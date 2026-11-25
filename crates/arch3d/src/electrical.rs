@@ -195,4 +195,207 @@ mod tests {
             assert!((def.base_color[i] - expected[i]).abs() < 1e-3, "offset at {i}: {} vs {}", def.base_color[i], expected[i]);
         }
     }
+
+    #[test]
+    fn a_plate_on_a_y_oriented_wall() {
+        let mut model = ArchModel::default();
+        model.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ..Default::default() });
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(0.0, 4.0));
+        let d = ElectricalDevice {
+            id: ArchId(0),
+            kind: ElectricalKind::Duplex,
+            wall: w,
+            side: WallSide::Left,
+            offset: 2.0,
+            height: 0.3,
+            ..Default::default()
+        };
+
+        let place = place_device(&model, &d).unwrap();
+        let meshes = plate_meshes(&d, Some(&place));
+        assert_eq!(meshes.len(), 1);
+        let mesh = &meshes[0];
+        assert!(mesh.is_manifold());
+        let bounds = mesh.bounds();
+        assert!((bounds.max[0] - bounds.min[0] - 0.006).abs() < 1e-6, "depth should be along x for y-oriented wall");
+        assert!((bounds.max[1] - bounds.min[1] - 0.07).abs() < 1e-6, "width should be along y for y-oriented wall");
+        assert!((bounds.max[2] - bounds.min[2] - 0.115).abs() < 1e-6);
+    }
+
+    #[test]
+    fn plate_materials_deduplicates_kinds() {
+        let mut model = ArchModel::default();
+        model.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ..Default::default() });
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        model.push_electrical(ElectricalDevice {
+            id: ArchId(0),
+            kind: ElectricalKind::Duplex,
+            wall: w,
+            side: WallSide::Left,
+            offset: 1.0,
+            height: 0.3,
+            ..Default::default()
+        });
+        model.push_electrical(ElectricalDevice {
+            id: ArchId(1),
+            kind: ElectricalKind::Duplex,
+            wall: w,
+            side: WallSide::Left,
+            offset: 2.0,
+            height: 0.3,
+            ..Default::default()
+        });
+
+        let mut scene = Scene3d::default();
+        plate_materials(&model, &mut scene);
+        assert_eq!(scene.materials.len(), 1, "two devices of the same kind should add one material");
+        assert!(scene.materials.contains_key("electrical:duplex"));
+    }
+
+    #[test]
+    fn plate_materials_adds_one_per_kind() {
+        let mut model = ArchModel::default();
+        model.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ..Default::default() });
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        model.push_electrical(ElectricalDevice {
+            id: ArchId(0),
+            kind: ElectricalKind::Duplex,
+            wall: w,
+            side: WallSide::Left,
+            offset: 1.0,
+            height: 0.3,
+            ..Default::default()
+        });
+        model.push_electrical(ElectricalDevice {
+            id: ArchId(1),
+            kind: ElectricalKind::Gfci,
+            wall: w,
+            side: WallSide::Left,
+            offset: 2.0,
+            height: 0.3,
+            ..Default::default()
+        });
+
+        let mut scene = Scene3d::default();
+        plate_materials(&model, &mut scene);
+        assert_eq!(scene.materials.len(), 2, "two different kinds should add two materials");
+        assert!(scene.materials.contains_key("electrical:duplex"));
+        assert!(scene.materials.contains_key("electrical:gfci"));
+    }
+
+    #[test]
+    fn plate_box_contains_rejects_nan_point() {
+        let mut model = ArchModel::default();
+        model.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ..Default::default() });
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let d = ElectricalDevice {
+            id: ArchId(0),
+            kind: ElectricalKind::Duplex,
+            wall: w,
+            side: WallSide::Left,
+            offset: 1.5,
+            height: 0.3,
+            ..Default::default()
+        };
+
+        let place = place_device(&model, &d).unwrap();
+        let box_ = plate_box(&d, &place, 0.0);
+        assert!(!box_.contains(Vec3::new(f64::NAN, 0.0, 0.0)));
+        assert!(!box_.contains(Vec3::new(0.0, f64::NAN, 0.0)));
+        assert!(!box_.contains(Vec3::new(0.0, 0.0, f64::NAN)));
+    }
+
+    #[test]
+    fn plate_box_contains_rejects_huge_point() {
+        let mut model = ArchModel::default();
+        model.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ..Default::default() });
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let d = ElectricalDevice {
+            id: ArchId(0),
+            kind: ElectricalKind::Duplex,
+            wall: w,
+            side: WallSide::Left,
+            offset: 1.5,
+            height: 0.3,
+            ..Default::default()
+        };
+
+        let place = place_device(&model, &d).unwrap();
+        let box_ = plate_box(&d, &place, 0.0);
+        assert!(!box_.contains(Vec3::new(1e300, 0.0, 0.0)));
+        assert!(!box_.contains(Vec3::new(0.0, 1e300, 0.0)));
+        assert!(!box_.contains(Vec3::new(0.0, 0.0, 1e300)));
+    }
+
+    #[test]
+    fn plate_meshes_returns_exactly_one_mesh() {
+        let mut model = ArchModel::default();
+        model.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ..Default::default() });
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let d = ElectricalDevice {
+            id: ArchId(0),
+            kind: ElectricalKind::Duplex,
+            wall: w,
+            side: WallSide::Left,
+            offset: 1.5,
+            height: 0.3,
+            ..Default::default()
+        };
+
+        let place = place_device(&model, &d).unwrap();
+        let meshes = plate_meshes(&d, Some(&place));
+        assert_eq!(meshes.len(), 1, "plate_meshes should return exactly one mesh");
+    }
+
+    #[test]
+    fn a_plate_at_the_wall_start() {
+        let mut model = ArchModel::default();
+        model.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ..Default::default() });
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let d = ElectricalDevice {
+            id: ArchId(0),
+            kind: ElectricalKind::Duplex,
+            wall: w,
+            side: WallSide::Left,
+            offset: 0.0,
+            height: 0.3,
+            ..Default::default()
+        };
+
+        let place = place_device(&model, &d).unwrap();
+        let meshes = plate_meshes(&d, Some(&place));
+        assert_eq!(meshes.len(), 1);
+        let mesh = &meshes[0];
+        assert!(mesh.is_manifold());
+        let bounds = mesh.bounds();
+        assert!((bounds.max[0] - bounds.min[0] - 0.07).abs() < 1e-6);
+        assert!((bounds.max[1] - bounds.min[1] - 0.006).abs() < 1e-6);
+        assert!((bounds.max[2] - bounds.min[2] - 0.115).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_plate_at_the_wall_end() {
+        let mut model = ArchModel::default();
+        model.levels.push(cadcraft_doc::Level { index: 0, elevation: 0.0, ..Default::default() });
+        let w = wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let d = ElectricalDevice {
+            id: ArchId(0),
+            kind: ElectricalKind::Duplex,
+            wall: w,
+            side: WallSide::Left,
+            offset: 4.0,
+            height: 0.3,
+            ..Default::default()
+        };
+
+        let place = place_device(&model, &d).unwrap();
+        let meshes = plate_meshes(&d, Some(&place));
+        assert_eq!(meshes.len(), 1);
+        let mesh = &meshes[0];
+        assert!(mesh.is_manifold());
+        let bounds = mesh.bounds();
+        assert!((bounds.max[0] - bounds.min[0] - 0.07).abs() < 1e-6);
+        assert!((bounds.max[1] - bounds.min[1] - 0.006).abs() < 1e-6);
+        assert!((bounds.max[2] - bounds.min[2] - 0.115).abs() < 1e-6);
+    }
 }
