@@ -357,7 +357,7 @@ mod tests {
             kind: ElectricalKind::Duplex,
             wall: w,
             side: WallSide::Left,
-            offset: 0.0,
+            offset: 0.06,
             height: 0.3,
             ..Default::default()
         };
@@ -383,7 +383,7 @@ mod tests {
             kind: ElectricalKind::Duplex,
             wall: w,
             side: WallSide::Left,
-            offset: 4.0,
+            offset: 3.94,
             height: 0.3,
             ..Default::default()
         };
