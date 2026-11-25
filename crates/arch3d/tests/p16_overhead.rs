@@ -188,11 +188,11 @@ fn open_below_room_above_opens_ceiling_completely() {
     // Upper level: solid room
     m.push_room(Room { polygon: rect(0.0, 0.0, 10.0, 10.0), level: 2, ..Room::default() });
 
-    // The lower room's ceiling should open up to the upper level's ceiling
+    // The lower room's ceiling should open up to the main level's ceiling (the Open Below room's ceiling)
     let p = Vec2::new(5.0, 5.0);
     let ceiling = rough_ceiling_in(&m, &m.rooms[0], p).unwrap();
-    // Should be at the upper level's ceiling: 5.4 + 2.4 = 7.8
-    assert!(near(ceiling, 7.8), "ceiling should open to upper level ceiling 7.8, got {}", ceiling);
+    // Should be at the main level's ceiling: 2.7 + 2.4 = 5.1
+    assert!(near(ceiling, 5.1), "ceiling should open to main level ceiling 5.1, got {}", ceiling);
 }
 
 #[test]
