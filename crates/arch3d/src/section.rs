@@ -216,4 +216,33 @@ mod tests {
         assert!(cut.rings.is_empty());
         assert!(cut.lines.is_empty());
     }
+
+    #[test]
+    fn section_view_up_parallel_to_normal_returns_none() {
+        let plane = Plane::new([0.0, 0.0, 0.0], [0.0, 1.0, 0.0]).unwrap();
+        let scene = Scene3d::default();
+        assert!(section_view(&scene, &plane, [0.0, 1.0, 0.0]).is_none());
+    }
+
+    #[test]
+    fn section_view_non_finite_up_returns_none() {
+        let plane = Plane::new([0.0, 0.0, 0.0], [0.0, 1.0, 0.0]).unwrap();
+        let scene = Scene3d::default();
+        assert!(section_view(&scene, &plane, [f64::NAN, 0.0, 0.0]).is_none());
+    }
+
+    #[test]
+    fn plane_distance_signed() {
+        let plane = Plane::new([0.0, 0.0, 0.0], [0.0, 0.0, 1.0]).unwrap();
+        assert!(plane.distance([0.0, 0.0, 1.0]) > 0.0);
+        assert!(plane.distance([0.0, 0.0, -1.0]) < 0.0);
+        assert!(plane.distance([0.0, 0.0, 0.0]).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cut_ring_signed_area_positive_for_ccw() {
+        let ring = CutRing::new(ArchKind::Wall, ArchId(1), "wall", vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]);
+        assert!(ring.signed_area() > 0.0);
+        assert!((ring.signed_area() - 1.0).abs() < 1e-9);
+    }
 }

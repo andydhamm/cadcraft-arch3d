@@ -733,4 +733,33 @@ mod tests {
         let lines = visible_lines(&scene, &ov);
         assert!(!lines.is_empty());
     }
+
+    #[test]
+    fn merge_collinear_vertical_lines() {
+        let a = Line2::new([0.0, 0.0], [0.0, 1.0], ArchKind::Wall, ArchId(0));
+        let b = Line2::new([0.0, 1.0], [0.0, 2.0], ArchKind::Wall, ArchId(0));
+        let out = merge_collinear(vec![a, b]);
+        assert_eq!(out.len(), 1);
+        assert!((out[0].length() - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn merge_collinear_diagonal_lines() {
+        let a = Line2::new([0.0, 0.0], [1.0, 1.0], ArchKind::Wall, ArchId(0));
+        let b = Line2::new([1.0, 1.0], [2.0, 2.0], ArchKind::Wall, ArchId(0));
+        let out = merge_collinear(vec![a, b]);
+        assert_eq!(out.len(), 1);
+        assert!((out[0].length() - 2.0_f64.sqrt() * 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn ortho_view_project_elevation() {
+        let ov = OrthoView::elevation([0.0, 1.0]).unwrap();
+        let p = [1.0, 2.0, 3.0];
+        let proj = ov.project(p);
+        // Looking along +y: u = x, v = z, depth = y
+        assert!((proj[0] - 1.0).abs() < 1e-9);
+        assert!((proj[1] - 3.0).abs() < 1e-9);
+        assert!((proj[2] - 2.0).abs() < 1e-9);
+    }
 }
