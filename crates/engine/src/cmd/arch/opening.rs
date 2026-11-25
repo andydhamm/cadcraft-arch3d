@@ -1636,10 +1636,8 @@ mod tests {
     fn window_roof_offset_at_boundaries() {
         let mut s = session_with_wall();
         // roofOffset exactly at 0 and 1 are accepted.
-        let r = s.execute("window", &json!({"wall": "w0", "offset": 2.0, "roofOffset": 0.0})).unwrap();
-        assert!(r.is_ok());
-        let r = s.execute("window", &json!({"wall": "w0", "offset": 4.0, "roofOffset": 1.0})).unwrap();
-        assert!(r.is_ok());
+        s.execute("window", &json!({"wall": "w0", "offset": 2.0, "roofOffset": 0.0})).unwrap();
+        s.execute("window", &json!({"wall": "w0", "offset": 4.0, "roofOffset": 1.0})).unwrap();
         // Just outside the boundaries are refused.
         assert!(s.execute("window", &json!({"wall": "w0", "offset": 6.0, "roofOffset": -0.001})).is_err());
         assert!(s.execute("window", &json!({"wall": "w0", "offset": 6.0, "roofOffset": 1.001})).is_err());
