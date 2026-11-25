@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-25 08:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 08:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23**
 
@@ -44,6 +44,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 25 08:33 | `harden-p16-tray-commands` | refused | 12,275 pass | tturbo-mac |
 | Nov 25 08:02 | `harden-p15-docs-user-guide` | refused | 12,271 pass | tturbo-mac |
 | Nov 25 07:36 | `harden-p16-tray-commands` | refused | 12,275 pass | tturbo-mac |
 | Nov 25 06:49 | `p22i-learned-firefly-spread` | refused | 0 pass | claude-sonnet-b |
@@ -55,7 +56,6 @@ none yet
 | Nov 25 04:15 | `harden-p17-scene-plumbing-pick` | merged | 12,244 pass | tturbo-mac |
 | Nov 25 03:56 | `p22h-learned-energy` | merged | 12,233 pass | claude-sonnet-d |
 | Nov 25 03:38 | `harden-p22g-adaptive-robust-error` | merged | 12,227 pass | tturbo-mac |
-| Nov 25 03:22 | `harden-p17-stair-flight` | merged | 12,219 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -74,5 +74,5 @@ none yet
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1259 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 755 |
+| tturbo-mac | tturbo-ultraheretic | gate | 1259 |
+| tturbo-mac2 | tturbo-ultraheretic | idle | 756 |
