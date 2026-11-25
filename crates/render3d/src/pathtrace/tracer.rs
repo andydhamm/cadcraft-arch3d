@@ -22,6 +22,10 @@ use cadcraft_doc::arch::backdrop::{Backdrop, Projection};
 use std::collections::BTreeMap;
 use wgpu::util::DeviceExt;
 
+/// Frame `photo` flag (kernel.wgsl `PHOTO_AOV_MEAN`): the guides hold sums over every sample, which
+/// `post::mean_guides` divides by the pixel's count. Set only for the learned denoiser.
+pub(super) const PHOTO_AOV_MEAN: u32 = 512;
+
 /// A path-traced still in progress.
 pub struct PathTracer {
     size: (u32, u32),
@@ -264,6 +268,9 @@ impl PathTracer {
         }
         if opts.adaptive {
             frame.photo[0] |= PHOTO_ADAPTIVE;
+        }
+        if opts.denoise && opts.denoise_mode == cadcraft_doc::arch::DenoiseMode::Learned {
+            frame.photo[0] |= PHOTO_AOV_MEAN;
         }
         if let Some(f) = opts.furnace {
             frame.flags |= FRAME_FURNACE;
@@ -511,7 +518,11 @@ impl PathTracer {
             Err(_) => return DAY_EXPOSURE,
         };
         let accum: Vec<[f32; 4]> = bytemuck::cast_slice(&accum_data).to_vec();
-        let aov: Vec<[f32; 4]> = bytemuck::cast_slice(&aov_data).to_vec();
+        let mut aov: Vec<[f32; 4]> = bytemuck::cast_slice(&aov_data).to_vec();
+        if self.opts.denoise && self.opts.denoise_mode == cadcraft_doc::arch::DenoiseMode::Learned {
+            let counts: Vec<f32> = accum[..pixels].iter().map(|p| p[3]).collect();
+            super::post::mean_guides(&mut aov, &counts);
+        }
         let mean_of = |p: &[f32; 4]| {
             let n = p[3].max(1.0);
             [p[0] / n, p[1] / n, p[2] / n]
@@ -1771,6 +1782,81 @@ mod tests {
         let none = PathOptions { denoise_mode: DenoiseMode::None, ..learned };
         let (_, stats) = render_to_rgba_stats(&gpu, &none);
         assert_eq!((stats.denoiser, stats.denoised, stats.denoise_fallback), (DenoiseMode::None, false, None));
+    }
+
+    /// Render `scene` to the end and return the image, the guides left in the AOV buffer and the flags.
+    fn render_aov(gpu: &ComputeGpu, scene: &Scene3d, size: (u32, u32), opts: &PathOptions) -> (Vec<u8>, Vec<[f32; 4]>, u32) {
+        let mut t = PathTracer::new(gpu, scene, &camera(), &Lighting::default(), false, size, opts, None).unwrap();
+        let rgba = loop {
+            match t.step(gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => break rgba,
+                other => panic!("unexpected: {other:?}"),
+            }
+        };
+        let bytes = u64::from(size.0 * size.1) * 32;
+        let aov = bytemuck::cast_slice::<u8, [f32; 4]>(&t.read_buffer(gpu, &t.aov, bytes).unwrap()).to_vec();
+        (rgba, aov, t.frame.photo[0])
+    }
+
+    #[test]
+    fn aov_means_are_off_unless_learned() {
+        use cadcraft_doc::arch::DenoiseMode;
+        let Some(gpu) = compute() else { return };
+        let size = (16, 16);
+        let filter = PathOptions { spp: 8, spp_per_step: 4, seed: 7, denoise: true, denoise_mode: DenoiseMode::Filter, ..Default::default() };
+        let (rgba, aov, photo) = render_aov(&gpu, &scene(), size, &filter);
+        assert_eq!(photo & PHOTO_AOV_MEAN, 0, "the filter does not ask for averaged guides");
+        // Today's expectation: the first sample's albedo, the material's own (the centre pixel is on the floor).
+        let centre = 8 * 16 + 8;
+        let albedo = super::super::scene_gpu::material_for("floor").albedo;
+        for c in 0..3 {
+            assert!((aov[2 * centre][c] - albedo[c]).abs() < 1e-6, "{:?} vs {albedo:?}", aov[2 * centre]);
+        }
+        assert!(aov[2 * centre][3] > 1.0 - 1e-6, "a hit carries 1 + roughness");
+        let (rgba2, aov2, _) = render_aov(&gpu, &scene(), size, &filter);
+        assert_eq!((&rgba, &aov), (&rgba2, &aov2), "the same seed gives the same guides and bytes");
+        let none = PathOptions { denoise: false, ..filter.clone() };
+        assert_eq!(render_aov(&gpu, &scene(), size, &none).1, aov, "the guides do not depend on the filter");
+        // Learned: the guides are sums over the 8 samples; the hit flag and distance stay sample 0's.
+        let learned = PathOptions { denoise_mode: DenoiseMode::Learned, ..filter };
+        let (_, sums, photo) = render_aov(&gpu, &scene(), size, &learned);
+        assert_eq!(photo & PHOTO_AOV_MEAN, PHOTO_AOV_MEAN);
+        for c in 0..3 {
+            assert!((sums[2 * centre][c] - 8.0 * albedo[c]).abs() < 1e-4, "{:?}", sums[2 * centre]);
+        }
+        assert_eq!(sums[2 * centre][3], aov[2 * centre][3]);
+        assert_eq!(sums[2 * centre + 1][3], aov[2 * centre + 1][3]);
+    }
+
+    #[test]
+    fn aov_mean_antialiases_an_edge() {
+        use cadcraft_doc::arch::DenoiseMode;
+        let Some(gpu) = compute() else { return };
+        let (a, b) = (super::super::scene_gpu::material_for("floor").albedo, super::super::scene_gpu::material_for("brick").albedo);
+        assert_ne!(a, b, "the two surfaces need different albedos");
+        // Two coloured slabs meeting at x = 0, which runs through the middle of the image.
+        let mut left = Mesh::new("floor", ArchId(1));
+        left.push_prism(&[Vec2::new(-8.0, -8.0), Vec2::new(0.0, -8.0), Vec2::new(0.0, 8.0), Vec2::new(-8.0, 8.0)], -0.1, 0.0);
+        let mut right = Mesh::new("brick", ArchId(2));
+        right.push_prism(&[Vec2::new(0.0, -8.0), Vec2::new(8.0, -8.0), Vec2::new(8.0, 8.0), Vec2::new(0.0, 8.0)], -0.1, 0.0);
+        let scene = Scene3d { bounds: left.bounds(), meshes: vec![left, right], lights: Vec::new(), ..Default::default() };
+        let opts = PathOptions { spp: 64, spp_per_step: 16, seed: 3, denoise: true, denoise_mode: DenoiseMode::Learned, ..Default::default() };
+        let (_, sums, _) = render_aov(&gpu, &scene, (16, 16), &opts);
+        let mut mixed = 0;
+        for i in 0..256 {
+            let mean = [sums[2 * i][0] / 64.0, sums[2 * i][1] / 64.0, sums[2 * i][2] / 64.0];
+            let c = (0..3).max_by(|&p, &q| (a[p] - b[p]).abs().total_cmp(&(a[q] - b[q]).abs())).unwrap_or(0);
+            let (lo, hi) = (a[c].min(b[c]), a[c].max(b[c]));
+            // Fully covered pixels only: the camera sees slab on both sides of x = 0 near the middle.
+            let (x, y) = (i % 16, i / 16);
+            if (4..12).contains(&x) && (4..12).contains(&y) && mean[c] > lo + 1e-3 && mean[c] < hi - 1e-3 {
+                mixed += 1;
+            }
+            // A sample that misses adds zero, so a blend never exceeds the brighter albedo.
+            assert!(mean[c] <= hi + 1e-4, "pixel {i}: {mean:?}");
+        }
+        assert!(mixed >= 1, "some pixel on the edge holds a blend of the two albedos");
     }
 
     fn mean_luminance(rgba: &[u8], w: u32, h: u32) -> f32 {
