@@ -1451,4 +1451,76 @@ mod tests {
         assert_eq!((p.metallic, p.roughness), (1.0, 0.1));
         assert_eq!(p._p2[1], 3.0, "the texture layer survives a non-clay style");
     }
+
+    #[test]
+    fn style_is_clay_returns_true_only_for_clay() {
+        assert!(style_is_clay(STYLE_CLAY));
+        assert!(!style_is_clay(STYLE_SHADED));
+        assert!(!style_is_clay(STYLE_SHADED_EDGES));
+        assert!(!style_is_clay(STYLE_HIDDEN_LINE));
+        assert!(!style_is_clay(STYLE_GLASS_HOUSE));
+        assert!(!style_is_clay(STYLE_TECHNICAL));
+        assert!(!style_is_clay(99));
+    }
+
+    #[test]
+    fn clay_overrides_draw_material_properties() {
+        // A draw with specific material properties must be fully overridden by clay
+        // (metallic, roughness, emissive, texture layer, tile) but not alpha.
+        let draw = Draw {
+            first_index: 0,
+            index_count: 3,
+            albedo: [0.1, 0.2, 0.3],
+            metallic: 0.9,
+            roughness: 0.2,
+            alpha: 0.5,
+            emissive: 1.0,
+            layer: 5,
+            tile: [2.0, 3.0],
+            ..Default::default()
+        };
+        let p = PbrUniform::new(&crate::light::Light::DEFAULT, 1.0, &draw, STYLE_CLAY, [0.0; 3]);
+        assert_eq!(p.style, STYLE_CLAY);
+        assert_eq!(p.metallic, 0.0, "clay is never metal");
+        assert_eq!(p.roughness, CLAY_ROUGHNESS, "clay uses its own roughness");
+        assert_eq!(p._p2, [0.0, 0.0, 1.0, 1.0], "clay has no emissive and no texture");
+        // Alpha is not overridden by clay
+        assert_eq!(p.alpha, 0.5);
+    }
+
+    #[test]
+    fn clay_pbr_matches_clay_draw() {
+        // clay_pbr() and clay_draw() must agree on every material property.
+        let (albedo, metallic, roughness, alpha) = clay_pbr();
+        let d = clay_draw();
+        assert_eq!(d.albedo, albedo);
+        assert_eq!(d.metallic, metallic);
+        assert_eq!(d.roughness, roughness);
+        assert_eq!(d.alpha, alpha);
+        assert_eq!(d.layer, 0);
+        assert_eq!(d.tile, [1.0, 1.0]);
+    }
+
+    #[test]
+    fn clay_with_nan_draw_values() {
+        // Clay must produce sane values even when the draw has NaN in every field.
+        let draw = Draw {
+            first_index: 0,
+            index_count: 0,
+            albedo: [f32::NAN, f32::NAN, f32::NAN],
+            metallic: f32::NAN,
+            roughness: f32::NAN,
+            alpha: f32::NAN,
+            emissive: f32::NAN,
+            layer: 0,
+            tile: [f32::NAN, f32::NAN],
+            ..Default::default()
+        };
+        let p = PbrUniform::new(&crate::light::Light::DEFAULT, 1.0, &draw, STYLE_CLAY, [0.0; 3]);
+        assert_eq!(p.metallic, 0.0, "clay metallic is always 0");
+        assert_eq!(p.roughness, CLAY_ROUGHNESS, "clay roughness is always 0.8");
+        assert_eq!(p._p2, [0.0, 0.0, 1.0, 1.0], "clay has no emissive and no texture even with NaN draw");
+        // NaN alpha is sanitized to the default 1.0 by fin()
+        assert_eq!(p.alpha, 1.0);
+    }
 }
