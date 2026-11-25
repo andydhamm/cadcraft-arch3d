@@ -1400,6 +1400,91 @@ mod tests {
     }
 
     #[test]
+    fn glb_electrical_empty_mesh_skipped() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "electrical:duplex".to_string();
+            m.object = ArchId(1);
+            m.positions.clear();
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "electrical:gfci".to_string();
+            m.object = ArchId(2);
+            m
+        });
+        let names = node_names(&scene);
+        assert_eq!(names, ["electrical-el2"]);
+    }
+
+    #[test]
+    fn glb_electrical_prefix_only_and_no_colon() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "electrical:".to_string();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "electrical".to_string();
+            m.object = ArchId(2);
+            m
+        });
+        let names = node_names(&scene);
+        assert_eq!(names, ["electrical-el1", "electrical-o2"]);
+    }
+
+    #[test]
+    fn glb_electrical_scene_order_preserved() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "electrical:dimmer".to_string();
+            m.object = ArchId(5);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "electrical:duplex".to_string();
+            m.object = ArchId(1);
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "electrical:gfci".to_string();
+            m.object = ArchId(3);
+            m
+        });
+        let names = node_names(&scene);
+        assert_eq!(names, ["electrical-el5", "electrical-el1", "electrical-el3"]);
+    }
+
+    #[test]
+    fn glb_electrical_with_nan_and_huge_positions() {
+        let mut scene = Scene3d::default();
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "electrical:duplex".to_string();
+            m.object = ArchId(1);
+            m.positions[0][0] = f32::NAN;
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "electrical:gfci".to_string();
+            m.object = ArchId(2);
+            m.positions[0][0] = 1e10;
+            m
+        });
+        let names = node_names(&scene);
+        assert_eq!(names, ["electrical-el1", "electrical-el2"]);
+    }
+
+    #[test]
     fn glb_is_byte_deterministic() {
         let a = write(&scene_with(2));
         let b = write(&scene_with(2));
