@@ -360,8 +360,9 @@ mod tests {
         let s = Stair { width: 0.1, ..phase5_stair() };
         let ms = stair_meshes(&s, 0.0, [false, false]);
         // sL = sR = 0.038, so t0 = -0.05 + 0.038 = -0.012, t1 = 0.05 - 0.038 = 0.012.
+        // The flight is centred on start.y = 1.0.
         let t = bb(of(&ms, "stair-tread")[0]);
-        assert!(near(t[1], 0.5 - 0.012) && near(t[4], 0.5 + 0.012), "{t:?}");
+        assert!(near(t[1], 1.0 - 0.012) && near(t[4], 1.0 + 0.012), "{t:?}");
         assert_eq!(of(&ms, "stair-stringer").len(), 2);
         for m in of(&ms, "stair-stringer") {
             assert!(m.is_manifold());
