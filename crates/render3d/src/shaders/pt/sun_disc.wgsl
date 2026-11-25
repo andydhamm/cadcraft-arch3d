@@ -43,7 +43,7 @@ fn sun_sample_at(r: ptr<function, Rng>) -> LightSample {
     var s: LightSample;
     s.dir = normalize(onb(normalize(frame.sun_dir.xyz)) * vec3<f32>(sin_t * cos(phi), sin_t * sin(phi), cos_t));
     s.dist = PT_INF;
-    s.li = sun_disc_radiance();
+    s.li = frame.sun_rgb.xyz;
     s.pdf = 1.0 / omega;
     s.delta = 0u;
     return s;
