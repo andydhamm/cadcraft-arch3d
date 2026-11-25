@@ -140,7 +140,7 @@ const TABLE: &[(Matcher, MaterialExt)] = &[
     ),
     // Wood, siding, masonry and plain building surfaces: only variation.
     (
-        |n| has(n, &["wood", "siding", "brick", "shingle", "concrete", "drywall", "plaster"]) || matches!(n, "wall" | "floor" | "ceiling" | "roof"),
+        |n| has(n, &["wood", "siding", "brick", "shingle", "concrete", "drywall", "plaster", "wall", "floor", "ceiling", "roof"]),
         MaterialExt { variation_scale: 0.6, variation_amount: 0.12, ..OFF },
     ),
 ];
@@ -221,5 +221,81 @@ mod tests {
         assert_eq!(resolve(&scene, "wall"), custom);
         scene.materials.insert("carpet".to_string(), MaterialDef::default());
         assert_eq!(resolve(&scene, "carpet"), ext_for("carpet"));
+    }
+
+    #[test]
+    fn ext_for_empty_string_returns_default() {
+        assert!(ext_for("").is_default());
+        assert!(!ext_for("").has_lobes());
+    }
+
+    #[test]
+    fn ext_for_is_case_insensitive() {
+        assert_eq!(ext_for("WALL"), ext_for("wall"));
+        assert_eq!(ext_for("Wall"), ext_for("wall"));
+        assert_eq!(ext_for("CARPET"), ext_for("carpet"));
+        assert_eq!(ext_for("Glass-Wall"), ext_for("glass-wall"));
+    }
+
+    #[test]
+    fn ext_for_strips_window_and_door_parts() {
+        assert_eq!(ext_for("window-glass"), ext_for("glass"));
+        assert_eq!(ext_for("door-glass"), ext_for("glass"));
+        assert_eq!(ext_for("Window-Glass"), ext_for("glass"));
+        // Non-glass parts are not stripped to "glass"
+        assert!(ext_for("window-frame").is_default());
+        assert!(ext_for("door-frame").is_default());
+    }
+
+    #[test]
+    fn ext_for_window_prefix_with_no_part_returns_default() {
+        assert!(ext_for("window-").is_default());
+        assert!(ext_for("door-").is_default());
+    }
+
+    #[test]
+    fn has_lobes_true_for_transmission_only() {
+        let g = ext_for("glass");
+        assert!(g.has_lobes(), "glazing should have lobes (transmission)");
+        let w = ext_for("wall");
+        assert!(!w.has_lobes(), "plain wall should have no lobes");
+    }
+
+    #[test]
+    fn is_default_false_for_custom_ext() {
+        let custom = MaterialExt { clearcoat: 0.5, ..MaterialExt::default() };
+        assert!(!custom.is_default());
+        assert!(custom.has_lobes());
+
+        let variation_only = MaterialExt { variation_scale: 0.6, variation_amount: 0.12, ..MaterialExt::default() };
+        assert!(!variation_only.is_default());
+        assert!(!variation_only.has_lobes(), "variation alone is not a lobe");
+    }
+
+    #[test]
+    fn table_first_match_wins_for_overlapping_names() {
+        // "counter-tile" matches counter* (quartz/tile) before *tile
+        let ct = ext_for("counter-tile");
+        assert_eq!(ct.clearcoat, 0.6);
+
+        // "wood-tile" matches *tile (quartz/tile) before *wood
+        let wt = ext_for("wood-tile");
+        assert_eq!(wt.clearcoat, 0.6);
+
+        // "light-wood" matches light-* (hard-edged) before *wood
+        let lw = ext_for("light-wood");
+        assert_eq!(lw.edge_radius, Some(0.0));
+        assert_eq!(lw.variation_scale, 0.0, "light-wood should not have variation");
+    }
+
+    #[test]
+    fn ext_for_handles_long_and_special_names() {
+        let long = "a".repeat(1000);
+        assert!(ext_for(&long).is_default());
+
+        let special = "wall/floor@1.0";
+        let e = ext_for(special);
+        // Contains "wall" so it matches the wood/siding/masonry rule
+        assert_eq!(e.variation_scale, 0.6);
     }
 }
