@@ -573,7 +573,7 @@ Planned against arch3d at 2674a60f0. 33 segments; checks 01–15 under `tests/ac
 - **Sun disc:** 0.3 × 0.3 × 3 m pole, elevation 30°: 10–90 % over 0.687 × 0.0555 m ± 15 % at y = 5.196.
 - **Film:** neutral = film off; bloom within 1 % of the frame's energy; vignette 0.15 → corner 0.85, mid edge 0.904; white balance 3000 K neutralises a 3000 K fixture; mid grey 0.18 ± 2 % under the Photoreal film; contrast 1.5 takes 0.36 to 0.45.
 - **Adaptive:** showcase `Kitchen` camera, ≤ 60 % of the uniform samples for the same noise; 60 s budget stops in 55–65 s.
-- **Learned denoiser:** 32 tensors per file, `enc_conv0.weight` 32 × 9 × 3 × 3; flat frame within 1 %; kitchen 64 spp MRSE ≤ half the filter's against 4096 spp; 1920 × 1080 under 5 s on a GPU.
+- **Learned denoiser:** 32 tensors per file, `enc_conv0.weight` 32 × 9 × 3 × 3; flat frame within 1 %; kitchen 64 spp MRSE ≤ half the filter's against 4096 spp on a GPU (320 × 200) and ≤ 0.75 on the software adapter (96 × 64, where the official oidnDenoise reaches 0.68; `crates/render3d/tests/oidn_reference.rs` holds our network to its answer); the network's answer is not clamped afterwards, only converged pixels keep their input; 1920 × 1080 under 5 s on a GPU.
 - **Ladder:** eight rungs, same seed; sheet 8 w × (h + 24) with a (24, 24, 24) label band.
 
 ### Check notes

@@ -7,6 +7,10 @@
 # (c) uses two independent half references (2026-11-24): the kitchen is lit by rare bright paths, so even the reference
 # is noisy, and with one reference its noise was added to both errors (a floor neither denoiser can go under, which
 # hides the ratio the brief asks for). With r1 and r2 independent, (x - r1)(x - r2) has the expectation (x - truth)^2.
+# (c) on the software adapter the bar is three quarters, not half (operator 2026-11-24): the official oidnDenoise 2.5.1,
+# given this very frame (96 x 64, 64 spp; crates/render3d/tests/fixtures/oidn-kitchen), reaches 0.68 of the filter's
+# error, and our base model matches its answer to five decimal places (crates/render3d/tests/oidn_reference.rs). Half is
+# the brief's figure for a 320 x 200 frame on a GPU and stays the bar there.
 # needs: p22-doc-look, p22-r3d-types, p22-r3d-kernel-hooks, p22-engine-look-keys, p22-engine-render-params, p22-cli-hook, p22-r3d-linear-out, p22-r3d-tza, p22-r3d-unet-cpu, p22-r3d-unet-gpu, p22-engine-denoiser-info, p22g-learned-kitchen-error
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p22lib.inc')).read())
@@ -99,8 +103,9 @@ if xn == xl:
 m_n, m_l = sum(lum(p) for p in xn) / len(xn), sum(lum(p) for p in xl) / len(xl)
 if abs(m_l - m_n) > 0.15 * m_n:
     fail('(c) the learned result keeps the frame brightness: mean %.2f against %.2f nits' % (m_l, m_n))
-if not e_l <= 0.5 * e_f:
-    fail('(c) the learned result error is at most half the edge-aware filter error: %.5f vs %.5f' % (e_l, e_f))
+RATIO = 0.5 if BIG else 0.75
+if not e_l <= RATIO * e_f:
+    fail('(c) the learned result error is at most %.2f of the edge-aware filter error: %.5f vs %.5f' % (RATIO, e_l, e_f))
 
 # (d) time.
 TS = (1920, 1080) if BIG else (320, 180)

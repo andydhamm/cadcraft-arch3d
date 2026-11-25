@@ -127,7 +127,6 @@ pub(super) fn finish_linear(
     let (out, used) = match learned {
         Some(mut out) => {
             keep_consistent(&colors, &counts, size, &mut out);
-            super::energy::restore_energy(&colors, size, &mut out);
             (out, DenoiseMode::Learned)
         }
         None => (
@@ -265,18 +264,20 @@ fn robust_sigma(colors: &[[f32; 4]], counts: &[f32], size: (u32, u32)) -> Vec<f3
     out
 }
 
-/// Lever of the learned denoiser: each pixel's answer is pulled into the interval its own samples allow.
+/// After the learned denoiser: a converged pixel keeps its own value, every other keeps the network's.
 ///
 /// `input` holds `[mean r, g, b, variance of the mean of the luminance]` per pixel, `counts` the
-/// samples behind each, `denoised` the network's answer. With `s_r` the [`robust_sigma`] a pixel's
-/// network colour is scaled so its luminance lies in `[L - 2 s_r, L + 2 s_r]` (hue from the network; the
-/// input colour when the network's luminance is not positive). A pixel with `s_r` under 0.2 % of
+/// samples behind each, `denoised` the network's answer. A pixel whose [`robust_sigma`] is under 0.2 % of
 /// `max(L, floor)` is converged and keeps its input exactly (the flat frame must not move). A pixel
-/// with non-finite input keeps the network's answer. `finish_linear` follows it with
-/// `energy::restore_energy`, which gives back the local light the network removed. This is the general rule the old fixed
-/// 0.2 % .. 1 % blend of `keep_converged` was a special case of.
+/// whose network answer is not finite takes its input. Nothing else is changed.
+///
+/// Until 2026-11-24 the answer was also scaled into `[L - 2 s_r, L + 2 s_r]`. In a room lit by rare
+/// bright paths most pixels saw none of them at 64 spp, so `L` and `s_r` are both far too low there and
+/// the clamp took back the light the network had (rightly) spread: the showcase kitchen lost 21 % of its
+/// mean, and `energy::restore_energy` then put noise back to make up for it. Measured against the
+/// official oidnDenoise on the same inputs (`tests/oidn_reference.rs`) the bare network keeps the mean
+/// within 1 % and has the lower error, so both steps are gone.
 pub(super) fn keep_consistent(input: &[[f32; 4]], counts: &[f32], size: (u32, u32), denoised: &mut [[f32; 4]]) {
-    const K: f32 = 2.0;
     let sigma = robust_sigma(input, counts, size);
     if sigma.len() != input.len() {
         return;
@@ -287,26 +288,8 @@ pub(super) fn keep_consistent(input: &[[f32; 4]], counts: &[f32], size: (u32, u3
         if !l.is_finite() || !s.is_finite() {
             continue;
         }
-        if s < 0.002 * l.max(floor) {
+        if s < 0.002 * l.max(floor) || !out[..3].iter().all(|c| c.is_finite()) {
             out[..3].copy_from_slice(&inp[..3]);
-            continue;
-        }
-        let ld = super::luminance([out[0], out[1], out[2]]);
-        // A pixel whose error is larger than half its level (rare bright paths) gets a wider interval:
-        // its samples say little, and a tight bound would pull the network's answer back into noise.
-        let k = K + (s / l.max(floor) - 0.5).clamp(0.0, 1.0);
-        let (lo, hi) = ((l - k * s).max(0.0), l + k * s);
-        let from_net = ld.is_finite() && ld > 0.0;
-        let (base, lb) = if from_net { ([out[0], out[1], out[2]], ld) } else { ([inp[0], inp[1], inp[2]], l) };
-        if !(lb > 0.0) {
-            continue;
-        }
-        let scale = lb.clamp(lo, hi) / lb;
-        if from_net && scale == 1.0 {
-            continue;
-        }
-        for (o, b) in out[..3].iter_mut().zip(base) {
-            *o = b * scale;
         }
     }
 }
@@ -404,30 +387,16 @@ mod tests {
     }
 
     #[test]
-    fn consistent_output_stays_within_the_sample_interval() {
-        // 5 x 5, luminance 1, 16 samples, per-sample variance 0.16: s = s_r = 0.1.
+    fn an_unconverged_pixel_keeps_the_network_answer() {
+        // 5 x 5, luminance 1, 16 samples, per-sample variance 0.16: s = s_r = 0.1. The network may answer far
+        // outside L +- 2 s_r: where rare bright paths light a region most pixels saw none of them, and the old
+        // clamp to that interval cut 21 % of the kitchen's light (operator 2026-11-24, against oidnDenoise).
         let (mut input, counts) = grey_frame(5, 5, 16.0, 0.16);
-        let mut out = vec![[5.0, 2.5, 0.0, 1.0]; 25]; // luminance 2.5 + 3.58 > 1.2: pulled down
-        keep_consistent(&input, &counts, (5, 5), &mut out);
-        let l0 = super::super::luminance([5.0, 2.5, 0.0]);
-        for p in &out {
-            let l = super::super::luminance([p[0], p[1], p[2]]);
-            assert!((l - 1.2).abs() < 1e-4, "luminance {l} should be L + 2 s_r = 1.2");
-            assert!((p[0] / p[1] - 2.0).abs() < 1e-4 && p[2].abs() < 1e-6, "hue kept: {p:?}");
-            assert_eq!(p[3], 1.0);
+        for answer in [[5.0, 2.5, 0.0, 1.0], [0.01, 0.01, 0.01, 1.0], [1.05, 1.05, 1.05, 1.0], [0.0, 0.0, 0.0, 1.0]] {
+            let mut out = vec![answer; 25];
+            keep_consistent(&input, &counts, (5, 5), &mut out);
+            assert!(out.iter().all(|p| *p == answer), "the network's {answer:?} is kept: {:?}", out[0]);
         }
-        assert!(l0 > 1.2);
-        let mut low = vec![[0.01, 0.01, 0.01, 1.0]; 25];
-        keep_consistent(&input, &counts, (5, 5), &mut low);
-        for p in &low {
-            assert!((p[0] - 0.8).abs() < 1e-4 && (p[1] - 0.8).abs() < 1e-4, "pulled up to L - 2 s_r: {p:?}");
-        }
-        let mut zero = vec![[0.0, 0.0, 0.0, 1.0]; 25];
-        keep_consistent(&input, &counts, (5, 5), &mut zero);
-        assert!(zero.iter().all(|p| (p[0] - 1.0).abs() < 1e-6), "zero luminance takes the input colour");
-        let mut inside = vec![[1.05, 1.05, 1.05, 1.0]; 25];
-        keep_consistent(&input, &counts, (5, 5), &mut inside);
-        assert!(inside.iter().all(|p| p[0] == 1.05), "an answer inside the interval is not touched");
         // A converged frame keeps its input bit for bit.
         let (conv, counts) = grey_frame(5, 5, 16.0, 0.0);
         let mut out = vec![[3.0, 0.0, 0.5, 1.0]; 25];
