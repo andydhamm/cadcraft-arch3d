@@ -127,6 +127,7 @@ pub(super) fn finish_linear(
     let (out, used) = match learned {
         Some(mut out) => {
             keep_consistent(&colors, &counts, size, &mut out);
+            super::energy::restore_energy(&colors, size, &mut out);
             (out, DenoiseMode::Learned)
         }
         None => (
@@ -271,7 +272,8 @@ fn robust_sigma(colors: &[[f32; 4]], counts: &[f32], size: (u32, u32)) -> Vec<f3
 /// network colour is scaled so its luminance lies in `[L - 2 s_r, L + 2 s_r]` (hue from the network; the
 /// input colour when the network's luminance is not positive). A pixel with `s_r` under 0.2 % of
 /// `max(L, floor)` is converged and keeps its input exactly (the flat frame must not move). A pixel
-/// with non-finite input keeps the network's answer. This is the general rule the old fixed
+/// with non-finite input keeps the network's answer. `finish_linear` follows it with
+/// `energy::restore_energy`, which gives back the local light the network removed. This is the general rule the old fixed
 /// 0.2 % .. 1 % blend of `keep_converged` was a special case of.
 pub(super) fn keep_consistent(input: &[[f32; 4]], counts: &[f32], size: (u32, u32), denoised: &mut [[f32; 4]]) {
     const K: f32 = 2.0;
@@ -290,7 +292,10 @@ pub(super) fn keep_consistent(input: &[[f32; 4]], counts: &[f32], size: (u32, u3
             continue;
         }
         let ld = super::luminance([out[0], out[1], out[2]]);
-        let (lo, hi) = ((l - K * s).max(0.0), l + K * s);
+        // A pixel whose error is larger than half its level (rare bright paths) gets a wider interval:
+        // its samples say little, and a tight bound would pull the network's answer back into noise.
+        let k = K + (s / l.max(floor) - 0.5).clamp(0.0, 1.0);
+        let (lo, hi) = ((l - k * s).max(0.0), l + k * s);
         let from_net = ld.is_finite() && ld > 0.0;
         let (base, lb) = if from_net { ([out[0], out[1], out[2]], ld) } else { ([inp[0], inp[1], inp[2]], l) };
         if !(lb > 0.0) {
@@ -530,6 +535,36 @@ mod tests {
             }
         }
         assert!(e_out <= 0.5 * e_in, "mse in {e_in}, out {e_out}");
+    }
+
+    #[test]
+    fn firefly_lit_frame_keeps_its_mean_through_the_learned_denoiser() {
+        let Some(gpu) = crate::gputest::shared_compute() else {
+            eprintln!("SKIP: no compute adapter");
+            return;
+        };
+        let size = (96, 64);
+        let n = 64u32;
+        let mut state = 0x9e37_79b9_u64;
+        let mut samples = vec![0.0_f32; (96 * 64 * n) as usize];
+        for v in &mut samples {
+            state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+            let u = ((state >> 40) as f32) / (1u64 << 24) as f32;
+            *v = 0.02 + if u < 1.0 / 400.0 { 40.0 } else { 0.0 };
+        }
+        let (accum, aov) = accum_frame(size, n, |x, y, k| samples.get(((y * 96 + x) * n + k) as usize).copied().unwrap_or(0.0));
+        let mut stats = PathStats::default();
+        let out = finish_linear(&gpu, &opts_learned(), &Film::default(), size, &accum, || Ok(aov), 1.0, &mut stats).expect("finish");
+        if stats.denoiser != DenoiseMode::Learned {
+            eprintln!("SKIP: the denoiser fell back: {:?}", stats.denoise_fallback);
+            return;
+        }
+        let px = out.len() as f64;
+        let mean_in: f64 = accum.iter().take(out.len()).map(|a| f64::from(a[0] / a[3])).sum::<f64>() / px;
+        let mean_out: f64 = out.iter().map(|p| f64::from(p[0])).sum::<f64>() / px;
+        assert!((mean_out - mean_in).abs() <= 0.1 * mean_in, "mean in {mean_in}, out {mean_out}");
+        let rms = (out.iter().map(|p| (f64::from(p[0]) - 0.12).powi(2)).sum::<f64>() / px).sqrt() / 0.12;
+        assert!(rms < 0.35, "relative rms error {rms}");
     }
 
     #[test]
