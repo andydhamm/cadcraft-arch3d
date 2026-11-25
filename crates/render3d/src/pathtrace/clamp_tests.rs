@@ -84,11 +84,11 @@ fn clamp_with_negative_limit_is_noop() {
 
 #[test]
 fn clamp_with_zero_limit_zeroes() {
+    // A zero limit means "no clamp" (limit > 0.0 is required), so the colour is unchanged.
     let c = [100.0, 200.0, 50.0];
     let (after, loss) = clamp_ref(c, 0.0, true, 1);
-    assert_eq!(after, [0.0, 0.0, 0.0], "zero limit: colour zeroed");
-    let expected_loss = luminance(c);
-    assert!((loss - expected_loss).abs() < 1e-6, "zero limit: loss = original luminance");
+    assert_eq!(after, c, "zero limit: no clamp, colour unchanged");
+    assert_eq!(loss, 0.0, "zero limit: no loss");
 }
 
 #[test]
