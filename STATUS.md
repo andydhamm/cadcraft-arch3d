@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-25 00:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 00:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 43 of 45 segments merged · 12 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 44 of 46 segments merged · 12 of 15 acceptance checks**
 
-12,062 workspace tests passing at the last merge · 1401 segments merged in all · 0 of 15 seats working
+12,084 workspace tests passing at the last merge · 1402 segments merged in all · 0 of 15 seats working · PAUSED
 
 ## Phases
 
@@ -32,21 +32,22 @@ Updated 2026-11-25 00:00 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 12 / 15 | 30.5 h so far · expected done Nov 25 02:44–Nov 26 03:51 UTC |
+| 22 | Photoreal stills | building | 12 / 15 | 30.8 h so far · expected done Nov 25 02:39–Nov 26 00:37 UTC |
 
 ## Phase 22 segments
 
-43 merged, 1 escalate, 1 merging
+44 merged, 1 escalate, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p22g-adaptive-robust-error` | Adaptive sampling: a neighbourhood error estimate, a higher floor and no sticky freeze, so pixels do not freeze on a zero sample variance | escalate |  |
-| `upstream-sync-5e4bbe594` | merge upstream upstream/main up to 5e4bbe594 (16 commits) | merging | claude-sonnet-a |
+| `upstream-sync-171ac5112` | merge upstream upstream/main up to 171ac5112 (39 commits) | working | darwin-ws3 |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 25 00:10 | `upstream-sync-5e4bbe594` | merged | 12,084 pass | claude-sonnet-a |
 | Nov 24 23:26 | `p22g-learned-kitchen-error` | merged | 12,062 pass, 1 fail | claude-sonnet-b |
 | Nov 24 21:55 | `p22g-trans-shadow-side` | merged | 12,056 pass | claude-sonnet-c |
 | Nov 24 21:19 | `harden-p22f-adaptive-freeze` | merged | 12,052 pass | tturbo-mac |
@@ -58,24 +59,23 @@ Updated 2026-11-25 00:00 UTC. This page and the card in the README are regenerat
 | Nov 24 18:52 | `harden-p22-r3d-lens-raster` | merged | 12,004 pass | tturbo-mac |
 | Nov 24 18:52 | `harden-p22-r3d-edges` | merged | 12,004 pass | tturbo-mac2 |
 | Nov 24 18:52 | `p22f-adaptive-freeze` | merged | 12,004 pass | claude-sonnet-a |
-| Nov 24 18:22 | `harden-p22f-learned-keeps-converged` | merged | 11,985 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | merging | 1445 |
-| bonsai-b | bonsai2-27b | gate | 1369 |
+| bonsai-a | bonsai2-27b | agent | 1445 |
+| bonsai-b | bonsai2-27b | agent | 1370 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 177 |
 | claude-sonnet-b | sonnet | idle | 187 |
 | claude-sonnet-c | sonnet | idle | 121 |
 | claude-sonnet-d | sonnet | idle | 117 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1332 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1332 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1241 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1242 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 747 |
