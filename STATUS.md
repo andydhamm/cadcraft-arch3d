@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-25 01:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 01:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 44 of 46 segments merged · 12 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 45 of 46 segments merged · 13 of 15 acceptance checks**
 
-12,112 workspace tests passing at the last merge · 1405 segments merged in all · 0 of 15 seats working
+12,118 workspace tests passing at the last merge · 1406 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,21 +32,21 @@ Updated 2026-11-25 01:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 12 / 15 | 32.0 h so far · expected done Nov 25 03:54–Nov 26 01:52 UTC |
+| 22 | Photoreal stills | building | 13 / 15 | 32.3 h so far · expected done Nov 25 02:49–Nov 25 21:45 UTC |
 
 ## Phase 22 segments
 
-44 merged, 2 merging
+45 merged, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22g-adaptive-robust-error` | Adaptive sampling: a neighbourhood error estimate, a higher floor and no sticky freeze, so pixels do not freeze on a zero sample variance | merging | claude-sonnet-d |
 | `upstream-sync-171ac5112` | merge upstream upstream/main up to 171ac5112 (39 commits) | merging | darwin-ws3 |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 25 01:35 | `p22g-adaptive-robust-error` | merged | 12,118 pass | claude-sonnet-d |
 | Nov 25 00:55 | `harden-p22-arch3d-material-ext` | merged | 12,112 pass | tturbo-mac |
 | Nov 25 00:55 | `harden-p22-r3d-lens-path` | merged | 12,112 pass | tturbo-mac2 |
 | Nov 25 00:55 | `harden-p22g-trans-shadow-side` | merged | 12,112 pass | tturbo-mac2 |
@@ -58,7 +58,6 @@ Updated 2026-11-25 01:30 UTC. This page and the card in the README are regenerat
 | Nov 24 20:35 | `harden-p22-r3d-linear-out` | merged | 12,047 pass | tturbo-mac2 |
 | Nov 24 20:35 | `harden-p22-engine-denoiser-info` | merged | 12,047 pass | tturbo-mac |
 | Nov 24 20:35 | `harden-p22-r3d-bsdf-ext` | merged | 12,047 pass | tturbo-mac2 |
-| Nov 24 19:28 | `upstream-sync-a1d92d995` | merged | 12,024 pass | claude-sonnet-b |
 
 ## Seats active in the last hour
 
