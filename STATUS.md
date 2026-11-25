@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-25 08:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 08:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23**
 
@@ -74,5 +74,5 @@ none yet
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1258 |
-| tturbo-mac2 | tturbo-ultraheretic | gate | 754 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1259 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 755 |
