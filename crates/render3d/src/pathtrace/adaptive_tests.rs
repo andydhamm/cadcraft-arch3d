@@ -261,6 +261,66 @@ fn sample_cap_stops_with_samples() {
 }
 
 #[test]
+fn pixel_errors_empty_and_short_accumulators() {
+    // Empty accumulator with non-zero size.
+    let errors = pixel_errors(&[], (4, 4));
+    assert!(errors.is_empty(), "empty accum gives empty errors");
+
+    // Accumulator shorter than 2 * pixels.
+    let short = vec![[1.0, 1.0, 1.0, 16.0], [1.0, 1.0, 1.0, 16.0]];
+    let errors = pixel_errors(&short, (4, 4));
+    assert!(errors.is_empty(), "short accum gives empty errors");
+
+    // Size (0, 0).
+    let errors = pixel_errors(&[], (0, 0));
+    assert!(errors.is_empty(), "size (0,0) gives empty errors");
+
+    // Size (0, 5).
+    let errors = pixel_errors(&[], (0, 5));
+    assert!(errors.is_empty(), "size (0,5) gives empty errors");
+
+    // Exactly 2 * pixels: should work.
+    let ok = accum_of(&[(1.0, 0.01, 16.0, true)]);
+    let errors = pixel_errors(&ok, (1, 1));
+    assert_eq!(errors.len(), 1);
+    assert!(errors[0].is_some());
+}
+
+#[test]
+fn pixel_errors_all_miss_pixels_gives_none() {
+    // All miss pixels: no hit pixels, so Lbar is undefined and every error is None.
+    let accum = accum_of(&[(0.0, 0.0, 16.0, false), (0.0, 0.0, 32.0, false)]);
+    let errors = pixel_errors(&accum, (2, 1));
+    assert_eq!(errors.len(), 2);
+    assert_eq!(errors[0], None, "miss pixel has no error");
+    assert_eq!(errors[1], None, "miss pixel has no error");
+}
+
+#[test]
+fn pixel_errors_single_pixel_image() {
+    // A 1 x 1 image with one hit pixel.
+    let accum = accum_of(&[(2.0, 0.04, 32.0, true)]);
+    let errors = pixel_errors(&accum, (1, 1));
+    assert_eq!(errors.len(), 1);
+    let e = errors[0].expect("hit pixel has an error");
+    // own = 0.04 / 2^2 = 0.01; error = sqrt(0.01 / 32)
+    let want = (0.04f32 / 4.0 / 32.0).sqrt();
+    assert!((e - want).abs() < 1e-6, "single pixel error {e} vs {want}");
+}
+
+#[test]
+fn pixel_errors_large_values_stay_finite() {
+    // Huge radiance values should not overflow or produce NaN.
+    let accum = accum_of(&[(1e15_f32, 1e10, 16.0, true), (1e15_f32, 1e10, 16.0, true)]);
+    let errors = pixel_errors(&accum, (2, 1));
+    assert_eq!(errors.len(), 2);
+    for e in errors {
+        let e = e.expect("hit pixel has an error");
+        assert!(e.is_finite(), "error is finite: {e}");
+    }
+}
+
+#[test]
 fn pixel_errors_handles_nan_and_non_finite() {
     // NaN in radiance sum: luminance is NaN, pixel is treated as a miss (None).
     let accum = accum_of(&[(f32::NAN, 1.0, 16.0, true)]);
@@ -287,6 +347,22 @@ fn pixel_errors_handles_nan_and_non_finite() {
 }
 
 #[test]
+fn converged_mask_empty_and_degenerate() {
+    // Empty accumulator.
+    let mask = converged_mask(&[], (4, 4), 0.1, 16);
+    assert!(mask.is_empty(), "empty accum gives empty mask");
+
+    // Size (0, 0).
+    let mask = converged_mask(&[], (0, 0), 0.1, 16);
+    assert!(mask.is_empty(), "size (0,0) gives empty mask");
+
+    // Short accumulator.
+    let short = vec![[1.0, 1.0, 1.0, 16.0], [1.0, 1.0, 1.0, 16.0]];
+    let mask = converged_mask(&short, (4, 4), 0.1, 16);
+    assert!(mask.is_empty(), "short accum gives empty mask");
+}
+
+#[test]
 fn converged_mask_zero_and_infinite_target() {
     // target = 0: only pixels with exactly zero error converge.
     let accum = accum_of(&[(1.0, 0.0, 16.0, true), (1.0, 1e-4, 16.0, true)]);
@@ -304,6 +380,23 @@ fn converged_mask_zero_and_infinite_target() {
 }
 
 #[test]
+fn frame_noise_empty_and_degenerate() {
+    // Empty accumulator.
+    assert_eq!(frame_noise_from_accum(&[], (4, 4)), 0.0, "empty accum: noise 0");
+
+    // Size (0, 0).
+    assert_eq!(frame_noise_from_accum(&[], (0, 0)), 0.0, "size (0,0): noise 0");
+
+    // Short accumulator.
+    let short = vec![[1.0, 1.0, 1.0, 16.0], [1.0, 1.0, 1.0, 16.0]];
+    assert_eq!(frame_noise_from_accum(&short, (4, 4)), 0.0, "short accum: noise 0");
+
+    // All miss pixels: no errors, noise 0.
+    let accum = accum_of(&[(0.0, 0.0, 16.0, false), (0.0, 0.0, 16.0, false)]);
+    assert_eq!(frame_noise_from_accum(&accum, (2, 1)), 0.0, "all miss: noise 0");
+}
+
+#[test]
 fn frame_noise_single_pixel() {
     // One hit pixel: noise is that pixel's error.
     let accum = accum_of(&[(1.0, 0.04, 16.0, true)]);
@@ -317,6 +410,18 @@ fn frame_noise_single_pixel() {
 }
 
 #[test]
+fn fill_stats_empty_accumulator() {
+    use super::adaptive::fill_stats;
+    let mut stats = PathStats::default();
+    fill_stats(&[], (4, 4), &mut stats);
+    assert_eq!(stats.spp_min, 0);
+    assert_eq!(stats.spp_max, 0);
+    assert_eq!(stats.spp_mean, 0.0);
+    assert_eq!(stats.samples_total, 0);
+    assert_eq!(stats.noise, 0.0);
+}
+
+#[test]
 fn fill_stats_small_accumulator() {
     use super::adaptive::fill_stats;
     let accum = accum_of(&[(1.0, 0.01, 10.0, true), (2.0, 0.04, 20.0, true)]);
@@ -327,6 +432,12 @@ fn fill_stats_small_accumulator() {
     assert!((stats.spp_mean - 15.0).abs() < 1e-6, "mean {}", stats.spp_mean);
     assert_eq!(stats.samples_total, 30);
     assert!(stats.noise >= 0.0 && stats.noise.is_finite());
+}
+
+#[test]
+fn freeze_flags_empty_slice() {
+    let flags = freeze_flags(&[]);
+    assert!(flags.is_empty(), "empty mask gives empty flags");
 }
 
 #[test]
