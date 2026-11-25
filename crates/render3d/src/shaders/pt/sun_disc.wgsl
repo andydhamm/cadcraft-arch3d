@@ -18,9 +18,18 @@ fn sun_disc_solid_angle() -> f32 {
     return 2.0 * PT_PI * max(1.0 - frame.photo_f.y, 1.0e-9);
 }
 
-// The sun toward a direction uniform in the cone around frame.sun_dir. li = the sun's lux (the
-// radiance lux / omega over the pdf 1 / omega), delta 0 with that pdf so a BSDF-sampled ray that
-// reaches the disc can be weighted against it. Without the disc: sun_sample(), no random number.
+// The radiance of the disc (nits): the sun's lux divided by the projected solid angle
+// (the integral of cos over the disc), so the total illuminance equals the point sun's
+// for any disc size.
+fn sun_disc_radiance() -> vec3<f32> {
+    let sin2 = max(1.0 - frame.photo_f.y * frame.photo_f.y, 1.0e-9);
+    return frame.sun_rgb.xyz / (PT_PI * sin2);
+}
+
+// The sun toward a direction uniform in the cone around frame.sun_dir. li = the disc's radiance
+// (the illuminance equals the point sun's for any disc size), delta 0 with that pdf so a
+// BSDF-sampled ray that reaches the disc can be weighted against it. Without the disc:
+// sun_sample(), no random number.
 fn sun_sample_at(r: ptr<function, Rng>) -> LightSample {
     if (!sun_disc_on()) {
         return sun_sample();
@@ -52,5 +61,5 @@ fn sun_disc_seen(d: vec3<f32>, depth: u32, mode: u32, prev_pdf: f32) -> vec3<f32
     if (mode == AREA_MIS) {
         w = power_heuristic(prev_pdf, 1.0 / omega);
     }
-    return frame.sun_rgb.xyz * (w / omega);
+    return sun_disc_radiance() * w;
 }
