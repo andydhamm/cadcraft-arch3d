@@ -3901,6 +3901,22 @@ mod tests {
     }
 
     #[test]
+    fn push_electrical_and_connection_assign_increasing_ids() {
+        let mut m = ArchModel::default();
+        let e1 = m.push_electrical(ElectricalDevice::default());
+        let e2 = m.push_electrical(ElectricalDevice::default());
+        assert_eq!(e1, ArchId(0));
+        assert_eq!(e2, ArchId(1));
+        assert_eq!(m.next_electrical_id, 2);
+
+        let c1 = m.push_connection(Connection::default());
+        let c2 = m.push_connection(Connection::default());
+        assert_eq!(c1, ArchId(0));
+        assert_eq!(c2, ArchId(1));
+        assert_eq!(m.next_connection_id, 2);
+    }
+
+    #[test]
     fn room_handle_is_in_the_room_range() {
         let rh = room_handle(ArchId(0));
         assert!(is_room_handle(rh));
