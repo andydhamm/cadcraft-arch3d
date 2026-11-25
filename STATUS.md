@@ -1,8 +1,8 @@
 # arch3d build status
 
-Updated 2026-11-25 02:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 02:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 46 of 46 segments merged · 13 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 46 of 48 segments merged · 13 of 15 acceptance checks**
 
 12,191 workspace tests passing at the last merge · 1407 segments merged in all · 0 of 15 seats working
 
@@ -32,12 +32,16 @@ Updated 2026-11-25 02:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 13 / 15 | 33.0 h so far · expected done Nov 25 02:30–Nov 25 23:07 UTC |
+| 22 | Photoreal stills | building | 13 / 15 | 33.3 h so far · expected done Nov 25 05:09–Nov 25 20:00 UTC |
 
 ## Phase 22 segments
 
-46 merged
+46 merged, 2 working
 
+| Segment | What | State | Seat |
+|---|---|---|---|
+| `p22h-learned-energy` | Learned denoiser: restore the local energy the network removes from firefly-lit regions (kitchen mean within 15 %, error at most half the filter's) | working | claude-sonnet-d |
+| `upstream-sync-c7b7ceacb` | merge upstream upstream/main up to c7b7ceacb (35 commits) | working | bonsai-b |
 
 ## Recent merges
 
@@ -60,18 +64,18 @@ Updated 2026-11-25 02:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1446 |
-| bonsai-b | bonsai2-27b | idle | 1371 |
+| bonsai-a | bonsai2-27b | agent | 1446 |
+| bonsai-b | bonsai2-27b | agent | 1372 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 177 |
 | claude-sonnet-b | sonnet | idle | 187 |
 | claude-sonnet-c | sonnet | idle | 121 |
-| claude-sonnet-d | sonnet | idle | 118 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | yielding | 1333 |
+| claude-sonnet-d | sonnet | agent | 118 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1333 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1246 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1247 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 748 |
