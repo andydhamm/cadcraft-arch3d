@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-25 06:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 06:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 47 of 48 segments merged · 14 of 15 acceptance checks**
 
@@ -32,15 +32,15 @@ Updated 2026-11-25 06:30 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 14 / 15 | 37.0 h so far · expected done Nov 25 07:42–Nov 25 15:00 UTC |
+| 22 | Photoreal stills | building | 14 / 15 | 37.3 h so far · expected done Nov 25 07:57–Nov 25 15:15 UTC |
 
 ## Phase 22 segments
 
-47 merged, 1 abandoned, 1 working
+47 merged, 1 abandoned, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22i-learned-firefly-spread` | Learned denoiser: a guide-stopped spread of firefly-lit pixels before the network and an error bound that zero-hit pixels share (kitchen error at most half the filter's) | working | claude-sonnet-b |
+| `p22i-learned-firefly-spread` | Learned denoiser: a guide-stopped spread of firefly-lit pixels before the network and an error bound that zero-hit pixels share (kitchen error at most half the filter's) | gate | claude-sonnet-b |
 
 ## Recent merges
 
@@ -63,12 +63,12 @@ Updated 2026-11-25 06:30 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1452 |
+| bonsai-a | bonsai2-27b | agent | 1453 |
 | bonsai-b | bonsai2-27b | idle | 1386 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 177 |
-| claude-sonnet-b | sonnet | agent | 188 |
+| claude-sonnet-b | sonnet | gate | 189 |
 | claude-sonnet-c | sonnet | idle | 121 |
 | claude-sonnet-d | sonnet | idle | 119 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1345 |
