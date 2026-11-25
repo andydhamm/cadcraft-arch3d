@@ -1462,6 +1462,93 @@ fn run_guide_line(line: &str, tag: &str) -> (Session, Vec<String>) {
     (session, ids)
 }
 
+/// Hostile electrical parameters are refused with nothing written.
+#[test]
+fn user_guide_hostile_electrical_params() {
+    let mut session = Session::new();
+    session.execute("wall", &serde_json::json!({"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true})).ok();
+    session.execute("roomdetect", &serde_json::json!({})).ok();
+    // outlet kind must be valid
+    let r = session.execute("outlet", &serde_json::json!({"kind":"usb","wall":"w0","offset":1.0,"side":"left"}));
+    assert!(r.is_err(), "outlet kind \"usb\" should be refused");
+    // outlet side must be left or right
+    let r = session.execute("outlet", &serde_json::json!({"kind":"duplex","wall":"w0","offset":1.0,"side":"top"}));
+    assert!(r.is_err(), "outlet side \"top\" should be refused");
+    // outlet offset out of range
+    let r = session.execute("outlet", &serde_json::json!({"kind":"duplex","wall":"w0","offset":10.0,"side":"left"}));
+    assert!(r.is_err(), "outlet offset 10.0 on 6m wall should be refused");
+    // switch kind must be valid
+    let r = session.execute("switch", &serde_json::json!({"kind":"four-way","wall":"w0","offset":2.0,"side":"left"}));
+    assert!(r.is_err(), "switch kind \"four-way\" should be refused");
+    // connection from non-existent switch
+    let r = session.execute("connection", &serde_json::json!({"from":"el99","to":["lf0"]}));
+    assert!(r.is_err(), "connection from non-existent switch should be refused");
+    // circuit.brightness with non-existent switch
+    let r = session.execute("circuit.brightness", &serde_json::json!({"switch":"el99","brightness":0.5}));
+    assert!(r.is_err(), "circuit.brightness with non-existent switch should be refused");
+    // circuit.brightness out of range
+    let r = session.execute("circuit.brightness", &serde_json::json!({"switch":"el1","brightness":1.5}));
+    assert!(r.is_err(), "circuit.brightness 1.5 should be refused");
+    // outlets.auto on non-existent room
+    let r = session.execute("outlets.auto", &serde_json::json!({"room":"r99"}));
+    assert!(r.is_err(), "outlets.auto on non-existent room should be refused");
+}
+
+/// Hostile split-level parameters are refused with nothing written.
+#[test]
+fn user_guide_hostile_split_level_params() {
+    let mut session = Session::new();
+    // level elevation must be finite
+    let r = session.execute("level", &serde_json::json!({"name":"Test","elevation":0.0/0.0}));
+    assert!(r.is_err(), "level with NaN elevation should be refused");
+    // wall topLevel must be a valid level
+    session.execute("wall", &serde_json::json!({"points":[[0,0],[6,0]],"thickness":0.2,"height":2.4,"exterior":true})).ok();
+    let r = session.execute("wall", &serde_json::json!({"points":[[6,0],[6,4]],"thickness":0.2,"exterior":false,"level":0,"topLevel":5}));
+    assert!(r.is_err(), "wall with topLevel 5 when only level 0 exists should be refused");
+    // door on non-spanning wall with level
+    let r = session.execute("door", &serde_json::json!({"wall":"w0","offset":2.0,"width":0.9,"height":2.1,"level":1}));
+    assert!(r.is_err(), "door on level 1 of a wall that does not span level 1 should be refused");
+    // stair between same levels
+    let r = session.execute("stair", &serde_json::json!({"start":[2,0.5],"direction":90,"width":1.0,"fromLevel":0,"toLevel":0}));
+    assert!(r.is_err(), "stair from level 0 to level 0 should be refused");
+    // stair from non-existent level
+    let r = session.execute("stair", &serde_json::json!({"start":[2,0.5],"direction":90,"width":1.0,"fromLevel":5,"toLevel":0}));
+    assert!(r.is_err(), "stair from non-existent level 5 should be refused");
+}
+
+/// Electrical objects and levels survive a save/reload round-trip.
+#[test]
+fn user_guide_electrical_and_levels_round_trip() {
+    let mut session = Session::new();
+    session
+        .execute("wall", &serde_json::json!({"points":[[0,0],[6,0],[6,4],[0,4],[0,0]],"thickness":0.2,"height":2.4,"exterior":true}))
+        .expect("wall");
+    session.execute("roomdetect", &serde_json::json!({})).expect("roomdetect");
+    session.execute("outlet", &serde_json::json!({"kind":"duplex","wall":"w0","offset":1.0,"side":"left"})).expect("outlet");
+    session.execute("switch", &serde_json::json!({"kind":"single-pole","wall":"w0","offset":3.0,"side":"left"})).expect("switch");
+    session.execute("lightfixture", &serde_json::json!({"room":"r0","rows":1,"cols":1})).expect("lightfixture");
+    session.execute("connection", &serde_json::json!({"from":"el1","to":["lf0"]})).expect("connection");
+    session.execute("level", &serde_json::json!({"name":"Upper","elevation":2.7})).expect("level");
+
+    let inspect = session.execute("arch.inspect", &serde_json::json!({"electrical":true,"levels":true})).expect("inspect");
+    let devices = inspect.get("electrical").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    let levels_before = inspect.get("levels").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    assert_eq!(devices.len(), 2, "two electrical devices before save");
+    assert_eq!(levels_before.len(), 2, "two levels before save");
+
+    let drawing = session.doc().expect("doc").clone();
+    let mut session2 = Session::new();
+    session2.open_drawing(drawing, "test", None);
+
+    let inspect2 = session2.execute("arch.inspect", &serde_json::json!({"electrical":true,"levels":true})).expect("inspect after reload");
+    let devices_after = inspect2.get("electrical").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    let levels_after = inspect2.get("levels").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+    assert_eq!(devices_after.len(), 2, "two electrical devices after reload");
+    assert_eq!(levels_after.len(), 2, "two levels after reload");
+    let elevations: Vec<f64> = levels_after.iter().filter_map(|l| l.get("elevation").and_then(serde_json::Value::as_f64)).collect();
+    assert_eq!(elevations, [0.0, 2.7], "level elevations preserved: {inspect2}");
+}
+
 /// The one logical line of the guide's ```sh blocks that contains every needle.
 fn guide_line_with(needles: &[&str]) -> String {
     let lines: Vec<String> = sh_blocks(GUIDE).into_iter().flatten().filter(|l| needles.iter().all(|n| l.contains(n))).collect();

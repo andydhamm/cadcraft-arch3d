@@ -525,21 +525,30 @@ fn place_from_params(cmd: &'static str, kind: OpeningKind, s: &mut Session, p: &
     // sill is `level.elevation - wall.bottom_z + sill`. The wall must span the
     // level and the head must stay under the wall's top.
     let mut sill = sill;
-    if let Some(lv) = crate::cmd::str_param(p, "level") {
-        let level = d.arch.levels.iter().find(|l| l.name == lv).ok_or_else(|| crate::cmd::bad(cmd, format!("unknown level `{lv}`")))?;
+    let level_param = p.get("level").filter(|v| !v.is_null());
+    if let Some(lv) = level_param {
+        let (level, level_name) = if let Some(name) = lv.as_str() {
+            let level = d.arch.levels.iter().find(|l| l.name == name).ok_or_else(|| crate::cmd::bad(cmd, format!("unknown level `{name}`")))?;
+            (level, name.to_string())
+        } else if let Some(idx) = lv.as_u64() {
+            let level = d.arch.levels.get(idx as usize).ok_or_else(|| crate::cmd::bad(cmd, format!("unknown level index {idx}")))?;
+            (level, level.name.clone())
+        } else {
+            return Err(crate::cmd::bad(cmd, "`level` must be a name or index"));
+        };
         let wall = d.arch.wall(host).ok_or_else(|| crate::cmd::bad(cmd, format!("no wall {host}")))?;
         if !wall.spans_level(level, &d.arch.levels) {
-            return Err(crate::cmd::bad(cmd, format!("wall {host} does not span level `{lv}`")));
+            return Err(crate::cmd::bad(cmd, format!("wall {host} does not span level `{level_name}`")));
         }
         let bottom = wall.bottom_z(&d.arch.levels);
         let top = wall.top_z(&d.arch.levels);
         let total = level.elevation - bottom + sill;
         if !total.is_finite() || total < 0.0 {
-            return Err(crate::cmd::bad(cmd, format!("sill on level `{lv}` would be below the wall bottom")));
+            return Err(crate::cmd::bad(cmd, format!("sill on level `{level_name}` would be below the wall bottom")));
         }
         // A roof top derives its own height, so the head check does not apply.
         if trim.top != Some(OpeningTop::Roof) && bottom + total + height > top + 1e-9 {
-            return Err(crate::cmd::bad(cmd, format!("opening on level `{lv}` would rise above the top of wall {host}")));
+            return Err(crate::cmd::bad(cmd, format!("opening on level `{level_name}` would rise above the top of wall {host}")));
         }
         sill = total;
     }
