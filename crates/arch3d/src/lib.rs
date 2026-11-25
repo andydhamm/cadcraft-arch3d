@@ -1363,6 +1363,260 @@ mod tests {
     }
 
     #[test]
+    fn spanning_wall_with_missing_top_level_falls_back_to_height() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(99),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 3.0,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        let mesh = scene.mesh_for(&ArchId(1)).unwrap();
+        let z_min = mesh.positions.iter().map(|p| p[2]).fold(f32::INFINITY, f32::min);
+        let z_max = mesh.positions.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
+        assert!((z_min - 0.0f32).abs() < 1e-3f32, "z_min = {z_min}");
+        assert!((z_max - 3.0f32).abs() < 1e-3f32, "z_max = {z_max}, expected 3.0 (height fallback)");
+    }
+
+    #[test]
+    fn spanning_wall_with_same_top_and_base_level() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(0),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 3.0,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        let mesh = scene.mesh_for(&ArchId(1)).unwrap();
+        let z_min = mesh.positions.iter().map(|p| p[2]).fold(f32::INFINITY, f32::min);
+        let z_max = mesh.positions.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
+        assert!((z_min - 0.0f32).abs() < 1e-3f32, "z_min = {z_min}");
+        assert!((z_max - 2.4f32).abs() < 1e-3f32, "z_max = {z_max}, expected 2.4 (ceiling_height)");
+    }
+
+    #[test]
+    fn spanning_wall_with_infinite_base_elevation_is_skipped() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: f64::INFINITY, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Default::default() });
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        assert!(scene.mesh_for(&ArchId(1)).is_none(), "wall with infinite base elevation should be skipped");
+    }
+
+    #[test]
+    fn spanning_wall_with_infinite_top_ceiling_height_is_skipped() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: f64::INFINITY, ..Default::default() });
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        assert!(scene.mesh_for(&ArchId(1)).is_none(), "wall with infinite top ceiling height should be skipped");
+    }
+
+    #[test]
+    fn spanning_wall_with_to_ceiling_uses_top_level_ceiling() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: 3.0, ..Default::default() });
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(1),
+            to_ceiling: true,
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        let mesh = scene.mesh_for(&ArchId(1)).unwrap();
+        let z_min = mesh.positions.iter().map(|p| p[2]).fold(f32::INFINITY, f32::min);
+        let z_max = mesh.positions.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
+        assert!((z_min - 0.0f32).abs() < 1e-3f32, "z_min = {z_min}");
+        assert!((z_max - 5.7f32).abs() < 1e-3f32, "z_max = {z_max}, expected 5.7 (2.7 + 3.0)");
+    }
+
+    #[test]
+    fn spanning_wall_with_top_at_or_below_base_is_skipped() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 5.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 1, elevation: 2.0, ceiling_height: 2.4, ..Default::default() });
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        assert!(scene.mesh_for(&ArchId(1)).is_none(), "wall with top <= base should be skipped");
+    }
+
+    #[test]
+    fn spanning_wall_with_negative_base_elevation() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: -2.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 1, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        let mesh = scene.mesh_for(&ArchId(1)).unwrap();
+        let z_min = mesh.positions.iter().map(|p| p[2]).fold(f32::INFINITY, f32::min);
+        let z_max = mesh.positions.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
+        assert!((z_min - (-2.0f32)).abs() < 1e-3f32, "z_min = {z_min}");
+        assert!((z_max - 2.4f32).abs() < 1e-3f32, "z_max = {z_max}, expected 2.4 (0.0 + 2.4)");
+    }
+
+    #[test]
+    fn spanning_wall_with_huge_coordinates() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Default::default() });
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(1),
+            start: Vec2::new(1e15, 1e15),
+            end: Vec2::new(1e15 + 4.0, 1e15),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        assert!(scene.mesh_for(&ArchId(1)).is_some(), "wall with huge coordinates should be built");
+        let mesh = scene.mesh_for(&ArchId(1)).unwrap();
+        let z_min = mesh.positions.iter().map(|p| p[2]).fold(f32::INFINITY, f32::min);
+        let z_max = mesh.positions.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
+        assert!((z_min - 0.0f32).abs() < 1e-3f32, "z_min = {z_min}");
+        assert!((z_max - 5.1f32).abs() < 1e-3f32, "z_max = {z_max}, expected 5.1 (2.7 + 2.4)");
+    }
+
+    #[test]
+    fn spanning_wall_with_nan_coordinates() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Default::default() });
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(1),
+            start: Vec2::new(f64::NAN, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        assert!(scene.mesh_for(&ArchId(1)).is_none(), "wall with NaN coordinates should be skipped");
+    }
+
+    #[test]
+    fn spanning_wall_with_zero_length() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 1, elevation: 2.7, ceiling_height: 2.4, ..Default::default() });
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(0.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        assert!(scene.mesh_for(&ArchId(1)).is_none(), "zero-length spanning wall should be skipped");
+    }
+
+    #[test]
+    fn spanning_wall_with_no_levels() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        let mesh = scene.mesh_for(&ArchId(1)).unwrap();
+        let z_min = mesh.positions.iter().map(|p| p[2]).fold(f32::INFINITY, f32::min);
+        let z_max = mesh.positions.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
+        assert!((z_min - 0.0f32).abs() < 1e-3f32, "z_min = {z_min}");
+        assert!((z_max - 2.4f32).abs() < 1e-3f32, "z_max = {z_max}, expected 2.4 (fallback)");
+    }
+
+    #[test]
+    fn spanning_wall_with_to_ceiling_and_missing_top_level() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.walls.push(Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(99),
+            to_ceiling: true,
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 3.0,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        let mesh = scene.mesh_for(&ArchId(1)).unwrap();
+        let z_min = mesh.positions.iter().map(|p| p[2]).fold(f32::INFINITY, f32::min);
+        let z_max = mesh.positions.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
+        assert!((z_min - 0.0f32).abs() < 1e-3f32, "z_min = {z_min}");
+        assert!((z_max - 2.4f32).abs() < 1e-3f32, "z_max = {z_max}, expected 2.4 (ceiling_height fallback)");
+    }
+
+    #[test]
     fn second_level_wall_sits_on_the_first() {
         let mut model = ArchModel::default();
         model.levels.push(Level { elevation: 0.0, ceiling_height: 2.5, ..Default::default() });
