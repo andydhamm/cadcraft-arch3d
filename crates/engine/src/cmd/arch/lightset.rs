@@ -133,4 +133,74 @@ mod tests {
         let err = s.execute("lightset", &json!({ "name": "bad", "lights": { "lf9": { "on": true } } })).unwrap_err();
         assert!(err.to_string().contains("unknown light"));
     }
+
+    #[test]
+    fn empty_lights_object_creates_a_set_with_no_overrides() {
+        let mut s = session_with_light();
+        let r = s.execute("lightset", &json!({ "name": "empty", "lights": {} })).unwrap();
+        assert_eq!(r["lightSet"], json!("empty"));
+        assert_eq!(r["lights"], json!(0));
+        let doc = s.doc().unwrap();
+        assert_eq!(doc.arch.light_sets.len(), 1);
+        assert!(doc.arch.light_sets[0].lights.is_empty());
+    }
+
+    #[test]
+    fn brightness_boundaries_are_accepted_and_out_of_range_refused() {
+        let mut s = session_with_light();
+        // 0.0 and 1.0 are accepted
+        s.execute("lightset", &json!({ "name": "a", "lights": { "lf0": { "on": true, "brightness": 0.0 } } })).unwrap();
+        s.execute("lightset", &json!({ "name": "b", "lights": { "lf0": { "on": true, "brightness": 1.0 } } })).unwrap();
+        // Just outside is refused
+        let err = s.execute("lightset", &json!({ "name": "c", "lights": { "lf0": { "on": true, "brightness": 1.0001 } } })).unwrap_err();
+        assert!(err.to_string().contains("brightness"));
+        let err = s.execute("lightset", &json!({ "name": "d", "lights": { "lf0": { "on": true, "brightness": -0.0001 } } })).unwrap_err();
+        assert!(err.to_string().contains("brightness"));
+    }
+
+    #[test]
+    fn light_set_name_length_boundaries() {
+        let mut s = session_with_light();
+        let name64 = "a".repeat(64);
+        s.execute("lightset", &json!({ "name": name64, "lights": {} })).unwrap();
+        let name65 = "a".repeat(65);
+        let err = s.execute("lightset", &json!({ "name": name65, "lights": {} })).unwrap_err();
+        assert!(err.to_string().contains("64"));
+    }
+
+    #[test]
+    fn light_set_create_and_delete_are_undoable() {
+        let mut s = session_with_light();
+        s.execute("lightset", &json!({ "name": "x", "lights": {} })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.light_sets.len(), 1);
+        s.execute("u", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().arch.light_sets.len(), 0);
+        s.execute("lightset", &json!({ "name": "y", "lights": {} })).unwrap();
+        s.execute("lightset", &json!({ "delete": "y" })).unwrap();
+        assert_eq!(s.doc().unwrap().arch.light_sets.len(), 0);
+        s.execute("u", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().arch.light_sets.len(), 1);
+    }
+
+    #[test]
+    fn multiple_light_sets_coexist_and_list_in_order() {
+        let mut s = session_with_light();
+        s.execute("lightset", &json!({ "name": "first", "lights": {} })).unwrap();
+        s.execute("lightset", &json!({ "name": "second", "lights": {} })).unwrap();
+        s.execute("lightset", &json!({ "name": "third", "lights": {} })).unwrap();
+        let r = s.execute("lightset", &json!({ "list": true })).unwrap();
+        let names: Vec<String> = r["lightSets"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap().to_string()).collect();
+        assert_eq!(names, vec!["first", "second", "third"]);
+    }
+
+    #[test]
+    fn replacing_a_light_set_keeps_its_position() {
+        let mut s = session_with_light();
+        s.execute("lightset", &json!({ "name": "a", "lights": {} })).unwrap();
+        s.execute("lightset", &json!({ "name": "b", "lights": {} })).unwrap();
+        s.execute("lightset", &json!({ "name": "a", "lights": { "lf0": { "on": false } } })).unwrap();
+        let r = s.execute("lightset", &json!({ "list": true })).unwrap();
+        let names: Vec<String> = r["lightSets"].as_array().unwrap().iter().map(|s| s["name"].as_str().unwrap().to_string()).collect();
+        assert_eq!(names, vec!["a", "b"]);
+    }
 }
