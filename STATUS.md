@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-25 03:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 03:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 46 of 47 segments merged · 13 of 15 acceptance checks**
 
@@ -32,15 +32,15 @@ Updated 2026-11-25 03:00 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 13 / 15 | 33.5 h so far · expected done Nov 25 04:12–Nov 25 18:22 UTC |
+| 22 | Photoreal stills | building | 13 / 15 | 33.8 h so far · expected done Nov 25 04:37–Nov 25 20:49 UTC |
 
 ## Phase 22 segments
 
-46 merged, 1 working, 1 abandoned
+46 merged, 1 gate, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22h-learned-energy` | Learned denoiser: restore the local energy the network removes from firefly-lit regions (kitchen mean within 15 %, error at most half the filter's) | working | claude-sonnet-d |
+| `p22h-learned-energy` | Learned denoiser: restore the local energy the network removes from firefly-lit regions (kitchen mean within 15 %, error at most half the filter's) | gate | claude-sonnet-d |
 
 ## Recent merges
 
@@ -63,18 +63,18 @@ Updated 2026-11-25 03:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1447 |
-| bonsai-b | bonsai2-27b | idle | 1374 |
+| bonsai-a | bonsai2-27b | idle | 1448 |
+| bonsai-b | bonsai2-27b | agent | 1374 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 177 |
 | claude-sonnet-b | sonnet | idle | 187 |
 | claude-sonnet-c | sonnet | idle | 121 |
-| claude-sonnet-d | sonnet | agent | 118 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1333 |
+| claude-sonnet-d | sonnet | gate | 118 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1334 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | gate | 1247 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1248 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 748 |
