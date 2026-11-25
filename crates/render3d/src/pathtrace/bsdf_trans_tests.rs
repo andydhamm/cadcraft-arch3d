@@ -472,3 +472,52 @@ fn opaque_direct_light_is_unchanged_by_the_shadow_side() {
     assert!(a.iter().any(|p| p[0] > 0.0), "the scene is lit");
     assert_eq!(a, b, "an opaque scene renders identically with PHOTO_MATERIALS on and off");
 }
+
+#[test]
+fn thin_sheet_very_rough_furnace_conserves_energy() {
+    let Some(out) = furnace_means(thin_sheet([1.0; 3], 0.99, 0.6)) else {
+        return;
+    };
+    for (o, c) in out.iter().zip(FURNACE_COSINES) {
+        for k in 0..3 {
+            assert!((0.95..=1.02).contains(&o[k]), "NoV {c} channel {k}: mean weight {}", o[k]);
+        }
+    }
+}
+
+#[test]
+fn thin_sheet_smooth_furnace_conserves_energy() {
+    let Some(out) = furnace_means(thin_sheet([1.0; 3], 0.05, 0.6)) else {
+        return;
+    };
+    for (o, c) in out.iter().zip(FURNACE_COSINES) {
+        for k in 0..3 {
+            assert!((0.95..=1.02).contains(&o[k]), "NoV {c} channel {k}: mean weight {}", o[k]);
+        }
+    }
+}
+
+#[test]
+fn rough_glass_high_ior_furnace_conserves_energy() {
+    let material = GpuMaterial { ior: 2.0, ..rough_glass([1.0; 3], 0.3, 1.0) };
+    let Some(out) = furnace_means(material) else {
+        return;
+    };
+    for (o, c) in out.iter().zip(FURNACE_COSINES) {
+        for k in 0..3 {
+            assert!((0.95..=1.02).contains(&o[k]), "NoV {c} channel {k}: mean weight {}", o[k]);
+        }
+    }
+}
+
+#[test]
+fn rough_glass_partial_transmission_furnace_conserves_energy() {
+    let Some(out) = furnace_means(rough_glass([1.0; 3], 0.3, 0.5)) else {
+        return;
+    };
+    for (o, c) in out.iter().zip(FURNACE_COSINES) {
+        for k in 0..3 {
+            assert!((0.95..=1.02).contains(&o[k]), "NoV {c} channel {k}: mean weight {}", o[k]);
+        }
+    }
+}
