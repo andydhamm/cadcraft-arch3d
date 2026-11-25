@@ -304,7 +304,7 @@ fn pixel_errors_single_pixel_image() {
     assert_eq!(errors.len(), 1);
     let e = errors[0].expect("hit pixel has an error");
     // own = 0.04 / 2^2 = 0.01; error = sqrt(0.01 / 32)
-    let want = (0.04 / 4.0 / 32.0).sqrt();
+    let want = (0.04f32 / 4.0 / 32.0).sqrt();
     assert!((e - want).abs() < 1e-6, "single pixel error {e} vs {want}");
 }
 
