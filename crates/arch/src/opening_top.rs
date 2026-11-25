@@ -428,4 +428,26 @@ mod tests {
         assert!(rough_outline(&o2, 1.2, Some(&bad)).is_none());
         assert!(validate(&mut Opening::default(), None).is_ok());
     }
+
+    #[test]
+    fn square_outline_with_nan_coordinates() {
+        let o = win(OpeningTop::Square, f64::NAN, 1.0, 1.5, 0.9);
+        assert!(rough_outline(&o, 0.9, None).is_none());
+        assert!(finished_outline(&o, 0.9, None).is_none());
+    }
+
+    #[test]
+    fn round_outline_with_zero_width() {
+        let o = win(OpeningTop::Round, 3.0, 0.0, 1.5, 0.9);
+        assert!(rough_outline(&o, 0.9, None).is_none());
+        assert!(finished_outline(&o, 0.9, None).is_none());
+    }
+
+    #[test]
+    fn segment_default_rise_applied_in_validate() {
+        let mut o = win(OpeningTop::Segment, 3.0, 0.9, 1.2, 0.9);
+        o.top_rise = 0.0; // Will be replaced with default width/6
+        assert!(validate(&mut o, None).is_ok());
+        assert!((o.top_rise - 0.15).abs() < 1e-12); // 0.9 / 6 = 0.15
+    }
 }

@@ -340,4 +340,42 @@ mod tests {
         assert!(ids.is_empty());
         assert_eq!(m.railings.len(), MAX_RAILINGS);
     }
+
+    #[test]
+    fn regenerate_with_unknown_stair() {
+        let mut m = ArchModel::default();
+        // No stair with id 5 exists; regenerate should not panic.
+        let ids = regenerate(&mut m, RailHostRef::Stair(ArchId(5)));
+        assert!(ids.is_empty());
+        assert_eq!(m.railings.len(), 0);
+    }
+
+    #[test]
+    fn regenerate_with_unknown_deck() {
+        let mut m = ArchModel::default();
+        // No room with id 5 exists; regenerate should not panic.
+        let ids = regenerate(&mut m, RailHostRef::Deck(ArchId(5)));
+        assert!(ids.is_empty());
+        assert_eq!(m.railings.len(), 0);
+    }
+
+    #[test]
+    fn auto_railings_for_deck_with_non_finite_height() {
+        let mut m = ArchModel::default();
+        let mut room = cadcraft_doc::arch::Room {
+            name: "Deck".into(),
+            room_type: cadcraft_doc::arch::RoomType::Deck,
+            polygon: vec![
+                cadcraft_geom::Vec2::new(0.0, 0.0),
+                cadcraft_geom::Vec2::new(3.0, 0.0),
+                cadcraft_geom::Vec2::new(3.0, 3.0),
+                cadcraft_geom::Vec2::new(0.0, 3.0),
+            ],
+            ..cadcraft_doc::arch::Room::default()
+        };
+        room.deck_height = Some(f64::NAN);
+        let id = m.push_room(room);
+        let rails = auto_railings(&m, RailHostRef::Deck(id));
+        assert!(rails.is_empty());
+    }
 }

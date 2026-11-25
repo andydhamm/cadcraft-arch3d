@@ -156,4 +156,12 @@ mod tests {
         let l = lighting_for(&look, Some(d), 8);
         assert!(l.sun.is_none() && !l.sun_shadow, "sun off");
     }
+
+    /// A NaN sun direction is treated as night (no sun).
+    #[test]
+    fn lighting_for_nan_sun_direction_is_night() {
+        let d = [f64::NAN, f64::NAN, f64::NAN];
+        let l = lighting_for(&Look::default(), Some(d), 8);
+        assert!(l.sun.is_none(), "NaN sun direction must be night");
+    }
 }
