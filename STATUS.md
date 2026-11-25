@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-25 14:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 15:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23**
 
-12,271 workspace tests passing at the last merge · 1418 segments merged in all · 0 of 15 seats working
+12,275 workspace tests passing at the last merge · 1419 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -33,7 +33,7 @@ Updated 2026-11-25 14:45 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — |  · expected done Nov 25 20:14–Dec 10 16:48 UTC |
+| 23 | Phase 23 | pending | — |  · expected done Nov 25 20:29–Dec 10 17:04 UTC |
 
 ## Phase 23 segments
 
@@ -44,6 +44,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 25 14:48 | `harden-p22g-learned-kitchen-error` | merged | 12,275 pass | tturbo-mac |
 | Nov 25 09:00 | `harden-p15-docs-user-guide` | merged | 12,271 pass | tturbo-mac |
 | Nov 25 08:33 | `harden-p16-tray-commands` | refused | 12,275 pass | tturbo-mac |
 | Nov 25 08:02 | `harden-p15-docs-user-guide` | refused | 12,271 pass | tturbo-mac |
@@ -55,7 +56,6 @@ none yet
 | Nov 25 05:30 | `harden-p16-rw-pane-styles` | merged | 12,266 pass | tturbo-mac |
 | Nov 25 05:06 | `harden-p17-observables-inspect` | merged | 12,257 pass | tturbo-mac |
 | Nov 25 04:15 | `harden-p17-scene-plumbing-pick` | merged | 12,244 pass | tturbo-mac |
-| Nov 25 03:56 | `p22h-learned-energy` | merged | 12,233 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
@@ -74,5 +74,5 @@ none yet
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1270 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1271 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 756 |
