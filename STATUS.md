@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-25 00:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 00:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 22 of 22: Photoreal stills — 44 of 46 segments merged · 12 of 15 acceptance checks**
 
@@ -32,16 +32,16 @@ Updated 2026-11-25 00:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 12 / 15 | 30.8 h so far · expected done Nov 25 02:39–Nov 26 00:37 UTC |
+| 22 | Photoreal stills | building | 12 / 15 | 31.0 h so far · expected done Nov 25 02:54–Nov 26 00:52 UTC |
 
 ## Phase 22 segments
 
-44 merged, 1 escalate, 1 working
+44 merged, 1 escalate, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
 | `p22g-adaptive-robust-error` | Adaptive sampling: a neighbourhood error estimate, a higher floor and no sticky freeze, so pixels do not freeze on a zero sample variance | escalate |  |
-| `upstream-sync-171ac5112` | merge upstream upstream/main up to 171ac5112 (39 commits) | working | darwin-ws3 |
+| `upstream-sync-171ac5112` | merge upstream upstream/main up to 171ac5112 (39 commits) | gate | darwin-ws3 |
 
 ## Recent merges
 
@@ -64,15 +64,15 @@ Updated 2026-11-25 00:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1445 |
-| bonsai-b | bonsai2-27b | agent | 1370 |
+| bonsai-a | bonsai2-27b | gate | 1445 |
+| bonsai-b | bonsai2-27b | gate | 1370 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 177 |
 | claude-sonnet-b | sonnet | idle | 187 |
 | claude-sonnet-c | sonnet | idle | 121 |
 | claude-sonnet-d | sonnet | idle | 117 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1332 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1332 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
