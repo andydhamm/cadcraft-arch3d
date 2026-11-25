@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-25 17:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 17:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23**
 
-12,275 workspace tests passing at the last merge · 1420 segments merged in all · 0 of 15 seats working
+12,280 workspace tests passing at the last merge · 1421 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -33,7 +33,7 @@ Updated 2026-11-25 17:15 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — |  · expected done Nov 25 22:44–Dec 10 19:19 UTC |
+| 23 | Phase 23 | pending | — |  · expected done Nov 25 22:59–Dec 10 19:34 UTC |
 
 ## Phase 23 segments
 
@@ -44,6 +44,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 25 17:22 | `harden-p22-r3d-sun-disc` | merged | 12,280 pass | tturbo-mac |
 | Nov 25 15:29 | `harden-p16-tray-i18n` | merged | 12,275 pass | tturbo-mac |
 | Nov 25 14:48 | `harden-p22g-learned-kitchen-error` | merged | 12,275 pass | tturbo-mac |
 | Nov 25 09:00 | `harden-p15-docs-user-guide` | merged | 12,271 pass | tturbo-mac |
@@ -55,7 +56,6 @@ none yet
 | Nov 25 05:56 | `harden-p16-rw-overhead-3d` | merged | 12,275 pass | tturbo-mac |
 | Nov 25 05:30 | `harden-p22h-learned-energy` | merged | 12,266 pass | tturbo-mac2 |
 | Nov 25 05:30 | `harden-p16-rw-pane-styles` | merged | 12,266 pass | tturbo-mac |
-| Nov 25 05:06 | `harden-p17-observables-inspect` | merged | 12,257 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -74,5 +74,5 @@ none yet
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1276 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1277 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 756 |
