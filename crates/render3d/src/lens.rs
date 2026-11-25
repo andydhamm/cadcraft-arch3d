@@ -96,4 +96,20 @@ mod tests {
         assert_eq!([f(0), f(1), f(2)], [4.0, 5.0, 6.0]);
         assert_eq!([f(3), f(4), f(5)], [1.0, 2.0, 3.0]);
     }
+
+    #[test]
+    fn encode_pfm_zero_width() {
+        let b = encode_pfm(0, 2, &[]);
+        let head = b"PF\n0 2\n-1.0\n";
+        assert_eq!(&b[..head.len()], head);
+        assert_eq!(b.len(), head.len(), "no pixel data for zero width");
+    }
+
+    #[test]
+    fn encode_pfm_zero_height() {
+        let b = encode_pfm(3, 0, &[]);
+        let head = b"PF\n3 0\n-1.0\n";
+        assert_eq!(&b[..head.len()], head);
+        assert_eq!(b.len(), head.len(), "no pixel data for zero height");
+    }
 }

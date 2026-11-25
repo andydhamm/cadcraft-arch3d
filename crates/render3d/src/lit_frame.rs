@@ -534,4 +534,13 @@ mod tests {
         let light = Lighting { look, sun: None, ..Default::default() }.with_moon(Some([0.0, 0.0, 1.0]));
         assert!(light.moon.is_none(), "moon with zero lux must not be used");
     }
+
+    /// A NaN sun intensity gives zero directional lux.
+    #[test]
+    fn directional_lux_nan_intensity_is_zero() {
+        let mut look = cadcraft_doc::arch::Look::default();
+        look.sun.intensity = f64::NAN;
+        let l = Lighting { look, sun: Some(Light::DEFAULT), ..Default::default() };
+        assert_eq!(l.directional_lux(), 0.0, "NaN sun intensity must give zero lux");
+    }
 }
