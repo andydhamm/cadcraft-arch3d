@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-25 03:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-25 03:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 22 of 22: Photoreal stills — 46 of 47 segments merged · 13 of 15 acceptance checks**
+**Phase 22 of 22: Photoreal stills — 46 of 47 segments merged · 14 of 15 acceptance checks**
 
-12,215 workspace tests passing at the last merge · 1409 segments merged in all · 0 of 15 seats working
+12,219 workspace tests passing at the last merge · 1410 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -32,20 +32,21 @@ Updated 2026-11-25 03:15 UTC. This page and the card in the README are regenerat
 | 19 | Light, sky and cameras | done | 17 / 17 | 118.1 h |
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
-| 22 | Photoreal stills | building | 13 / 15 | 33.8 h so far · expected done Nov 25 04:37–Nov 25 20:49 UTC |
+| 22 | Photoreal stills | building | 14 / 15 | 34.0 h so far · expected done Nov 25 04:52–Nov 25 21:04 UTC |
 
 ## Phase 22 segments
 
-46 merged, 1 gate, 1 abandoned
+46 merged, 1 merging, 1 abandoned
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `p22h-learned-energy` | Learned denoiser: restore the local energy the network removes from firefly-lit regions (kitchen mean within 15 %, error at most half the filter's) | gate | claude-sonnet-d |
+| `p22h-learned-energy` | Learned denoiser: restore the local energy the network removes from firefly-lit regions (kitchen mean within 15 %, error at most half the filter's) | merging | claude-sonnet-d |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 25 03:22 | `harden-p17-stair-flight` | merged | 12,219 pass | tturbo-mac |
 | Nov 25 02:55 | `harden-p17-commands` | merged | 12,215 pass | tturbo-mac |
 | Nov 25 02:55 | `harden-p22-r3d-types` | merged | 12,215 pass | tturbo-mac2 |
 | Nov 25 01:58 | `upstream-sync-171ac5112` | merged | 12,191 pass | darwin-ws3 |
@@ -57,20 +58,19 @@ Updated 2026-11-25 03:15 UTC. This page and the card in the README are regenerat
 | Nov 24 23:26 | `p22g-learned-kitchen-error` | merged | 12,062 pass, 1 fail | claude-sonnet-b |
 | Nov 24 21:55 | `p22g-trans-shadow-side` | merged | 12,056 pass | claude-sonnet-c |
 | Nov 24 21:19 | `harden-p22f-adaptive-freeze` | merged | 12,052 pass | tturbo-mac |
-| Nov 24 20:35 | `harden-p22-arch3d-lens` | merged | 12,047 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1448 |
-| bonsai-b | bonsai2-27b | agent | 1374 |
+| bonsai-b | bonsai2-27b | agent | 1378 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 177 |
 | claude-sonnet-b | sonnet | idle | 187 |
 | claude-sonnet-c | sonnet | idle | 121 |
-| claude-sonnet-d | sonnet | gate | 118 |
+| claude-sonnet-d | sonnet | idle | 119 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1334 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
