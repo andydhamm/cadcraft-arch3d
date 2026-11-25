@@ -4,6 +4,8 @@
 # the rim, anisotropy 0.8 under a point light gives a highlight at least 3 x longer than wide, transmission lets an
 # emitter behind the sphere show through. (c) materials: basic ignores the fields. (d) surface variation changes a flat
 # card's colour from place to place and keeps its mean within 2 %.
+# (d) measures the mean over about 33 x 33 noise cells (2026-11-24): with 0.2 m cells its 60 px window held 3 x 3 cells,
+# so the window mean was one draw of the noise (3 % off), not the material's mean.
 # needs: p22-doc-look, p22-arch3d-material-ext, p22-arch3d-calibrate, p22-r3d-types, p22-r3d-kernel-hooks, p22-r3d-material-map, p22-engine-look-keys, p22-engine-render-params, p22-cli-hook, p22-r3d-linear-out, p22-r3d-bsdf-ext, p22-r3d-bsdf-transmission, p22-r3d-variation
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p22lib.inc')).read())
@@ -100,17 +102,19 @@ print('emitter behind the sphere: opaque %.3f, rough transmission %.1f, thin %.1
 if not (m_o < 0.5 and m_t > 5.0 and m_n > 5.0):
     fail('an emitter behind the sphere shows through rough glass and a thin translucent sheet, not through the opaque one: %.3f, %.2f, %.2f' % (m_o, m_t, m_n))
 
-# (d) surface variation on a flat grey card facing the sun and the camera.
+# (d) surface variation on a flat grey card facing the sun and the camera. The frame shows 1.6 m of the 2 m card across
+# 160 px (1 cm a pixel). The noise cell is 3 cm, so the judged 100 px window holds about 33 x 33 cells and its mean is
+# the material's mean to a fraction of a percent, while a cell is still 3 px wide, so the variation shows.
 card = lambda **m: [obj('box', [0, 0, 0], [2.0, 0.02, 2.0], color=[0.5, 0.5, 0.5], roughness=0.8, **m)]
 V = dict(spp=16, bounces=0, sun={'azimuth': 180, 'elevation': 20})
-v0 = shot(S, card(variation={'scale': 0.2, 'amount': 0.5}), None, variation=False, **V)
-v1 = shot(S, card(variation={'scale': 0.2, 'amount': 0.5}), None, variation=True, **V)
+v0 = shot(S, card(variation={'scale': 0.03, 'amount': 0.5}), None, variation=False, **V)
+v1 = shot(S, card(variation={'scale': 0.03, 'amount': 0.5}), None, variation=True, **V)
 rendered([v0[2], v1[2]], 'the variation renders')
 
 
 def stats(p):
     w, h, vals = pfm_lumas(p)
-    v = [vals[y * w + x] for y in range(50, 110) for x in range(50, 110)]
+    v = [vals[y * w + x] for y in range(30, 130) for x in range(30, 130)]
     m = sum(v) / len(v)
     return m, math.sqrt(sum((x - m) ** 2 for x in v) / len(v)) / m
 
