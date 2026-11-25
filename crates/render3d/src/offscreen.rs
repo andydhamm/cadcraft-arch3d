@@ -1056,8 +1056,10 @@ mod offscreen_behavior_tests {
 
     #[test]
     fn style_codes_are_distinct() {
-        let codes: Vec<u32> =
-            [Style::Shaded, Style::ShadedEdges, Style::HiddenLine, Style::GlassHouse, Style::Clay].iter().map(|s| s.code()).collect();
+        let codes: Vec<u32> = [Style::Shaded, Style::ShadedEdges, Style::HiddenLine, Style::GlassHouse, Style::Clay, Style::Technical]
+            .iter()
+            .map(|s| s.code())
+            .collect();
         for i in 0..codes.len() {
             for j in i + 1..codes.len() {
                 assert_ne!(codes[i], codes[j], "style codes must be distinct");
@@ -1413,6 +1415,46 @@ mod offscreen_behavior_tests {
         assert!(different > 0, "glass house must produce different pixels than shaded");
         // But not every pixel should differ (the silhouette should be similar).
         assert!(different < shaded.len(), "glass house should not change every pixel");
+    }
+
+    #[test]
+    fn technical_style_differs_from_shaded() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let size = (160u32, 120u32);
+        let mut off = Offscreen::with_device(device, queue, size);
+        let scene = cube_scene();
+        let camera = Camera::Orbit(crate::camera::Orbit::at_origin(30.0, 30.0, 8.0, 45.0));
+        off.render_with(&scene, 1, &camera, &Light::DEFAULT, &RenderOptions { style: Style::Shaded, ..Default::default() });
+        let shaded = off.read_rgba().unwrap_or_default();
+        off.render_with(&scene, 1, &camera, &Light::DEFAULT, &RenderOptions { style: Style::Technical, ..Default::default() });
+        let technical = off.read_rgba().unwrap_or_default();
+        assert_eq!(shaded.len(), technical.len());
+        let different = shaded.iter().zip(technical.iter()).filter(|(a, b)| a != b).count();
+        assert!(different > 0, "technical must produce different pixels than shaded");
+        assert!(different < shaded.len(), "technical should not change every pixel");
+    }
+
+    #[test]
+    fn technical_style_with_empty_scene() {
+        let Some((device, queue)) = crate::gputest::shared_device() else {
+            eprintln!("SKIP: no GPU adapter available");
+            return;
+        };
+        let size = (160, 120);
+        let mut off = Offscreen::with_device(device, queue, size);
+        let scene = Scene3d::default();
+        off.render_with(
+            &scene,
+            1,
+            &Camera::Orbit(crate::camera::Orbit::at_origin(0.0, 0.0, 5.0, 45.0)),
+            &Light::DEFAULT,
+            &RenderOptions { style: Style::Technical, ..Default::default() },
+        );
+        let rgba = off.read_rgba().expect("readback");
+        assert!(pixels_are_uniform(&rgba), "empty scene in technical style should be uniform clear colour");
     }
 
     #[test]

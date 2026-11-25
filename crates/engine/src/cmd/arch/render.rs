@@ -922,6 +922,29 @@ mod tests {
         assert_eq!(style, "technical");
     }
 
+    #[test]
+    fn technical_style_is_not_default() {
+        assert_eq!(parse_style(None).ok().as_deref(), Some("shaded"));
+        assert_ne!(parse_style(None).ok().as_deref(), Some("technical"));
+    }
+
+    #[test]
+    fn technique_style_covers_all_techniques() {
+        assert_eq!(technique_style(Technique::Standard), "shaded");
+        assert_eq!(technique_style(Technique::Path), "shaded");
+        assert_eq!(technique_style(Technique::Photoreal), "shaded");
+        assert_eq!(technique_style(Technique::Clay), "clay");
+        assert_eq!(technique_style(Technique::Technical), "technical");
+    }
+
+    #[test]
+    fn parse_style_rejects_technical_variants() {
+        for bad in ["tech", "technical-", "-technical", "TECHNICAL", " Technical", "Technical "] {
+            let err = parse_style(Some(&json!(bad))).map_err(|e| e.to_string()).err().unwrap_or_default();
+            assert!(err.contains("`style` must be one of"), "{bad}: {err}");
+        }
+    }
+
     fn sited() -> Drawing {
         let mut d = Drawing::new_metric();
         d.arch.site = Some(cadcraft_doc::arch::site::SiteLocation { latitude: 51.05, ..Default::default() });

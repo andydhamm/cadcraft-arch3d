@@ -329,4 +329,55 @@ mod tests {
         let scene = Scene3d { meshes: vec![m], ..Default::default() };
         assert!(edge_lines(&scene).is_empty());
     }
+
+    #[test]
+    fn edge_lines_with_view_uses_same_silhouettes_for_close_views() {
+        let mut m = Mesh::new("cyl", ArchId(1));
+        let sides = 16usize;
+        for k in 0..sides {
+            let a = std::f64::consts::TAU * k as f64 / sides as f64;
+            let (x, y) = (a.cos() as f32, a.sin() as f32);
+            m.positions.push([x, y, 0.0]);
+            m.positions.push([x, y, 1.0]);
+        }
+        for k in 0..sides {
+            let (b0, t0) = (2 * k as u32, 2 * k as u32 + 1);
+            let n = (k + 1) % sides;
+            let (b1, t1) = (2 * n as u32, 2 * n as u32 + 1);
+            m.indices.extend([b0, b1, t1, b0, t1, t0]);
+        }
+        m.normals = vec![[0.0, 0.0, 1.0]; m.positions.len()];
+        m.uvs = vec![[0.0, 0.0]; m.positions.len()];
+        let scene = Scene3d { meshes: vec![m], ..Default::default() };
+        let a = edge_lines_with_view(&scene, [0.0, 1.0, 0.0]);
+        let b = edge_lines_with_view(&scene, [0.001, 1.0, 0.0]);
+        assert_eq!(a.len(), b.len(), "close view directions should produce the same silhouette count");
+    }
+
+    #[test]
+    fn edge_lines_of_coincident_vertices() {
+        let p = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.5, 1.0, 0.0], [0.5, 1.0, 0.0]];
+        let lines = edge_lines(&mesh_of(p, vec![0, 1, 2, 0, 3, 1]));
+        assert!(lines.len() % 2 == 0);
+        assert!(lines.len() <= 12, "coincident vertices should not produce extra edges: {}", lines.len());
+    }
+
+    #[test]
+    fn edge_lines_of_flat_cube() {
+        let p = vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ];
+        let idx = vec![0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7];
+        let lines = edge_lines(&mesh_of(p, idx));
+        assert!(lines.len() % 2 == 0);
+        assert!(lines.len() > 0, "flat cube should have some edges");
+        assert!(lines.len() <= 24, "flat cube should not have more edges than a real cube: {}", lines.len());
+    }
 }
