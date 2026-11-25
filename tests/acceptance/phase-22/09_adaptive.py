@@ -2,14 +2,16 @@
 # uniform render needs for the same error (both stop on the same metric: the 95th percentile over hit pixels of the
 # relative error of the mean, floored at 5 % of the frame mean); two adaptive renders with different seeds really differ
 # by no more than that error allows. A 60 s time budget stops within 65 s and reports time budget. The target is 0.08
-# on a GPU and 0.25 on the software adapter (the 60 % rule does not depend on it).
+# on a GPU and 0.40 on the software adapter (the 60 % rule does not depend on it).
 # needs: p22-doc-look, p22-r3d-types, p22-r3d-kernel-hooks, p22-engine-look-keys, p22-engine-render-params, p22-cli-hook, p22-r3d-linear-out, p22-r3d-adaptive
 import os
 exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'p22lib.inc')).read())
 
 tmp = tempfile.mkdtemp()
-T = 0.08 if BIG else 0.25
-SIZE = (240, 150) if BIG else (64, 40)
+# Software adapter (operator 2026-11-24): target 0.40 on a 48 x 30 frame. At 0.25 on 64 x 40 the three kitchen renders took
+# 646 s and the whole check 963 s run alone on nb4, over the gate's 900 s, so a working fix could only time out.
+T = 0.08 if BIG else 0.40
+SIZE = (240, 150) if BIG else (48, 30)
 base = dict(final='path', noiseTarget=T, spp=65536, timeBudget=3000, bounces=2, denoise=False)
 pa, pb, pu = [os.path.join(tmp, x + '.pfm') for x in ('a1', 'a2', 'u')]
 # Fail fast while adaptive sampling is missing. Without it the three kitchen renders below ignore `adaptive` and
