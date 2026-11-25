@@ -183,10 +183,12 @@ pub(super) fn mean_guides(aov: &mut [[f32; 4]], counts: &[f32]) {
             for c in &mut nrm[..3] {
                 *c /= n;
             }
-            let len = (nrm[0] * nrm[0] + nrm[1] * nrm[1] + nrm[2] * nrm[2]).sqrt();
-            if len.is_finite() && len > 1e-6 {
-                for c in &mut nrm[..3] {
-                    *c /= len;
+            if count.is_finite() {
+                let len = (nrm[0] * nrm[0] + nrm[1] * nrm[1] + nrm[2] * nrm[2]).sqrt();
+                if len.is_finite() && len > 1e-6 {
+                    for c in &mut nrm[..3] {
+                        *c /= len;
+                    }
                 }
             }
         }
@@ -369,6 +371,26 @@ mod tests {
         assert_eq!(out[1][0], 0.0, "e = 1 % keeps the denoised value");
     }
 
+    /// robust_sigma on a single pixel: no neighbourhood, so it falls back to the pixel's own error.
+    #[test]
+    fn robust_sigma_single_pixel() {
+        let colors = vec![[1.0, 1.0, 1.0, 0.04]];
+        let counts = vec![4.0];
+        let sigma = robust_sigma(&colors, &counts, (1, 1));
+        assert_eq!(sigma.len(), 1);
+        // Own error sqrt(0.04) = 0.2; no neighbours to pool, so rho = 0 and pooled = 0.
+        assert!((sigma[0] - 0.2).abs() < 1e-6, "single pixel uses its own error: {}", sigma[0]);
+
+        // A single noisy pixel among itself: the window is just itself.
+        let colors = vec![[2.0, 2.0, 2.0, 0.25]];
+        let counts = vec![4.0];
+        let sigma = robust_sigma(&colors, &counts, (1, 1));
+        // L = 2.0, floor = 0.1, n = 4, var = 0.25, own = 0.5.
+        // rho = (4 * 0.25) / (4 * 4.0) = 0.0625, pooled = sqrt(0.0625/4) * 2.0 = 0.25.
+        // sigma = max(0.5, 0.25) = 0.5.
+        assert!((sigma[0] - 0.5).abs() < 1e-6, "single noisy pixel: {}", sigma[0]);
+    }
+
     #[test]
     fn robust_sigma_sees_the_neighbourhood() {
         // 3 x 3 pixels, all luminance 1 (floor 0.05), 4 samples each. The eight outer pixels have a
@@ -384,6 +406,49 @@ mod tests {
         assert!(sigma[0] >= 0.3 - 1e-6, "{}", sigma[0]);
         assert!(robust_sigma(&colors, &counts[..4], (3, 3)).is_empty(), "short counts give nothing");
         assert!(robust_sigma(&[], &[], (0, 0)).is_empty());
+    }
+
+    /// The spec's named test: converged pixels keep their input bit for bit, unconverged pixels keep
+    /// the network's answer, and hostile input (NaN, zero counts, negative variance) never panics.
+    #[test]
+    fn consistent_output_stays_within_the_sample_interval() {
+        // A converged pixel (zero variance) keeps its input exactly.
+        let (conv, counts) = grey_frame(3, 3, 16.0, 0.0);
+        let mut out = vec![[0.3, 0.4, 0.5, 1.0]; 9];
+        keep_consistent(&conv, &counts, (3, 3), &mut out);
+        for (inp, o) in conv.iter().zip(&out) {
+            assert_eq!(o[0].to_bits(), inp[0].to_bits(), "converged pixel keeps input bit for bit");
+            assert_eq!(o[1].to_bits(), inp[1].to_bits());
+            assert_eq!(o[2].to_bits(), inp[2].to_bits());
+        }
+
+        // An unconverged pixel keeps the network's answer, even far outside L ± 2 s_r.
+        let (input, counts) = grey_frame(3, 3, 16.0, 0.16);
+        let far = [[5.0, 2.5, 0.0, 1.0]; 9];
+        let mut out = far;
+        keep_consistent(&input, &counts, (3, 3), &mut out);
+        for o in &out {
+            assert_eq!(o, &far[0], "unconverged pixel keeps the network's answer");
+        }
+
+        // A network answer with a NaN channel pulls the input back in.
+        let mut input = grey_frame(3, 3, 16.0, 0.16).0;
+        let mut net = vec![[1.0, f32::NAN, 0.5, 1.0]; 9];
+        keep_consistent(&input, &counts, (3, 3), &mut net);
+        for (inp, o) in input.iter().zip(&net) {
+            assert_eq!(o[..3], inp[..3], "NaN in network answer pulls input back");
+        }
+
+        // Zero sample counts do not panic.
+        keep_consistent(&input, &vec![0.0; 9], (3, 3), &mut net);
+
+        // Negative variance does not panic.
+        let mut bad = grey_frame(3, 3, 16.0, 0.0).0;
+        for p in &mut bad {
+            p[3] = -1.0;
+        }
+        let mut out = vec![[0.5, 0.5, 0.5, 1.0]; 9];
+        keep_consistent(&bad, &vec![4.0; 9], (3, 3), &mut out);
     }
 
     #[test]
@@ -534,6 +599,50 @@ mod tests {
         assert!((mean_out - mean_in).abs() <= 0.1 * mean_in, "mean in {mean_in}, out {mean_out}");
         let rms = (out.iter().map(|p| (f64::from(p[0]) - 0.12).powi(2)).sum::<f64>() / px).sqrt() / 0.12;
         assert!(rms < 0.35, "relative rms error {rms}");
+    }
+
+    /// mean_guides edge cases: empty input, non-finite counts, zero-length normals after division.
+    #[test]
+    fn mean_guides_edge_cases() {
+        // Empty input: no panic, no change.
+        let mut empty: Vec<[f32; 4]> = Vec::new();
+        mean_guides(&mut empty, &[]);
+        assert!(empty.is_empty());
+
+        // Non-finite count is treated as 1.
+        let mut aov = vec![[4.0, 4.0, 4.0, 1.0], [0.0, 0.0, 4.0, 3.0]];
+        mean_guides(&mut aov, &[f32::NAN]);
+        assert_eq!(aov[0], [4.0, 4.0, 4.0, 1.0], "NaN count divides by 1");
+        assert_eq!(aov[1], [0.0, 0.0, 4.0, 3.0], "normal unchanged with NaN count");
+
+        // Zero-length normal after division stays zero (no renormalisation).
+        let mut aov = vec![[2.0, 2.0, 2.0, 1.0], [0.0, 0.0, 0.0, 3.0]];
+        mean_guides(&mut aov, &[2.0]);
+        assert_eq!(aov[0], [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(aov[1], [0.0, 0.0, 0.0, 3.0], "zero normal stays zero");
+
+        // Normal is renormalised when its length is above 1e-6.
+        let mut aov = vec![[0.0; 4], [3.0, 0.0, 0.0, 3.0]];
+        mean_guides(&mut aov, &[3.0]);
+        assert_eq!(aov[1], [1.0, 0.0, 0.0, 3.0], "normal renormalised");
+
+        // A normal very close to zero length (below 1e-6) is not renormalised.
+        let mut aov = vec![[0.0; 4], [1e-9, 0.0, 0.0, 3.0]];
+        mean_guides(&mut aov, &[1e9]);
+        // After division: 1e-18, which is below 1e-6, so no renormalisation.
+        assert!(aov[1][0].abs() < 1e-10, "tiny normal not renormalised: {}", aov[1][0]);
+    }
+
+    #[test]
+    fn keep_consistent_all_converged() {
+        // Every pixel converged: all keep their input, none take the network answer.
+        let (input, counts) = grey_frame(4, 4, 32.0, 0.0);
+        let net = vec![[0.0, 0.0, 0.0, 1.0]; 16];
+        let mut out = net;
+        keep_consistent(&input, &counts, (4, 4), &mut out);
+        for (inp, o) in input.iter().zip(&out) {
+            assert_eq!(o[..3], inp[..3], "all converged: every pixel keeps input");
+        }
     }
 
     #[test]
