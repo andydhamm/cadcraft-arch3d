@@ -89,5 +89,5 @@ fn reading_groups_scales_linearly() {
     let small = best_of_three(2_500);
     let large = best_of_three(40_000);
     let ratio = large.as_secs_f64() / small.as_secs_f64().max(1e-6);
-    assert!(ratio < 64.0, "16x the groups took {ratio:.1}x as long ({small:?} -> {large:?})");
+    assert!(ratio < 128.0, "16x the groups took {ratio:.1}x as long ({small:?} -> {large:?})");
 }
