@@ -5840,7 +5840,7 @@ mod tests {
         // Wall 0 is zero-length (one per-wall message); the rest are clean.
         m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
         for i in 1..=MAX_WALLS {
-            m.push_wall(Wall::new(Vec2::new(f64::from(i), 0.0), Vec2::new(f64::from(i) + 1.0, 0.0), 0.2));
+            m.push_wall(Wall::new(Vec2::new(i as f64, 0.0), Vec2::new((i as f64) + 1.0, 0.0), 0.2));
         }
         let msgs = m.validate();
         assert_eq!(msgs.len(), 2, "max message plus the one per-wall message: {msgs:?}");
@@ -5866,7 +5866,7 @@ mod tests {
         let mut m = ArchModel::default();
         let id = m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
         let json = serde_json::to_string(&m).unwrap();
-        let back: ArchModel = serde_json::from_str(&json).unwrap();
+        let mut back: ArchModel = serde_json::from_str(&json).unwrap();
         assert_eq!(back.walls.len(), 1);
         assert_eq!(back.walls[0].id, id);
         assert_eq!(back.walls[0].start, Vec2::new(0.0, 0.0));
