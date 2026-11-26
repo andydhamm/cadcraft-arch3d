@@ -303,6 +303,12 @@ fn fit(light_dir: [f32; 3], bounds: &Bounds3) -> Option<([[f32; 4]; 4], f64)> {
     if !light_dir.iter().all(|v| v.is_finite()) || !bounds_usable(bounds) {
         return None;
     }
+    // Reject suns at or below the horizon. We check the unnormalized Z component to catch
+    // low-elevation suns even if they are not unit vectors (e.g. [1, 0, 0.01]).
+    // A Z of 0.01 or less is considered too low for a shadow map.
+    if f64::from(light_dir[2]) <= 0.01 {
+        return None;
+    }
     let d = norm([f64::from(light_dir[0]), f64::from(light_dir[1]), f64::from(light_dir[2])])?;
     if d[2] <= 0.01 {
         return None;
