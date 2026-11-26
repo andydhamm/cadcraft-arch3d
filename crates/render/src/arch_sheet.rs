@@ -53,6 +53,7 @@ mod tests {
                 name: "Demo".into(),
                 layers: Vec::new(),
                 rules: vec![cadcraft_doc::LayerRule { pattern: "A-WALL".into(), on: Some(false), transparency: None }],
+                ..Default::default()
             },
             ..PlanView::default()
         }];
@@ -206,6 +207,7 @@ mod tests {
                     cadcraft_doc::LayerRule { pattern: "A-WALL".into(), on: Some(false), transparency: None },
                     cadcraft_doc::LayerRule { pattern: "A-DOOR".into(), on: Some(false), transparency: None },
                 ],
+                ..Default::default()
             },
             ..PlanView::default()
         }];

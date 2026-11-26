@@ -611,4 +611,64 @@ mod tests {
         assert_eq!(s.doc().map(|d| d.arch_revision).unwrap_or(1), rev);
         assert_eq!(s.doc().map(|d| d.arch.walls.len()).unwrap_or(9), walls);
     }
+
+    #[test]
+    fn pick3d_with_empty_model_returns_null() {
+        let mut s = Session::new();
+        let cam = json!({ "kind": "full", "eye": [0.0, -5.0, 1.0], "target": [0.0, 0.0, 1.0], "fov": 45 });
+        let r = s.execute("pick3d", &params(cam, json!([50, 50])));
+        assert!(r.is_ok(), "{r:?}");
+        let v = r.unwrap_or(Value::Null);
+        assert_eq!(v["ok"], true);
+        assert!(v["hit"].is_null(), "empty model should return null hit: {v}");
+    }
+
+    #[test]
+    fn pick3d_with_missing_camera_fails() {
+        let mut s = session();
+        let p = json!({ "size": [100, 100], "pixel": [50, 50] });
+        assert!(s.execute("pick3d", &p).is_err(), "missing camera should fail");
+    }
+
+    #[test]
+    fn pick3d_with_missing_size_fails() {
+        let mut s = session();
+        let p = json!({ "camera": front(), "pixel": [50, 50] });
+        assert!(s.execute("pick3d", &p).is_err(), "missing size should fail");
+    }
+
+    #[test]
+    fn pick3d_with_missing_pixel_fails() {
+        let mut s = session();
+        let p = json!({ "camera": front(), "size": [100, 100] });
+        assert!(s.execute("pick3d", &p).is_err(), "missing pixel should fail");
+    }
+
+    #[test]
+    fn pick3d_with_unknown_camera_name_fails() {
+        let mut s = session();
+        let p = json!({ "camera": "nonexistent", "size": [100, 100], "pixel": [50, 50] });
+        assert!(s.execute("pick3d", &p).is_err(), "unknown camera name should fail");
+    }
+
+    #[test]
+    fn pick3d_with_zero_size_fails() {
+        let mut s = session();
+        let p = json!({ "camera": front(), "size": [0, 0], "pixel": [50, 50] });
+        assert!(s.execute("pick3d", &p).is_err(), "zero size should fail");
+    }
+
+    #[test]
+    fn pick3d_with_non_array_pixel_fails() {
+        let mut s = session();
+        let p = json!({ "camera": front(), "size": [100, 100], "pixel": 50 });
+        assert!(s.execute("pick3d", &p).is_err(), "non-array pixel should fail");
+    }
+
+    #[test]
+    fn pick3d_with_non_array_size_fails() {
+        let mut s = session();
+        let p = json!({ "camera": front(), "size": 100, "pixel": [50, 50] });
+        assert!(s.execute("pick3d", &p).is_err(), "non-array size should fail");
+    }
 }

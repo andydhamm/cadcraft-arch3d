@@ -106,7 +106,7 @@ impl Default for PlanView {
             name: String::new(),
             level: None,
             kind: PlanKind::Floor,
-            layers: LayerState { name: String::new(), layers: Vec::new(), rules: Vec::new() },
+            layers: LayerState { name: String::new(), layers: Vec::new(), rules: Vec::new(), ..LayerState::default() },
             annotation: AnnotationSet::default(),
             labels: RoomLabelShow::default(),
             reference: None,
@@ -190,7 +190,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
             name: "Working".into(),
             level: None,
             kind: PlanKind::Floor,
-            layers: LayerState { name: "Working".into(), layers: Vec::new(), rules: vec![rule("*", Some(true), Some(0))] },
+            layers: LayerState { name: "Working".into(), layers: Vec::new(), rules: vec![rule("*", Some(true), Some(0))], ..LayerState::default() },
             annotation: AnnotationSet { layer: "A-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
             labels: RoomLabelShow { name: true, area: true, dimensions: false, ceiling: false, numbers: true },
             reference: None,
@@ -210,6 +210,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                     rule("C-*", Some(false), None),
                     rule("L-*", Some(false), None),
                 ],
+                ..LayerState::default()
             },
             annotation: AnnotationSet { layer: "A-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
             labels: RoomLabelShow { name: true, area: true, dimensions: true, ceiling: false, numbers: true },
@@ -224,6 +225,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                 name: "Electrical".into(),
                 layers: Vec::new(),
                 rules: vec![rule("*", None, Some(70)), rule("E-*", Some(true), Some(0))],
+                ..LayerState::default()
             },
             annotation: AnnotationSet { layer: "E-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
             labels: RoomLabelShow { name: true, area: false, dimensions: false, ceiling: false, numbers: false },
@@ -249,6 +251,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                     rule("A-ANNO-DIMS", Some(false), None),
                     rule("A-FLOR-CASE-UPPR", Some(true), Some(50)),
                 ],
+                ..LayerState::default()
             },
             annotation: AnnotationSet { layer: "A-CLNG-ANNO".into(), text_style: String::new(), dim_style: String::new() },
             labels: RoomLabelShow { name: true, area: false, dimensions: false, ceiling: true, numbers: false },
@@ -270,6 +273,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                     rule("A-ANNO*", Some(true), Some(0)),
                     rule("A-ANNO-DIMS", Some(false), None),
                 ],
+                ..LayerState::default()
             },
             annotation: AnnotationSet { layer: "A-ROOF-ANNO".into(), text_style: String::new(), dim_style: String::new() },
             labels: RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, numbers: false },
@@ -291,6 +295,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                     rule("C-*", Some(false), None),
                     rule("L-*", Some(false), None),
                 ],
+                ..LayerState::default()
             },
             annotation: AnnotationSet { layer: "A-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
             labels: RoomLabelShow { name: true, area: false, dimensions: true, ceiling: false, numbers: true },
@@ -315,6 +320,7 @@ pub fn template_plan_views() -> Vec<PlanView> {
                     rule("A-ANNO*", Some(true), Some(0)),
                     rule("A-ANNO-DIMS", Some(false), None),
                 ],
+                ..LayerState::default()
             },
             annotation: AnnotationSet { layer: "C-ANNO-NOTE".into(), text_style: String::new(), dim_style: String::new() },
             labels: RoomLabelShow { name: false, area: false, dimensions: false, ceiling: false, numbers: false },
@@ -412,7 +418,7 @@ mod tests {
 
     #[test]
     fn layer_state_without_rules_serializes_as_before() {
-        let state = LayerState { name: "Saved".into(), layers: vec![crate::Layer::new("0")], rules: Vec::new() };
+        let state = LayerState { name: "Saved".into(), layers: vec![crate::Layer::new("0")], rules: Vec::new(), ..LayerState::default() };
         let text = serde_json::to_string(&state).unwrap();
         assert!(!text.contains("\"rules\""), "rules should not serialize when empty");
         assert!(serde_json::from_str::<LayerState>(&text).unwrap().rules.is_empty());
