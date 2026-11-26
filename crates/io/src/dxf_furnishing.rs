@@ -191,4 +191,166 @@ mod tests {
         assert_eq!(back.arch.cabinets, d.arch.cabinets);
         assert!(back.arch.furnishings.is_empty() && back.arch.symbols.is_empty() && back.arch.backdrop.is_none());
     }
+
+    #[test]
+    fn furnishing_proxies_nan_coordinates() {
+        let mut d = Drawing::new_metric();
+        d.arch.symbols.insert("00112233aabbccdd".into(), textured_symbol());
+        // Furnishing with NaN in at
+        let mut f1 = Furnishing {
+            item: "armchair".into(),
+            symbol: "00112233aabbccdd".into(),
+            name: "Armchair".into(),
+            category: "Furniture".into(),
+            symbol_type: "armchair".into(),
+            at: [f64::NAN, 3.0],
+            rotation: 30.0,
+            size: [0.9, 0.9, 0.9],
+            ..Default::default()
+        };
+        f1.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
+        d.arch.furnishings.push(f1);
+        d.arch.next_furnishing_id += 1;
+        // Furnishing with NaN in size
+        let mut f2 = Furnishing {
+            item: "armchair".into(),
+            symbol: "00112233aabbccdd".into(),
+            name: "Armchair".into(),
+            category: "Furniture".into(),
+            symbol_type: "armchair".into(),
+            at: [2.0, 3.0],
+            rotation: 30.0,
+            size: [f64::NAN, 0.9, 0.9],
+            ..Default::default()
+        };
+        f2.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
+        d.arch.furnishings.push(f2);
+        d.arch.next_furnishing_id += 1;
+        // Furnishing with NaN in rotation
+        let mut f3 = Furnishing {
+            item: "armchair".into(),
+            symbol: "00112233aabbccdd".into(),
+            name: "Armchair".into(),
+            category: "Furniture".into(),
+            symbol_type: "armchair".into(),
+            at: [2.0, 3.0],
+            rotation: f64::NAN,
+            size: [0.9, 0.9, 0.9],
+            ..Default::default()
+        };
+        f3.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
+        d.arch.furnishings.push(f3);
+        d.arch.next_furnishing_id += 1;
+        // Valid furnishing
+        let mut f4 = Furnishing {
+            item: "armchair".into(),
+            symbol: "00112233aabbccdd".into(),
+            name: "Armchair".into(),
+            category: "Furniture".into(),
+            symbol_type: "armchair".into(),
+            at: [5.0, 3.0],
+            rotation: 30.0,
+            size: [0.9, 0.9, 0.9],
+            ..Default::default()
+        };
+        f4.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
+        d.arch.furnishings.push(f4);
+        d.arch.next_furnishing_id += 1;
+
+        let p = proxy_furnishing_entities(&d.arch);
+        // Only the valid furnishing should produce a proxy
+        assert_eq!(p.len(), 1, "only the valid furnishing should produce a proxy");
+        for (_, layer, tags) in &p {
+            for t in tags {
+                if t.code == 10 || t.code == 20 {
+                    assert!(t.f64().is_finite(), "non-finite coordinate in proxy on layer {}", layer);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn furnishing_proxies_huge_coordinates() {
+        let mut d = Drawing::new_metric();
+        d.arch.symbols.insert("00112233aabbccdd".into(), textured_symbol());
+        let mut f = Furnishing {
+            item: "armchair".into(),
+            symbol: "00112233aabbccdd".into(),
+            name: "Armchair".into(),
+            category: "Furniture".into(),
+            symbol_type: "armchair".into(),
+            at: [1e15, 1e15],
+            rotation: 30.0,
+            size: [0.9, 0.9, 0.9],
+            ..Default::default()
+        };
+        f.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
+        d.arch.furnishings.push(f);
+        d.arch.next_furnishing_id += 1;
+
+        let p = proxy_furnishing_entities(&d.arch);
+        assert_eq!(p.len(), 1, "furnishing at huge coordinates should produce a proxy");
+        for (_, layer, tags) in &p {
+            for t in tags {
+                if t.code == 10 || t.code == 20 {
+                    assert!(t.f64().is_finite(), "non-finite coordinate in proxy on layer {}", layer);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn furnishing_proxies_zero_size() {
+        let mut d = Drawing::new_metric();
+        d.arch.symbols.insert("00112233aabbccdd".into(), textured_symbol());
+        let mut f = Furnishing {
+            item: "armchair".into(),
+            symbol: "00112233aabbccdd".into(),
+            name: "Armchair".into(),
+            category: "Furniture".into(),
+            symbol_type: "armchair".into(),
+            at: [2.0, 3.0],
+            rotation: 30.0,
+            size: [0.0, 0.0, 0.0],
+            ..Default::default()
+        };
+        f.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
+        d.arch.furnishings.push(f);
+        d.arch.next_furnishing_id += 1;
+
+        let p = proxy_furnishing_entities(&d.arch);
+        // A zero-size furnishing maps all symbol corners to one point, so the outline
+        // has fewer than three vertices and no proxy is written.
+        assert_eq!(p.len(), 0, "a zero-size furnishing has no outline to proxy");
+    }
+
+    #[test]
+    fn furnishing_proxies_rotation() {
+        let mut d = Drawing::new_metric();
+        d.arch.symbols.insert("00112233aabbccdd".into(), textured_symbol());
+        let mut f = Furnishing {
+            item: "armchair".into(),
+            symbol: "00112233aabbccdd".into(),
+            name: "Armchair".into(),
+            category: "Furniture".into(),
+            symbol_type: "armchair".into(),
+            at: [2.0, 3.0],
+            rotation: 90.0,
+            size: [0.9, 0.9, 0.9],
+            ..Default::default()
+        };
+        f.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
+        d.arch.furnishings.push(f);
+        d.arch.next_furnishing_id += 1;
+
+        let p = proxy_furnishing_entities(&d.arch);
+        assert_eq!(p.len(), 1, "furnishing with rotation should produce a proxy");
+        for (_, layer, tags) in &p {
+            for t in tags {
+                if t.code == 10 || t.code == 20 {
+                    assert!(t.f64().is_finite(), "non-finite coordinate in proxy on layer {}", layer);
+                }
+            }
+        }
+    }
 }
