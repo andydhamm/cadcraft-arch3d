@@ -415,6 +415,7 @@ mod tests {
     use super::*;
     use crate::camera::Orbit;
     use crate::light::Light;
+    use crate::lit::{LitParams, frame_uniform};
     use crate::pipeline::{Draw, STYLE_SHADED};
     use crate::types::{ArchId, Mesh};
 
