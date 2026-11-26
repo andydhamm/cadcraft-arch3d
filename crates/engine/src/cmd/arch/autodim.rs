@@ -975,11 +975,11 @@ mod tests {
 
         // If we run a command that *doesn't* change the drawing (e.g. a read-only command),
         // the Arc should be identical.
-        let before_arc = s.doc().unwrap();
+        let before_arc = s.state().unwrap().doc.clone();
         s.execute("arch.inspect", &json!({})).unwrap();
-        let after_arc = s.doc().unwrap();
+        let after_arc = s.state().unwrap().doc.clone();
 
-        assert!(Arc::ptr_eq(before_arc, after_arc), "Arc should be identical for read-only command");
+        assert!(Arc::ptr_eq(&before_arc, &after_arc), "Arc should be identical for read-only command");
     }
 
     #[test]
