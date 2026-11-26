@@ -747,6 +747,47 @@ mod uk_tests {
             }
         });
     }
+
+    #[test]
+    fn uk_phase2_strings_present() {
+        // Phase 2 (openings) added Door, Window, Garage Door and Move Opening.
+        let source = uk_source();
+        for key in ["Door", "Window", "Garage Door", "Move Opening"] {
+            assert!(source.contains(key), "missing Ukrainian translation for: {}", key);
+        }
+    }
+
+    #[test]
+    fn uk_phase2_strings_translated() {
+        with_language("uk", || {
+            for source in ["Door", "Window", "Garage Door", "Move Opening"] {
+                let translated = t(source);
+                assert_ne!(translated, source, "phase-2 label not translated: {source}");
+                assert!(translated.chars().any(|c| !c.is_ascii()), "{source}: translation has no Cyrillic characters: {translated}");
+            }
+        });
+    }
+
+    #[test]
+    fn uk_trailing_ellipsis_preserved() {
+        // If the English source ends with an ellipsis, the Ukrainian translation must too.
+        let source = uk_source();
+        for (i, line) in source.lines().enumerate() {
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let cols: Vec<&str> = line.split('\t').collect();
+            if cols.len() != 3 {
+                continue;
+            }
+            let (key, value) = (cols[1], cols[2]);
+            for suffix in ["...", "\u{2026}"] {
+                if key.ends_with(suffix) {
+                    assert!(value.ends_with(suffix), "line {}: source ends with {suffix} but translation doesn't: {key} -> {value}", i + 1);
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
