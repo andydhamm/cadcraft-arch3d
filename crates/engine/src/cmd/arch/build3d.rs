@@ -1716,4 +1716,45 @@ mod tests {
         let r = e.execute("build3d", &json!({})).unwrap();
         assert_eq!(r["parts"], json!({}));
     }
+
+    /// Probe and ceiling queries can be combined in a single build3d call.
+    #[test]
+    fn build3d_probe_and_ceiling_together() {
+        let mut s = house();
+        let params = json!({
+            "probe": [[5.0, 0.0, 1.0], [5.0, 1.5, 5.0]],
+            "ceiling": [[5.0, 1.5]],
+            "level": 0
+        });
+        let r = s.execute("build3d", &params).unwrap();
+        // Probe results: first inside wall (hit), second above everything (miss).
+        let probe = r["probe"].as_array().expect("missing `probe` array");
+        assert_eq!(probe.len(), 2);
+        assert!(probe[0].is_object(), "probe inside wall should hit");
+        assert!(probe[1].is_null(), "probe above everything should miss");
+        // Ceiling query should still work.
+        assert!(r.get("ceiling").is_some(), "ceiling key must be present");
+        let ceiling = r["ceiling"].as_array().expect("ceiling must be an array");
+        assert_eq!(ceiling.len(), 1);
+        assert!(ceiling[0].is_number(), "ceiling value must be a number");
+    }
+
+    /// The parts object must not contain keys for part types that are absent.
+    #[test]
+    fn build3d_parts_has_no_spurious_keys() {
+        let mut s = wall_session();
+        let r = s.execute("build3d", &json!({})).unwrap();
+        let parts = r["parts"].as_object().expect("parts must be an object");
+        // Only "wall" should be present for a single-wall scene.
+        assert_eq!(parts.len(), 1, "expected exactly 1 part key, got {}", parts.len());
+        assert!(parts.contains_key("wall"), "wall part must be present");
+        assert!(!parts.contains_key("floor"), "floor part must not be present");
+        assert!(!parts.contains_key("ceiling"), "ceiling part must not be present");
+        assert!(!parts.contains_key("roof"), "roof part must not be present");
+        assert!(!parts.contains_key("stair"), "stair part must not be present");
+        assert!(!parts.contains_key("deck"), "deck part must not be present");
+        assert!(!parts.contains_key("terrain"), "terrain part must not be present");
+        assert!(!parts.contains_key("furnishing"), "furnishing part must not be present");
+        assert!(!parts.contains_key("electrical"), "electrical part must not be present");
+    }
 }
