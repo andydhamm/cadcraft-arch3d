@@ -1548,7 +1548,7 @@ mod tests {
     fn material_draw_with_invalid_texture_uses_base_colour() {
         // A MaterialDef with a texture key in scene.textures but an invalid image uses just the base colour.
         let mut scene = Scene3d::default();
-        let invalid = cadcraft_doc::arch::ImageRgba { width: 0, height: 0, rgba: vec![] };
+        let invalid = cadcraft_doc::arch::ImageRgba { width: 0, height: 0, ..Default::default() };
         scene.textures.insert("sym:k:t0".into(), invalid);
         let def =
             MaterialDef { base_color: [0.4, 0.5, 0.6, 1.0], metallic: 0.1, roughness: 0.7, texture: Some("sym:k:t0".into()), ..Default::default() };

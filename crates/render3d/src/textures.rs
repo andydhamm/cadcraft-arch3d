@@ -907,9 +907,9 @@ mod tests {
     #[test]
     fn mean_linear_invalid_image_returns_none() {
         // mean_linear returns None for an invalid image (wrong size or zero dimensions).
-        let invalid = ImageRgba { width: 0, height: 0, rgba: vec![] };
+        let invalid = ImageRgba { width: 0, height: 0, ..Default::default() };
         assert_eq!(mean_linear(&invalid), None);
-        let wrong_size = ImageRgba { width: 2, height: 2, rgba: vec![0; 3] };
+        let wrong_size = ImageRgba { width: 2, height: 2, rgba: vec![0; 3], ..Default::default() };
         assert_eq!(mean_linear(&wrong_size), None);
     }
 
