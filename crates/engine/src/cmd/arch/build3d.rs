@@ -1722,7 +1722,7 @@ mod tests {
     fn build3d_probe_and_ceiling_together() {
         let mut s = house();
         let params = json!({
-            "probe": [[5.0, 1.5, 1.0], [5.0, 1.5, 5.0]],
+            "probe": [[5.0, 0.0, 1.0], [5.0, 1.5, 5.0]],
             "ceiling": [[5.0, 1.5]],
             "level": 0
         });
