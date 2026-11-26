@@ -1195,6 +1195,20 @@ mod tests {
         assert_eq!(r.spp, Some(64));
     }
 
+    /// `--spp` (space or `=`) sets `spp_given` at every boundary the parser accepts and a flag-less
+    /// render leaves it unset — the CLI half of the round-trip the software-adapter lowering uses.
+    #[test]
+    fn spp_flag_sets_given_across_boundary_and_equals() {
+        let given = |a: &[&str]| -> bool { render_of(a).unwrap().path_params().spp_given };
+        assert!(given(&["--spp", "1"]));
+        assert!(given(&["--spp=1"]));
+        assert!(given(&["--spp", "256"]));
+        assert!(given(&["--spp=256"]));
+        assert!(given(&["--spp", "65536"]));
+        assert!(given(&["--spp=65536"]));
+        assert!(!given(&[]), "a flag-less render must leave spp_given unset");
+    }
+
     #[test]
     fn spp_out_of_range_is_refused() {
         for bad in ["--spp", "0", "--spp", "65537", "--spp", "-1", "--spp", "abc"] {
