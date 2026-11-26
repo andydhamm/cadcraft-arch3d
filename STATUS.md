@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-26 12:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-26 13:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23**
 
-12,561 workspace tests passing at the last merge · 1456 segments merged in all · 0 of 15 seats working
+12,565 workspace tests passing at the last merge · 1457 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -33,7 +33,7 @@ Updated 2026-11-26 12:45 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — |  · expected done Nov 26 18:14–Dec 11 14:49 UTC |
+| 23 | Phase 23 | pending | — |  · expected done Nov 26 18:29–Dec 11 15:04 UTC |
 
 ## Phase 23 segments
 
@@ -44,6 +44,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 26 12:55 | `harden-p6-arch3d-camera` | merged | 12,565 pass, 1 fail | tturbo-mac |
 | Nov 26 12:22 | `harden-p7-render-views` | merged | 12,561 pass | bonsai-a |
 | Nov 26 12:22 | `harden-p13-doc-finish-data` | merged | 12,561 pass | tturbo-mac |
 | Nov 26 12:04 | `harden-p10-ui-pane-lights` | merged | 12,540 pass | darwin-ws3 |
@@ -55,21 +56,20 @@ none yet
 | Nov 26 10:31 | `harden-p18-backsplash` | merged | 12,491 pass, 1 fail | darwin-ws3 |
 | Nov 26 10:14 | `harden-p11f-explicit-spp-kept` | merged | 12,489 pass | bonsai-b |
 | Nov 26 09:52 | `harden-p15-ui-electrical` | merged | 12,484 pass | darwin-ws3 |
-| Nov 26 09:39 | `harden-p12-io-obj` | merged | 12,467 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1472 |
-| bonsai-b | bonsai2-27b | agent | 1401 |
+| bonsai-a | bonsai2-27b | agent | 1473 |
+| bonsai-b | bonsai2-27b | agent | 1402 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 177 |
 | claude-sonnet-b | sonnet | idle | 189 |
 | claude-sonnet-c | sonnet | idle | 122 |
 | claude-sonnet-d | sonnet | idle | 119 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1378 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1380 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
