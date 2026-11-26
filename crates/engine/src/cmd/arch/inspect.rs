@@ -1303,15 +1303,14 @@ mod tests {
         let end = gap[1].as_f64().expect("gap end must be a number");
         assert!(start.is_finite() && end.is_finite(), "gap must be finite ({start}, {end})");
         let rough_width = o["rough"]["width"].as_f64().expect("rough width must be a number");
-        assert!((end - start - rough_width).abs() < 1e-6,
-                "gap span {span} must equal the stored rough width {rough_width}",
-                span = end - start);
+        assert!((end - start - rough_width).abs() < 1e-6, "gap span {span} must equal the stored rough width {rough_width}", span = end - start);
 
         // A second, explicit-rough opening: same invariant must hold.
         let mut s2 = Session::new();
         match s2.doc_mut() {
             Ok(d) => {
-                let wid = d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
                 d.arch.push_opening(Opening {
                     host: wid,
                     offset: 4.0,
@@ -1345,7 +1344,8 @@ mod tests {
         let mut s = Session::new();
         match s.doc_mut() {
             Ok(d) => {
-                let wid = d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
                 d.arch.push_opening(Opening {
                     host: wid,
                     offset: 3.0,
@@ -1392,7 +1392,8 @@ mod tests {
         let mut s = Session::new();
         match s.doc_mut() {
             Ok(d) => {
-                let wid = d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
                 d.arch.push_opening(Opening {
                     host: wid,
                     offset: 1e12,
@@ -1429,10 +1430,12 @@ mod tests {
     #[test]
     fn inspect_opening_number_groups_identical_items() {
         let mut s = Session::new();
-        match s.doc_mut() => {
+        match s.doc_mut() {
             Ok(d) => {
-                let wid0 = d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
-                let wid1 = d.arch.push_wall(Wall { start: Vec2::new(0.0, 4.0), end: Vec2::new(10.0, 4.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                let wid0 =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                let wid1 =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 4.0), end: Vec2::new(10.0, 4.0), thickness: 0.2, height: 2.7, ..Wall::default() });
                 d.arch.push_opening(Opening {
                     host: wid0,
                     offset: 2.0,
@@ -1500,10 +1503,12 @@ mod tests {
     #[test]
     fn inspect_multiple_openings_distinct_labels_and_handles() {
         let mut s = Session::new();
-        match s.doc_mut() => {
+        match s.doc_mut() {
             Ok(d) => {
-                let wid0 = d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
-                let wid1 = d.arch.push_wall(Wall { start: Vec2::new(10.0, 0.0), end: Vec2::new(10.0, 8.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                let wid0 =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                let wid1 =
+                    d.arch.push_wall(Wall { start: Vec2::new(10.0, 0.0), end: Vec2::new(10.0, 8.0), thickness: 0.2, height: 2.7, ..Wall::default() });
                 d.arch.push_opening(Opening { host: wid0, offset: 2.0, width: 0.9, height: 2.1, kind: OpeningKind::Door, ..Opening::default() });
                 d.arch.push_opening(Opening { host: wid1, offset: 3.0, width: 1.0, height: 1.8, kind: OpeningKind::Window, ..Opening::default() });
                 d.touch_arch();
