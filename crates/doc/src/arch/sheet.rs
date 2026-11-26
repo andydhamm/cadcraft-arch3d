@@ -685,4 +685,74 @@ mod tests {
         assert_eq!(read_link(&[]), None);
         assert_eq!(read_link(&[RawTag { code: 1001, value: LINK_APP.into() }]), None);
     }
+
+    #[test]
+    fn validate_schedule_rejects_nan_and_infinity() {
+        let mut s = Schedule { name: "S".into(), columns: vec!["number".into()], ..Default::default() };
+        s.at = [f64::NAN, 0.0];
+        assert!(validate_schedule(&s, 1).is_err(), "NaN at rejected");
+        s.at = [f64::INFINITY, 0.0];
+        assert!(validate_schedule(&s, 1).is_err(), "Infinity at rejected");
+        s.at = [0.0, 1e7];
+        assert!(validate_schedule(&s, 1).is_err(), "out of bounds at rejected");
+    }
+
+    #[test]
+    fn validate_sheet_rejects_duplicate_view_numbers_and_bad_scales() {
+        let mut s = Sheet { name: "S".into(), number: "1".into(), ..Default::default() };
+        s.views = vec![SheetView { number: 1, scale: 50.0, ..Default::default() }, SheetView { number: 1, scale: 50.0, ..Default::default() }];
+        assert!(validate_sheet(&s, 1).is_err(), "duplicate view numbers rejected");
+
+        s.views = vec![SheetView { number: 1, scale: 0.0, ..Default::default() }];
+        assert!(validate_sheet(&s, 1).is_err(), "scale 0 rejected");
+
+        s.views = vec![SheetView { number: 1, scale: 20000.0, ..Default::default() }];
+        assert!(validate_sheet(&s, 1).is_err(), "scale 20000 rejected");
+
+        s.views = vec![SheetView { number: 1, scale: 1.0, ..Default::default() }];
+        assert!(validate_sheet(&s, 1).is_ok(), "scale 1 accepted");
+    }
+
+    #[test]
+    fn validate_note_rejects_empty_text_and_bad_height() {
+        let mut n = ViewNote { id: 0, text: "".into(), ..Default::default() };
+        assert!(validate_note(&n).is_err(), "empty text rejected");
+
+        n.text = "x".into();
+        n.height = 0.0;
+        assert!(validate_note(&n).is_err(), "height 0 rejected");
+
+        n.height = 11.0;
+        assert!(validate_note(&n).is_err(), "height 11 rejected");
+
+        n.height = 0.15;
+        n.layer = "".into();
+        assert!(validate_note(&n).is_err(), "empty layer rejected");
+    }
+
+    #[test]
+    fn schedule_kind_key_and_from_key_round_trip() {
+        for k in [ScheduleKind::Door, ScheduleKind::Window, ScheduleKind::Cabinet, ScheduleKind::Room] {
+            assert_eq!(ScheduleKind::from_key(k.key()), Some(k));
+        }
+        assert_eq!(ScheduleKind::from_key("invalid"), None);
+    }
+
+    #[test]
+    fn note_kind_key_and_corner_key_round_trip() {
+        for k in [NoteKind::Text, NoteKind::Marker, NoteKind::Dimension] {
+            assert_eq!(
+                k.key(),
+                match k {
+                    NoteKind::Text => "text",
+                    NoteKind::Marker => "marker",
+                    NoteKind::Dimension => "dimension",
+                }
+            );
+        }
+        for c in [Corner::TopLeft, Corner::TopRight, Corner::BottomLeft, Corner::BottomRight, Corner::Center] {
+            assert_eq!(Corner::from_key(c.key()), Some(c));
+        }
+        assert_eq!(Corner::from_key("invalid"), None);
+    }
 }
