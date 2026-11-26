@@ -137,13 +137,13 @@ pub enum Backdrop {
         /// Library item id.
         image: String,
         /// Brightness multiplier.
-        #[serde(default = "one")]
+        #[serde(default = "one", skip_serializing_if = "is_one_f64")]
         intensity: f64,
         /// Rotation about the vertical axis, degrees.
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "is_zero_f64")]
         rotation: f64,
         /// Horizon offset, degrees.
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "is_zero_f64")]
         horizon: f64,
     },
 }
@@ -154,6 +154,10 @@ fn one() -> f64 {
 
 fn is_zero_f64(v: &f64) -> bool {
     *v == 0.0
+}
+
+fn is_one_f64(v: &f64) -> bool {
+    *v == 1.0
 }
 
 #[cfg(test)]
