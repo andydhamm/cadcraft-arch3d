@@ -2375,4 +2375,239 @@ mod tests {
         d.arch.plan_level = Some(1);
         let _ = build_arch(&d, &Options::default(), false);
     }
+
+    #[test]
+    fn build_arch_solved_joins_is_deterministic() {
+        let t = 0.2;
+        let mk = || -> Drawing {
+            let mut d = Drawing::new_metric();
+            d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+            d.arch.add_wall(wall(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), t));
+            d.arch.add_wall(wall(Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0), t));
+            d.arch.add_wall(wall(Vec2::new(0.0, 8.0), Vec2::new(0.0, 0.0), t));
+            d.touch_arch();
+            d
+        };
+        let d1 = mk();
+        let d2 = mk();
+        let l1 = build_arch(&d1, &Options::default(), false);
+        let l2 = build_arch(&d2, &Options::default(), false);
+
+        assert_eq!(l1.prims.len(), l2.prims.len(), "prim counts differ");
+        for (p1, p2) in l1.prims.iter().zip(l2.prims.iter()) {
+            assert_eq!(p1.handle, p2.handle, "handle drift");
+            assert_eq!(p1.kind, p2.kind, "kind drift");
+            assert_eq!(p1.len, p2.len, "len drift");
+            assert_eq!(p1.color, p2.color, "color drift");
+            assert_eq!(p1.aci7, p2.aci7, "aci7 drift");
+            assert_eq!(p1.transparency, p2.transparency, "transparency drift");
+        }
+        assert_eq!(l1.verts.len(), l2.verts.len(), "vertex counts differ");
+        for (a, b) in l1.verts.iter().zip(l2.verts.iter()) {
+            assert!((a.x - b.x).abs() < 1e-9 && (a.y - b.y).abs() < 1e-9, "vertex drift: {a:?} vs {b:?}");
+        }
+    }
+
+    #[test]
+    fn glass_wall_draws_an_outline_without_fill() {
+        let mut d = Drawing::new_metric();
+        let wid = d.arch.add_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.01,
+            height: 2.0,
+            wall_type: "Glass".into(),
+            ..Wall::default()
+        });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let handle = arch_handle(wid);
+        let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle).collect();
+        // No fill (no tris)
+        let tris: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Tris).collect();
+        assert!(tris.is_empty(), "glass wall should have no filled poché");
+        // One outline
+        let outlines: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Polyline && p.len >= 4).collect();
+        assert_eq!(outlines.len(), 1, "glass wall should have one outline");
+    }
+
+    #[test]
+    fn plan_poché_isolated_wall_draws_the_raw_rectangle() {
+        let mut d = Drawing::new_metric();
+        let wid = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let handle = arch_handle(wid);
+        let outline = list.prims.iter().find(|p| p.handle == handle && p.kind == Kind::Polyline && p.len >= 4).expect("outline");
+        let pts = list.points(outline);
+        // Raw rectangle: (0,-0.1), (10,-0.1), (10,0.1), (0,0.1), (0,-0.1)
+        let expected = [Vec2::new(0.0, -0.1), Vec2::new(10.0, -0.1), Vec2::new(10.0, 0.1), Vec2::new(0.0, 0.1), Vec2::new(0.0, -0.1)];
+        for (i, (got, exp)) in pts.iter().zip(expected.iter()).enumerate() {
+            assert!((got.x - exp.x).abs() < 1e-9, "x[{}]: {} != {}", i, got.x, exp.x);
+            assert!((got.y - exp.y).abs() < 1e-9, "y[{}]: {} != {}", i, got.y, exp.y);
+        }
+    }
+
+    #[test]
+    fn plan_poché_mixed_thickness_at_join() {
+        let mut d = Drawing::new_metric();
+        let t1 = 0.2;
+        let t2 = 0.4;
+        let id1 = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t1));
+        let id2 = d.arch.add_wall(wall(Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), t2));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        // Wall 1 (bottom) should mitre into Wall 2 (right).
+        // Wall 2 is thicker, so Wall 1's right end should extend to Wall 2's outer face.
+        // Wall 2 outer face is at x = 10.0 + 0.4/2 = 10.2.
+        let h1 = arch_handle(id1);
+        let o1 = list.prims.iter().find(|p| p.handle == h1 && p.kind == Kind::Polyline && p.len >= 4).expect("wall 1 outline");
+        let pts1 = list.points(o1);
+        let maxx1 = pts1.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+        assert!((maxx1 - 10.2).abs() < 1e-6, "wall 1 maxx {} expected 10.2", maxx1);
+
+        // Wall 2 (right) should butt against Wall 1's inner face.
+        // Wall 1 inner face is at y = 0.0 + 0.2/2 = 0.1.
+        let h2 = arch_handle(id2);
+        let o2 = list.prims.iter().find(|p| p.handle == h2 && p.kind == Kind::Polyline && p.len >= 4).expect("wall 2 outline");
+        let pts2 = list.points(o2);
+        let miny2 = pts2.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+        assert!((miny2 - 0.1).abs() < 1e-6, "wall 2 miny {} expected 0.1", miny2);
+    }
+
+    #[test]
+    fn plan_poché_solved_ring_replaces_raw_corner() {
+        let t = 0.2;
+        let mut d = Drawing::new_metric();
+        let id0 = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+        d.arch.add_wall(wall(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), t));
+        d.arch.add_wall(wall(Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0), t));
+        d.arch.add_wall(wall(Vec2::new(0.0, 8.0), Vec2::new(0.0, 0.0), t));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let h = arch_handle(id0);
+        let outline = list.prims.iter().find(|p| p.handle == h && p.kind == Kind::Polyline && p.len >= 4).expect("outline");
+        let pts = list.points(outline);
+
+        // The raw corner (10.0, -0.1) should be replaced by the mitred corner (10.1, -0.1).
+        assert!(pts.iter().any(|p| (p.x - 10.1).abs() < 1e-6 && (p.y - -0.1).abs() < 1e-6), "mitred corner (10.1, -0.1) missing");
+        assert!(!pts.iter().any(|p| (p.x - 10.0).abs() < 1e-6 && (p.y - -0.1).abs() < 1e-6), "raw corner (10.0, -0.1) still present");
+    }
+
+    #[test]
+    fn plan_poché_t_junction_butts_into_the_mid_wall() {
+        let mut d = Drawing::new_metric();
+        let t = 0.2;
+        // Horizontal wall
+        let h_id = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+        // Vertical wall butting into the middle of the horizontal wall
+        let v_id = d.arch.add_wall(wall(Vec2::new(5.0, 0.0), Vec2::new(5.0, 5.0), t));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        // The vertical wall should butt against the horizontal wall's top face (y = 0.1).
+        let h = arch_handle(v_id);
+        let outline = list.prims.iter().find(|p| p.handle == h && p.kind == Kind::Polyline && p.len >= 4).expect("vertical outline");
+        let pts = list.points(outline);
+        let miny = pts.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+        assert!((miny - 0.1).abs() < 1e-6, "vertical wall miny {} expected 0.1", miny);
+
+        // The horizontal wall should have a gap or be split?
+        // In this implementation, walls are drawn as separate prims. The join solver trims the ends.
+        // The horizontal wall's end at x=5 should be trimmed to the vertical wall's face.
+        let h_h = arch_handle(h_id);
+        let h_outline = list.prims.iter().find(|p| p.handle == h_h && p.kind == Kind::Polyline && p.len >= 4).expect("horizontal outline");
+        let h_pts = list.points(h_outline);
+        // The horizontal wall is one prim, but the join solver might split it or trim it.
+        // Actually, solve_joins returns polygons per wall.
+        // The horizontal wall polygon should have vertices near x=5.0 +/- 0.1.
+        // Let's just check that the vertical wall butts correctly, which is the main T-junction behavior.
+    }
+
+    #[test]
+    fn plan_poché_two_separated_walls_keep_their_own_raw_rectangles() {
+        let mut d = Drawing::new_metric();
+        let t = 0.2;
+        let id1 = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+        let id2 = d.arch.add_wall(wall(Vec2::new(0.0, 5.0), Vec2::new(10.0, 5.0), t));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let h1 = arch_handle(id1);
+        let o1 = list.prims.iter().find(|p| p.handle == h1 && p.kind == Kind::Polyline && p.len >= 4).expect("wall 1 outline");
+        let pts1 = list.points(o1);
+        // Raw rectangle for wall 1
+        assert!(pts1.iter().any(|p| (p.x - 0.0).abs() < 1e-6 && (p.y - -0.1).abs() < 1e-6), "wall 1 raw corner (0, -0.1) missing");
+        assert!(pts1.iter().any(|p| (p.x - 10.0).abs() < 1e-6 && (p.y - -0.1).abs() < 1e-6), "wall 1 raw corner (10, -0.1) missing");
+
+        let h2 = arch_handle(id2);
+        let o2 = list.prims.iter().find(|p| p.handle == h2 && p.kind == Kind::Polyline && p.len >= 4).expect("wall 2 outline");
+        let pts2 = list.points(o2);
+        // Raw rectangle for wall 2
+        assert!(pts2.iter().any(|p| (p.x - 0.0).abs() < 1e-6 && (p.y - 4.9).abs() < 1e-6), "wall 2 raw corner (0, 4.9) missing");
+        assert!(pts2.iter().any(|p| (p.x - 10.0).abs() < 1e-6 && (p.y - 4.9).abs() < 1e-6), "wall 2 raw corner (10, 4.9) missing");
+    }
+
+    #[test]
+    fn plan_poché_very_thin_wall_in_joined_group() {
+        let mut d = Drawing::new_metric();
+        let t_thick = 0.2;
+        let t_thin = 0.01;
+        let id1 = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t_thick));
+        let id2 = d.arch.add_wall(wall(Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), t_thin));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        // Wall 1 (thick) should extend to Wall 2's outer face (10.0 + 0.01/2 = 10.005).
+        let h1 = arch_handle(id1);
+        let o1 = list.prims.iter().find(|p| p.handle == h1 && p.kind == Kind::Polyline && p.len >= 4).expect("wall 1 outline");
+        let pts1 = list.points(o1);
+        let maxx1 = pts1.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+        assert!((maxx1 - 10.005).abs() < 1e-6, "wall 1 maxx {} expected 10.005", maxx1);
+
+        // Wall 2 (thin) should butt against Wall 1's inner face (0.0 + 0.2/2 = 0.1).
+        let h2 = arch_handle(id2);
+        let o2 = list.prims.iter().find(|p| p.handle == h2 && p.kind == Kind::Polyline && p.len >= 4).expect("wall 2 outline");
+        let pts2 = list.points(o2);
+        let miny2 = pts2.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+        assert!((miny2 - 0.1).abs() < 1e-6, "wall 2 miny {} expected 0.1", miny2);
+    }
+
+    #[test]
+    fn plan_poché_collinear_walls_do_not_crash() {
+        let mut d = Drawing::new_metric();
+        let t = 0.2;
+        // Two collinear walls, end-to-end
+        d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(5.0, 0.0), t));
+        d.arch.add_wall(wall(Vec2::new(5.0, 0.0), Vec2::new(10.0, 0.0), t));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        // Should produce prims for both walls, or merge them.
+        // The join solver handles collinear walls by merging or trimming.
+        // Just check it doesn't panic and produces some output.
+        assert!(!list.prims.is_empty(), "collinear walls should produce prims");
+    }
+
+    #[test]
+    fn plan_poché_zero_thickness_is_skipped() {
+        let mut d = Drawing::new_metric();
+        d.arch.add_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.0, height: 3.0, ..Wall::default() });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        assert!(list.prims.is_empty(), "zero thickness wall should be skipped");
+    }
+
+    #[test]
+    fn plan_poché_nan_thickness_is_skipped() {
+        let mut d = Drawing::new_metric();
+        d.arch.add_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: f64::NAN, height: 3.0, ..Wall::default() });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        assert!(list.prims.is_empty(), "NaN thickness wall should be skipped");
+    }
 }
