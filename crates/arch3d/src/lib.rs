@@ -81,12 +81,15 @@ use cadcraft_geom::{Bounds2, Vec2, Vec3};
 /// Build a simple extruded-rectangle mesh from a wall's raw start/end/thickness.
 ///
 /// Used as a fallback when the join solver produced no shape for a wall id.
-/// Returns `None` if the wall is degenerate (zero length).
+/// Returns `None` if the wall is degenerate (zero length or zero thickness).
 fn raw_wall_mesh(wall: &Wall, base: f64, top: f64, object: ArchId) -> Option<Mesh> {
     let dx = wall.end.x - wall.start.x;
     let dy = wall.end.y - wall.start.y;
     let len = (dx * dx + dy * dy).sqrt();
     if len < 1e-9 {
+        return None;
+    }
+    if wall.thickness < 1e-9 {
         return None;
     }
     let nx = -dy / len;
@@ -3989,5 +3992,58 @@ mod tests {
 
         assert!(partial.mesh_for(&ArchId(10)).is_none(), "Deleted opening mesh should be removed");
         assert!(partial.mesh_for(&ArchId(1)).is_some(), "Host wall should remain");
+    }
+
+    #[test]
+    fn build_skips_walls_with_nan_thickness() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: f64::NAN,
+            height: 2.5,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        assert!(scene.mesh_for(&ArchId(1)).is_none(), "Wall with NaN thickness should be skipped");
+    }
+
+    #[test]
+    fn build_skips_walls_with_infinite_thickness() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: f64::INFINITY,
+            height: 2.5,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        assert!(scene.mesh_for(&ArchId(1)).is_none(), "Wall with infinite thickness should be skipped");
+    }
+
+    #[test]
+    fn build_dirty_skips_walls_with_nan_thickness() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.3,
+            height: 2.5,
+            ..Default::default()
+        });
+        let full = Scene3d::build(&model);
+
+        let mut edited = model.clone();
+        if let Some(w) = edited.walls.iter_mut().find(|w| w.id == ArchId(1)) {
+            w.thickness = f64::NAN;
+        }
+
+        let dirty: BTreeSet<ArchId> = BTreeSet::from([ArchId(1)]);
+        let partial = Scene3d::build_dirty(&edited, &dirty, &full);
+        assert!(partial.mesh_for(&ArchId(1)).is_none(), "Wall with NaN thickness should be skipped in dirty rebuild");
     }
 }
