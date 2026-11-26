@@ -3216,7 +3216,6 @@ mod tests {
         assert!(is_arch_proxy(t), "the written wall ring must be recognised by is_arch_proxy");
     }
 
-
     /// The proxy output is capped at [`cadcraft_doc::MAX_WALLS`] polylines, so a model with
     /// more walls than that still writes only `MAX_WALLS` rings.
     #[test]
@@ -3363,25 +3362,21 @@ mod tests {
         // Along +x: (start, end, thickness) -> [(0,0.1), (10,0.1), (10,-0.1), (0,-0.1)].
         let corners = wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
         let got = corners.expect("a sane wall must yield a poche ring");
-        let want = [
-            (0.0, 0.1),
-            (10.0, 0.1),
-            (10.0, -0.1),
-            (0.0, -0.1),
-        ];
+        let want = [(0.0, 0.1), (10.0, 0.1), (10.0, -0.1), (0.0, -0.1)];
         assert_eq!(got.len(), 4, "a poche ring has four corners");
         for (p, (wx, wy)) in got.iter().zip(want) {
-            assert!((p.x - wx).abs() < 1e-9 && (p.y - wy).abs() < 1e-9, "corner {} not at ({}, {})", got.iter().position(|c| c == p).map_or(-1, |i| i), wx, wy);
+            assert!(
+                (p.x - wx).abs() < 1e-9 && (p.y - wy).abs() < 1e-9,
+                "corner {} not at ({}, {})",
+                got.iter().position(|c| c == p).map_or(-1, |i| i),
+                wx,
+                wy
+            );
         }
         // Along +y the offset stays on the x axis: [(-0.1, 0), (-0.1, 10), (0.1, 10), (0.1, 0)].
         let corners = wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.0, 10.0), 0.2));
         let got = corners.expect("a sane wall must yield a poche ring");
-        let want = [
-            (-0.1, 0.0),
-            (-0.1, 10.0),
-            (0.1, 10.0),
-            (0.1, 0.0),
-        ];
+        let want = [(-0.1, 0.0), (-0.1, 10.0), (0.1, 10.0), (0.1, 0.0)];
         for (p, (wx, wy)) in got.iter().zip(want) {
             assert!((p.x - wx).abs() < 1e-9 && (p.y - wy).abs() < 1e-9, "corner not at ({}, {})", wx, wy);
         }
@@ -3392,62 +3387,58 @@ mod tests {
         assert!((got[2].x - 10.0).abs() < 1e-9 && (got[2].y + 0.1).abs() < 1e-9, "reversed wall end+perp wrong");
         assert!((got[3].x - 0.0).abs() < 1e-9 && (got[3].y - 0.1).abs() < 1e-9, "reversed wall start+perp wrong");
     }
+}
 
-    /// `wall_ring` is the single place hostile wall data can turn into a non-finite ring:
-    /// non-finite endpoints, a non-finite or non-positive thickness, a zero or sub-epsilon
-    /// centre line, and a centre line so long that `end - start` overflows, are all refused.
-    #[test]
-    fn wall_ring_refuses_non_finite_zero_short_and_overflowing_walls() {
-        // Non-finite endpoints.
-        assert!(wall_ring(&Wall::new(Vec2::new(f64::NAN, 0.0), Vec2::new(10.0, 0.0), 0.2)).is_none());
-        assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, f64::NAN), 0.2)).is_none());
-        assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(f64::INFINITY, 0.0), 0.2)).is_none());
-        // Non-finite or non-positive thickness.
-        assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), f64::NAN)).is_none());
-        assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), f64::INFINITY)).is_none());
-        assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.0)).is_none());
-        assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), -0.2)).is_none());
-        // Zero length and sub-epsilon length (the < 1e-12 guard).
-        assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0), 0.2)).is_none());
-        assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1.0e-13, 0.0), 0.2)).is_none());
-        assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1e-12, 0.0), 0.2)).is_some_or("a 1e-12 wall is exactly at the guard; either outcome is acceptable but must not panic"));
-        // Finite endpoints so far apart that `end - start` overflows to infinity.
-        assert!(wall_ring(&Wall::new(Vec2::new(1.7e308, 0.0), Vec2::new(-1.7e308, 0.0), 0.2)).is_none());
-        // A huge-but-finite wall is still fine: the ring is finite and offset by half the thickness.
-        let got = wall_ring(&Wall::new(Vec2::new(1e15, 0.0), Vec2::new(1e15 + 10.0, 0.0), 0.2)).expect("a huge-but-finite wall must yield a ring");
-        assert!(got.iter().all(|c| c.is_finite()), "huge wall ring must be finite");
-        assert_eq!(got.len(), 4, "a huge wall ring has four corners");
+/// `wall_ring` is the single place hostile wall data can turn into a non-finite ring:
+/// non-finite endpoints, a non-finite or non-positive thickness, a zero or sub-epsilon
+/// centre line, and a centre line so long that `end - start` overflows, are all refused.
+#[test]
+fn wall_ring_refuses_non_finite_zero_short_and_overflowing_walls() {
+    // Non-finite endpoints.
+    assert!(wall_ring(&Wall::new(Vec2::new(f64::NAN, 0.0), Vec2::new(10.0, 0.0), 0.2)).is_none());
+    assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, f64::NAN), 0.2)).is_none());
+    assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(f64::INFINITY, 0.0), 0.2)).is_none());
+    // Non-finite or non-positive thickness.
+    assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), f64::NAN)).is_none());
+    assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), f64::INFINITY)).is_none());
+    assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.0)).is_none());
+    assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), -0.2)).is_none());
+    // Zero length and sub-epsilon length (the < 1e-12 guard).
+    assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0), 0.2)).is_none());
+    assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1.0e-13, 0.0), 0.2)).is_none());
+    assert!(
+        wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1e-12, 0.0), 0.2))
+            .is_some_or("a 1e-12 wall is exactly at the guard; either outcome is acceptable but must not panic")
+    );
+    // Finite endpoints so far apart that `end - start` overflows to infinity.
+    assert!(wall_ring(&Wall::new(Vec2::new(1.7e308, 0.0), Vec2::new(-1.7e308, 0.0), 0.2)).is_none());
+    // A huge-but-finite wall is still fine: the ring is finite and offset by half the thickness.
+    let got = wall_ring(&Wall::new(Vec2::new(1e15, 0.0), Vec2::new(1e15 + 10.0, 0.0), 0.2)).expect("a huge-but-finite wall must yield a ring");
+    assert!(got.iter().all(|c| c.is_finite()), "huge wall ring must be finite");
+    assert_eq!(got.len(), 4, "a huge wall ring has four corners");
+}
+
+/// One proxy ring per wall, in wall insertion order, each carrying its own id xdata.
+/// The spec says "for each wall, the groups …" — the ring order is the wall order and
+/// the label is `w<N>` from the id, so a foreign reader can tell which wall a ring is.
+#[test]
+fn proxy_polylines_write_rings_in_wall_order_with_the_wall_id_label() {
+    let mut m = ArchModel::default();
+    let w0 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), 0.2));
+    let w1 = m.push_wall(Wall::new(Vec2::new(20.0, 0.0), Vec2::new(26.0, 0.0), 0.2));
+    let w2 = m.push_wall(Wall::new(Vec2::new(0.0, 20.0), Vec2::new(6.0, 20.0), 0.2));
+
+    let polys = proxy_polylines(&m);
+    assert_eq!(polys.len(), 3, "three isolated walls must write three proxy rings");
+    for (i, want_id) in [w0, w1, w2].into_iter().enumerate().zip(["w0", "w1", "w2"]).map(|((_, wid), id)| (wid, id)) {
+        let label = format!("w{}", wid.0);
+        assert!(polys[i].iter().any(|t| t.code == 1000 && t.str().eq_ignore_ascii_case(label)), "ring {} must carry the xdata id {}", i, label);
     }
-
-    /// One proxy ring per wall, in wall insertion order, each carrying its own id xdata.
-    /// The spec says "for each wall, the groups …" — the ring order is the wall order and
-    /// the label is `w<N>` from the id, so a foreign reader can tell which wall a ring is.
-    #[test]
-    fn proxy_polylines_write_rings_in_wall_order_with_the_wall_id_label() {
-        let mut m = ArchModel::default();
-        let w0 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(6.0, 0.0), 0.2));
-        let w1 = m.push_wall(Wall::new(Vec2::new(20.0, 0.0), Vec2::new(26.0, 0.0), 0.2));
-        let w2 = m.push_wall(Wall::new(Vec2::new(0.0, 20.0), Vec2::new(6.0, 20.0), 0.2));
-
-        let polys = proxy_polylines(&m);
-        assert_eq!(polys.len(), 3, "three isolated walls must write three proxy rings");
-        for (i, want_id) in [w0, w1, w2]
-            .into_iter()
-            .enumerate()
-            .zip(["w0", "w1", "w2"])
-            .map(|((_, wid), id)| (wid, id))
-            {
-            let label = format!("w{}", wid.0);
-            assert!(polys[i]
-                .iter()
-                .any(|t| t.code == 1000 && t.str().eq_ignore_ascii_case(label)),
-                "ring {} must carry the xdata id {}", i, label);
-        }
-        // Every ring is a closed polyline with a vertex count that matches its points.
-        for t in &polys {
-            assert!(t.iter().any(|x| x.code == 70 && x.i64() == 1), "a wall proxy must be closed");
-            let n = t.iter().find(|x| x.code == 90).map(|x| x.i64()).unwrap_or(-1);
-            assert_eq!(n, t.iter().filter(|x| x.code == 10).count() as i64, "vertex count 90 must match the point count");
-            assert!(!t.is_empty(), "a wall proxy must carry groups");
-        }
+    // Every ring is a closed polyline with a vertex count that matches its points.
+    for t in &polys {
+        assert!(t.iter().any(|x| x.code == 70 && x.i64() == 1), "a wall proxy must be closed");
+        let n = t.iter().find(|x| x.code == 90).map(|x| x.i64()).unwrap_or(-1);
+        assert_eq!(n, t.iter().filter(|x| x.code == 10).count() as i64, "vertex count 90 must match the point count");
+        assert!(!t.is_empty(), "a wall proxy must carry groups");
     }
+}
