@@ -1053,6 +1053,79 @@ mod tests {
     }
 
     #[test]
+    fn openings_with_hinge_sill_and_garage_style_round_trip() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-DOOR");
+        d.ensure_layer("A-GLAZ");
+        let wid = d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(12.0, 0.0), 0.2));
+
+        // Hinged door with hinge/swing
+        let mut door = Opening::new(wid, 1.0, 0.9, 2.1, OpeningKind::Door);
+        door.hinge = cadcraft_doc::arch::Hinge::Left;
+        door.swing = cadcraft_doc::arch::Swing::In;
+        let door_id = d.arch.push_opening(door);
+
+        // Casement window with recess and sill
+        let mut window = Opening::new(wid, 4.0, 1.2, 1.5, OpeningKind::Window);
+        window.recess = 0.05;
+        window.sill = 0.9;
+        let window_id = d.arch.push_opening(window);
+
+        // Garage door with style
+        let mut garage = Opening::new(wid, 6.5, 2.4, 2.1, OpeningKind::GarageDoor);
+        garage.style = "garage".into();
+        let garage_id = d.arch.push_opening(garage);
+
+        let snap = d.arch.clone();
+        let text = write_dxf(&d);
+        let back = read_dxf(text.as_bytes()).unwrap();
+
+        assert_eq!(back.arch.openings.len(), 3);
+
+        let door_r = back.arch.opening(door_id).unwrap();
+        assert_eq!(door_r.hinge, cadcraft_doc::arch::Hinge::Left, "hinge lost");
+        assert_eq!(door_r.swing, cadcraft_doc::arch::Swing::In, "swing lost");
+
+        let window_r = back.arch.opening(window_id).unwrap();
+        assert_eq!(window_r.recess, 0.05, "recess lost");
+        assert_eq!(window_r.sill, 0.9, "sill lost");
+
+        let garage_r = back.arch.opening(garage_id).unwrap();
+        assert_eq!(garage_r.style.as_str(), "garage", "garage style lost");
+
+        // Verify layers exist in output
+        assert!(text.contains("A-DOOR"));
+        assert!(text.contains("A-GLAZ"));
+    }
+
+    #[test]
+    fn opening_proxy_polylines_handle_nan_offset_gracefully() {
+        let mut m = ArchModel::default();
+        let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+
+        // Opening with NaN offset should be skipped or handled without panic
+        let mut o = Opening::new(wid, f64::NAN, 0.9, 2.1, OpeningKind::Door);
+        m.push_opening(o);
+
+        // Valid opening
+        m.push_opening(Opening::new(wid, 5.0, 0.9, 2.1, OpeningKind::Door));
+
+        let polys = proxy_opening_polylines(&m);
+        // Should not panic. The NaN opening might produce no polys or be filtered.
+        // The valid opening should produce polys.
+        assert!(!polys.is_empty(), "valid opening should produce proxies");
+
+        // Ensure no NaN coordinates in output
+        for (layer, tags) in &polys {
+            for t in tags {
+                if t.code == 10 || t.code == 20 {
+                    assert!(t.f64().is_finite(), "non-finite coordinate in proxy on layer {}", layer);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn proxy_openings_are_dropped_when_the_xrecord_is_present() {
         let mut d = Drawing::new_metric();
         d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
@@ -2894,5 +2967,84 @@ mod tests {
         assert_eq!(back.arch.walls[0].finish, Some(Finish::Brick), "wall 0 finish changed");
         assert_eq!(back.arch.walls[1].finish, Some(Finish::Tile), "wall 1 finish changed");
         assert_eq!(back.arch.walls[2].finish, Some(Finish::Wood), "wall 2 finish changed");
+    }
+
+    /// Openings with zero width or height are handled gracefully (skipped or clamped) and do not crash.
+    #[test]
+    fn degenerate_openings_round_trip() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-DOOR");
+        let wid = d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+
+        // Zero width
+        let mut o1 = Opening::new(wid, 1.0, 0.0, 2.1, OpeningKind::Door);
+        d.arch.push_opening(o1);
+
+        // Zero height
+        let mut o2 = Opening::new(wid, 3.0, 0.9, 0.0, OpeningKind::Window);
+        d.arch.push_opening(o2);
+
+        // Negative width
+        let mut o3 = Opening::new(wid, 5.0, -1.0, 2.1, OpeningKind::Door);
+        d.arch.push_opening(o3);
+
+        let text = write_dxf(&d);
+        let back = read_dxf(text.as_bytes());
+        assert!(back.is_ok(), "degenerate openings must not crash the reader");
+        let back = back.unwrap();
+
+        // The model should still contain the openings (possibly clamped or as-is depending on impl)
+        // but definitely not crash.
+        assert!(!back.arch.openings.is_empty(), "openings should survive round trip");
+    }
+
+    /// Openings with NaN coordinates or dimensions are skipped or handled without panic.
+    #[test]
+    fn nan_openings_round_trip() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-DOOR");
+        let wid = d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+
+        let mut o1 = Opening::new(wid, f64::NAN, 0.9, 2.1, OpeningKind::Door);
+        d.arch.push_opening(o1);
+
+        let mut o2 = Opening::new(wid, 2.0, f64::NAN, 2.1, OpeningKind::Door);
+        d.arch.push_opening(o2);
+
+        let mut o3 = Opening::new(wid, 4.0, 0.9, f64::NAN, OpeningKind::Door);
+        d.arch.push_opening(o3);
+
+        let text = write_dxf(&d);
+        let back = read_dxf(text.as_bytes());
+        assert!(back.is_ok(), "NaN openings must not crash the reader");
+        let back = back.unwrap();
+
+        // Depending on implementation, these might be dropped or kept.
+        // The key is no panic.
+    }
+
+    /// Openings at huge coordinates produce finite proxy polylines and round-trip correctly.
+    #[test]
+    fn huge_coordinate_openings_round_trip() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer("A-DOOR");
+        let wid = d.arch.push_wall(Wall::new(Vec2::new(1e15, 1e15), Vec2::new(1e15 + 10.0, 1e15), 0.2));
+        d.arch.push_opening(Opening::new(wid, 5.0, 0.9, 2.1, OpeningKind::Door));
+
+        let text = write_dxf(&d);
+        let back = read_dxf(text.as_bytes()).unwrap();
+
+        assert_eq!(back.arch.openings.len(), 1, "huge coordinate opening lost");
+        assert_eq!(back.arch.openings[0].offset, 5.0);
+
+        // Verify proxy polylines are finite
+        let polys = proxy_opening_polylines(&back.arch);
+        for (_, tags) in &polys {
+            for t in tags {
+                if t.code == 10 || t.code == 20 {
+                    assert!(t.f64().is_finite(), "non-finite coordinate in proxy");
+                }
+            }
+        }
     }
 }
