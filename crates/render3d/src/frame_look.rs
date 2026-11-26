@@ -144,9 +144,12 @@ impl Meter {
                 // Skip hits outside the frame's clip box.
                 if let Some([lo, hi]) = f.clip {
                     let p = hit.point;
-                    if p.x < f64::from(lo[0]) || p.x > f64::from(hi[0])
-                        || p.y < f64::from(lo[1]) || p.y > f64::from(hi[1])
-                        || p.z < f64::from(lo[2]) || p.z > f64::from(hi[2])
+                    if p.x < f64::from(lo[0])
+                        || p.x > f64::from(hi[0])
+                        || p.y < f64::from(lo[1])
+                        || p.y > f64::from(hi[1])
+                        || p.z < f64::from(lo[2])
+                        || p.z > f64::from(hi[2])
                     {
                         continue;
                     }
@@ -983,11 +986,7 @@ mod tests {
         assert!(l_full.is_some(), "full plane meters");
         // Clip to x < 0: only the left half is metered. The plane is symmetric, so the result is the same.
         let mut lighting_clip = lighting.clone();
-        lighting_clip.look.clip = Some(cadcraft_doc::arch::ClipBox {
-            min: [-5.0, -5.0, -1.0],
-            max: [0.0, 5.0, 1.0],
-            ..Default::default(),
-        });
+        lighting_clip.look.clip = Some(cadcraft_doc::arch::ClipBox { min: [-5.0, -5.0, -1.0], max: [0.0, 5.0, 1.0], ..Default::default() });
         let f_clip = frame_look(&scene, &camera, (64, 48), &lighting_clip, false, &mut meter);
         let l_clip = meter.log_average(&scene, &camera, (64, 48), &lighting_clip, false, &f_clip);
         assert!(l_clip.is_some(), "clipped plane meters");
@@ -995,11 +994,7 @@ mod tests {
         // roughly half the rays hit inside the box. The luminance is the same (uniform plane),
         // but the count differs. Verify the clip is applied by checking a box that excludes everything.
         let mut lighting_none = lighting.clone();
-        lighting_none.look.clip = Some(cadcraft_doc::arch::ClipBox {
-            min: [10.0, 10.0, 10.0],
-            max: [20.0, 20.0, 20.0],
-            ..Default::default(),
-        });
+        lighting_none.look.clip = Some(cadcraft_doc::arch::ClipBox { min: [10.0, 10.0, 10.0], max: [20.0, 20.0, 20.0], ..Default::default() });
         let f_none = frame_look(&scene, &camera, (64, 48), &lighting_none, false, &mut meter);
         let l_none = meter.log_average(&scene, &camera, (64, 48), &lighting_none, false, &f_none);
         assert!(l_none.is_none(), "a clip box excluding all geometry meters nothing");
