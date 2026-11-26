@@ -505,6 +505,57 @@ mod tests {
         assert_ne!(k1, light_key(&l2));
     }
 
+    /// `light_key` with a light whose direction is all-zero (a degenerate direction) still
+    /// produces a stable key; two lights with the same zero direction and same position share it.
+    #[test]
+    fn light_key_with_zero_direction_is_stable() {
+        let mut a = spot(1, 0.0);
+        a.direction = cadcraft_geom::Vec3::new(0.0, 0.0, 0.0);
+        let mut b = spot(1, 0.0);
+        b.direction = cadcraft_geom::Vec3::new(0.0, 0.0, 0.0);
+        assert_eq!(light_key(&a), light_key(&b), "same zero direction, same key");
+        let mut c = spot(1, 0.0);
+        c.direction = cadcraft_geom::Vec3::new(0.0, 0.0, -1.0);
+        assert_ne!(light_key(&a), light_key(&c), "a zero direction differs from a real one");
+    }
+
+    /// `occluder_key` with a scene that has no meshes at all is stable and equal across calls.
+    #[test]
+    fn occluder_key_with_no_meshes() {
+        let s = Scene3d::default();
+        let k1 = occluder_key(&s);
+        let k2 = occluder_key(&s);
+        assert_eq!(k1, k2);
+    }
+
+    /// `occluder_key` with a mesh that has positions but no indices (an empty draw) is hashed
+    /// deterministically; two such scenes with the same positions share a key.
+    #[test]
+    fn occluder_key_with_empty_indices() {
+        let mut m = crate::types::Mesh::new("wall", ArchId(1));
+        m.positions.push([0.0, 0.0, 0.0]);
+        m.positions.push([1.0, 0.0, 0.0]);
+        // No indices.
+        let s1 = Scene3d { meshes: vec![m.clone()], ..Default::default() };
+        let s2 = Scene3d { meshes: vec![m], ..Default::default() };
+        assert_eq!(occluder_key(&s1), occluder_key(&s2));
+    }
+
+    /// `casts_fixture_shadow` with a material name that is an empty string: not a light material,
+    /// not a ceiling, so it casts.
+    #[test]
+    fn casts_fixture_shadow_with_empty_material() {
+        assert!(casts_fixture_shadow(""), "an empty material name is not a fixture housing or ceiling");
+    }
+
+    /// `casts_fixture_shadow` with a material name that starts with "CEILING" in upper case: the
+    /// check is case-insensitive, so it does not cast.
+    #[test]
+    fn casts_fixture_shadow_uppercase_ceiling() {
+        assert!(!casts_fixture_shadow("CEILING"), "the ceiling check is case-insensitive");
+        assert!(!casts_fixture_shadow("Ceiling_Plaster"), "a prefixed ceiling name is also a ceiling");
+    }
+
     #[test]
     fn re_adding_light_rebuilds() {
         let Some((device, queue)) = crate::gputest::shared_device() else {

@@ -1110,6 +1110,40 @@ mod tests {
     }
 
     #[test]
+    fn entry_record_non_object_is_refused() {
+        // A catalog entry must be a JSON object; anything else is refused with a stable
+        // reason (never repaired, never a crash).
+        assert!(entry_record(&json!(1), "c").is_err());
+        assert!(entry_record(&json!(["a"]), "c").is_err());
+        assert!(entry_record(&json!("x"), "c").is_err());
+        assert!(entry_record(&json!(null), "c").is_err());
+        // A minimal valid object is accepted.
+        let rec = json!({
+            "id": "a",
+            "name": "A",
+            "category": "Furniture",
+            "licence": "CC0",
+            "source": "s",
+            "file": "a.glb",
+        });
+        assert!(entry_record(&rec, "c").is_ok());
+    }
+
+    #[test]
+    fn user_record_requires_and_validates_record() {
+        // A user item file must contain a "record" object; an empty one is refused.
+        assert!(user_record(&json!({})).is_err());
+        assert!(user_record(&json!(null)).is_err());
+        // A valid user record is accepted, forced to the "user" catalog and editable.
+        let v = json!({"record": {"id": "user:z", "name": "Z", "category": "Furniture"}});
+        let r = user_record(&v).expect("valid user record");
+        assert_eq!((r.catalog.as_str(), r.read_only), ("user", false));
+        // A bad profile in a user record is still refused (never repaired).
+        let bad = json!({"record": {"id": "user:z", "name": "Z", "profile": [[0.0, 0.0], [0.01, 0.0]]}});
+        assert!(user_record(&bad).is_err());
+    }
+
+    #[test]
     fn hostile_entries_are_skipped_with_a_reason() {
         let ok = json!({"id": "a", "name": "A", "category": "Furniture", "licence": "CC0-1.0", "source": "me", "file": "a.glb"});
         assert!(entry_record(&ok, "x").is_ok());
@@ -1300,6 +1334,52 @@ mod tests {
             for k in expected {
                 assert!(keywords.contains(k), "finish {} missing keyword {}", f.name(), k);
             }
+        }
+
+        #[test]
+        fn entry_record_keyword_boundary() {
+            let base = json!({
+                "id": "k:b",
+                "name": "B",
+                "category": "Furniture",
+                "licence": "CC0-1.0",
+                "source": "s",
+                "file": "b.glb"
+            });
+            // exactly MAX_KEYWORDS (64) keywords is accepted
+            let kw64: Vec<Value> = (0..64).map(|i| Value::String(format!("kw{}", i))).collect();
+            let mut e = base.clone();
+            e["keywords"] = Value::Array(kw64);
+            assert!(entry_record(&e, "x").is_ok());
+            // 65 keywords is refused
+            let kw65: Vec<Value> = (0..65).map(|i| Value::String(format!("kw{}", i))).collect();
+            let mut e2 = base.clone();
+            e2["keywords"] = Value::Array(kw65);
+            assert!(entry_record(&e2, "x").is_err());
+            // a keyword exactly at MAX_SHORT (256) chars is accepted
+            let long_kw = "a".repeat(256);
+            let mut e3 = base.clone();
+            e3["keywords"] = json!([long_kw]);
+            assert!(entry_record(&e3, "x").is_ok());
+            // a keyword at 257 chars is refused
+            let long_kw2 = "a".repeat(257);
+            let mut e4 = base.clone();
+            e4["keywords"] = json!([long_kw2]);
+            assert!(entry_record(&e4, "x").is_err());
+            // symbolType exactly at MAX_SHORT (256) is accepted
+            let long_st = "s".repeat(256);
+            let mut e5 = base.clone();
+            e5["symbolType"] = json!(long_st);
+            assert!(entry_record(&e5, "x").is_ok());
+            // symbolType at 257 chars is refused
+            let long_st2 = "s".repeat(257);
+            let mut e6 = base.clone();
+            e6["symbolType"] = json!(long_st2);
+            assert!(entry_record(&e6, "x").is_err());
+            // elevation 0.0 is accepted (unlike size, zero is allowed)
+            let mut e7 = base.clone();
+            e7["elevation"] = json!(0.0);
+            assert!(entry_record(&e7, "x").is_ok());
         }
     }
 }
