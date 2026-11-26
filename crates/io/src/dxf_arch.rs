@@ -1091,7 +1091,7 @@ mod tests {
         assert_eq!(window_r.sill, 0.9, "sill lost");
 
         let garage_r = back.arch.opening(garage_id).unwrap();
-        assert_eq!(garage_r.style.as_ref(), "garage", "garage style lost");
+        assert_eq!(garage_r.style.as_str(), "garage", "garage style lost");
 
         // Verify layers exist in output
         assert!(text.contains("A-DOOR"));
