@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-26 04:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-26 04:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23**
 
-12,364 workspace tests passing at the last merge · 1432 segments merged in all · 0 of 15 seats working
+12,368 workspace tests passing at the last merge · 1433 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -33,7 +33,7 @@ Updated 2026-11-26 04:30 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — |  · expected done Nov 26 09:59–Dec 11 06:33 UTC |
+| 23 | Phase 23 | pending | — |  · expected done Nov 26 10:14–Dec 11 06:49 UTC |
 
 ## Phase 23 segments
 
@@ -44,6 +44,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 26 04:34 | `harden-p14-io-dxf-furnishing` | merged | 12,368 pass | tturbo-mac |
 | Nov 26 03:31 | `harden-p14-cmd-icons` | merged | 12,364 pass | tturbo-mac |
 | Nov 26 01:04 | `harden-p14-r3d-backdrop` | merged | 12,359 pass | tturbo-mac |
 | Nov 26 00:35 | `harden-p14-cmd-defaults` | merged | 12,352 pass | tturbo-mac |
@@ -55,7 +56,6 @@ none yet
 | Nov 25 21:34 | `harden-p15-arch3d-plate-mesh` | merged | 12,301 pass | tturbo-mac |
 | Nov 25 18:07 | `harden-p22-r3d-clamp` | merged | 12,293 pass | tturbo-mac |
 | Nov 25 17:40 | `harden-p15-io-electrical-node` | merged | 12,284 pass | tturbo-mac |
-| Nov 25 17:22 | `harden-p22-r3d-sun-disc` | merged | 12,280 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
