@@ -4163,6 +4163,82 @@ mod tests {
     }
 
     #[test]
+    fn openings_on_sorts_by_offset() {
+        let mut m = ArchModel::default();
+        let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        m.push_opening(Opening::new(wid, 5.0, 0.9, 2.1, OpeningKind::Door));
+        m.push_opening(Opening::new(wid, 1.0, 0.9, 2.1, OpeningKind::Door));
+        m.push_opening(Opening::new(wid, 3.0, 0.9, 2.1, OpeningKind::Door));
+        let on = m.openings_on(wid);
+        assert_eq!(on.len(), 3);
+        assert_eq!(on[0].offset, 1.0);
+        assert_eq!(on[1].offset, 3.0);
+        assert_eq!(on[2].offset, 5.0);
+    }
+
+    #[test]
+    fn openings_on_empty_when_no_openings_on_wall() {
+        let mut m = ArchModel::default();
+        let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        let on = m.openings_on(wid);
+        assert!(on.is_empty());
+    }
+
+    #[test]
+    fn openings_on_filters_by_wall() {
+        let mut m = ArchModel::default();
+        let w1 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        let w2 = m.push_wall(Wall::new(Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), 0.2));
+        m.push_opening(Opening::new(w1, 1.0, 0.9, 2.1, OpeningKind::Door));
+        m.push_opening(Opening::new(w2, 1.0, 0.9, 2.1, OpeningKind::Door));
+        let on_w1 = m.openings_on(w1);
+        let on_w2 = m.openings_on(w2);
+        assert_eq!(on_w1.len(), 1);
+        assert_eq!(on_w1[0].host, w1);
+        assert_eq!(on_w2.len(), 1);
+        assert_eq!(on_w2[0].host, w2);
+    }
+
+    #[test]
+    fn validate_rejects_rough_below_finished() {
+        let mut m = ArchModel::default();
+        let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        let mut o = Opening::new(wid, 1.0, 0.9, 2.1, OpeningKind::Door);
+        o.rough_width = 0.5;
+        m.push_opening(o);
+        let msgs = m.validate();
+        assert!(msgs.iter().any(|s| s.contains("rough width")), "rough width error not reported: {msgs:?}");
+
+        let mut m2 = ArchModel::default();
+        let wid2 = m2.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        let mut o2 = Opening::new(wid2, 1.0, 0.9, 2.1, OpeningKind::Door);
+        o2.rough_height = 1.5;
+        m2.push_opening(o2);
+        let msgs2 = m2.validate();
+        assert!(msgs2.iter().any(|s| s.contains("rough height")), "rough height error not reported: {msgs2:?}");
+    }
+
+    #[test]
+    fn validate_rejects_non_finite_offset() {
+        let mut m = ArchModel::default();
+        let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        let mut o = Opening::new(wid, 1.0, 0.9, 2.1, OpeningKind::Door);
+        o.offset = f64::NAN;
+        m.push_opening(o);
+        let msgs = m.validate();
+        assert!(msgs.iter().any(|s| s.contains("non-finite")), "non-finite offset not reported: {msgs:?}");
+    }
+
+    #[test]
+    fn opening_index_none_for_missing() {
+        let mut m = ArchModel::default();
+        let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        let oid = m.push_opening(Opening::new(wid, 1.0, 0.9, 2.1, OpeningKind::Door));
+        assert_eq!(m.opening_index(oid), Some(0));
+        assert_eq!(m.opening_index(ArchId(999)), None);
+    }
+
+    #[test]
     fn level_floor_to_floor_is_derived() {
         let l = Level { ceiling_height: 2.4, structure: 0.3, ..Level::default() };
         assert!((l.floor_to_floor() - 2.7).abs() < 1e-12);
