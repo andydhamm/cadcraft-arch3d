@@ -3733,7 +3733,7 @@ mod tests {
         let mesh_count = json["meshes"].as_array().unwrap().len();
         for node in json["nodes"].as_array().unwrap().iter().skip(1) {
             if let Some(mesh_idx) = node["mesh"].as_u64() {
-                assert!(mesh_idx as usize < mesh_count, "node mesh index out of range");
+                assert!((mesh_idx as usize) < mesh_count, "node mesh index out of range");
             }
         }
         // Every bufferView must reference a valid buffer
