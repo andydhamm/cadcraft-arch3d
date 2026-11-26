@@ -1401,6 +1401,15 @@ mod tests {
     }
 
     #[test]
+    fn variance_of_mean_f32_max_returns_zero() {
+        // f32::MAX luminance squared overflows f32 to inf; the clamp must return 0.0
+        // (a finite, well-defined value) rather than NaN or -inf leaking through.
+        assert_eq!(PathTracer::variance_of_mean([f32::MAX, f32::MAX, f32::MAX, 1.0], f32::MAX), 0.0, "tri-channel f32::MAX, n=1");
+        assert_eq!(PathTracer::variance_of_mean([f32::MAX, 0.0, 0.0, 1.0], f32::MAX), 0.0, "single-channel f32::MAX, n=1");
+        assert_eq!(PathTracer::variance_of_mean([f32::MAX, f32::MAX, 0.0, 4.0], f32::MAX), 0.0, "two-channel f32::MAX, n=4");
+    }
+
+    #[test]
     fn metered_scale_keeps_the_legacy_night() {
         let lum = vec![0.0, 1.0, 100.0, 1e-3];
         let hit = vec![true, false, true, false];

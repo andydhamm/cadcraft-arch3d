@@ -478,17 +478,50 @@ impl Pane3d {
         if self.night {
             look.sun.on = false;
         }
-        if self.view.sun_dir.is_some() {
-            return (look, Ok(self.view.sun_dir));
+
+        // A NaN latitude or longitude means the site is invalid; treat as no sun.
+        // Checked before view.sun_dir so a stale or erroneous direction from the view
+        // does not override an invalid site.
+        let site_valid = self.site.as_ref().is_some_and(|s| s.latitude.is_finite() && s.longitude.is_finite());
+        if !site_valid {
+            look.sun.on = false;
+            return (look, Ok(None));
         }
-        let Some(site) = self.site.as_ref() else { return (look, Ok(None)) };
+
+        let Some(site) = self.site.as_ref() else {
+            // No site: no sun from site. If there's a named angle, it's in view.sun_dir.
+            if let Some(dir) = self.view.sun_dir {
+                if dir.iter().all(|v| v.is_finite()) {
+                    return (look, Ok(Some(dir)));
+                }
+                look.sun.on = false;
+                return (look, Ok(None));
+            }
+            return (look, Ok(None));
+        };
+
+        if let Some(dir) = self.view.sun_dir {
+            if dir.iter().all(|v| v.is_finite()) {
+                return (look, Ok(Some(dir)));
+            }
+            // Non-finite sun direction from the view: treat as no sun.
+            look.sun.on = false;
+            return (look, Ok(None));
+        }
+
         let dir = cadcraft_arch::sun::sun_position(site.latitude, self.sun_date.trim(), self.sun_time.trim())
             .map(|sun| cadcraft_arch::site::true_to_drawing(Some(site), cadcraft_arch::sun::sun_dir(&sun)));
         match dir {
-            Some(d) => (look, Ok(Some([d[0], d[1], d[2]]))),
+            Some(d) if d[0].is_finite() && d[1].is_finite() && d[2].is_finite() => (look, Ok(Some([d[0], d[1], d[2]]))),
             // Night has no sun to place, so an unreadable entry does not matter.
             None if self.night => (look, Ok(None)),
+            // Invalid date/time or non-finite result: treat as no sun if we can't compute it,
+            // but if it's just a bad date/time we might want to keep the last good one?
+            // The spec says "an invalid entry keeps the last good sun".
+            // But if the SITE is NaN, we already returned Ok(None).
+            // If the date/time is bad, sun_position returns None.
             None => (look, Err(())),
+            _ => (look, Err(())),
         }
     }
 
@@ -526,6 +559,14 @@ impl Pane3d {
                     // At night the sun light is off, but a named sun angle still has a direction.
                     let dir = if self.night { self.view.sun_dir } else { sun_dir };
                     let mut l = cadcraft_render3d::look::lighting_for(&look, dir, budget).with_moon(if self.night { None } else { self.moon_dir });
+                    if !look.sun.on || dir.is_none() {
+                        l.sun = None;
+                        // Keep sun_dir if it exists (e.g. from a named angle) even if the sun is off.
+                        if dir.is_none() {
+                            l.sun_dir = None;
+                        }
+                        l.sun_shadow = false;
+                    }
                     l.meter_night = true;
                     if self.environment_for.as_ref() == Some(&(look, sun_dir)) {
                         l.environment = self.environment.clone();
@@ -676,7 +717,7 @@ impl Pane3d {
         use cadcraft_doc::arch::photo;
         let look = &self.view.look;
         let spp = lock_final(&self.finalize).samples.clamp(1, cadcraft_render3d::pathtrace::MAX_SPP);
-        let mut opts = cadcraft_render3d::pathtrace::PathOptions { spp, ..Default::default() };
+        let mut opts = cadcraft_render3d::pathtrace::PathOptions::default();
         let mut lighting = self.lighting.clone();
         if look.technique == cadcraft_doc::arch::Technique::Photoreal {
             cadcraft_render3d::look::apply_photo(&mut opts, &mut lighting, &photo::rung(7));
@@ -689,10 +730,11 @@ impl Pane3d {
         } else {
             cadcraft_render3d::look::apply_photo(&mut opts, &mut lighting, &photo::PhotoSettings::default());
             // The plain Finalize keeps the user's samples, bounces and the live lighting.
-            opts.spp = spp;
             opts.bounces = cadcraft_render3d::pathtrace::PathOptions::default().bounces;
             lighting = self.lighting.clone();
         }
+        // User-specified samples always win over the preset.
+        opts.spp = spp;
         (opts, lighting)
     }
 
@@ -914,10 +956,21 @@ impl Pane3d {
     /// Identifies the held scene's content for the renderer's mesh cache.
     fn scene_key(&self) -> u64 {
         let today = self.doc.unwrap_or(0).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ self.scene_revision;
+        // Include a hash of the lighting state (night, sun presence) so toggling night changes the key.
+        let mut lighting_hash = 0u64;
+        if self.night {
+            lighting_hash ^= 0x1234_5678_9ABC_DEF0;
+        }
+        if self.lighting.sun.is_some() {
+            lighting_hash ^= 0x0FED_CBA9_8765_4321;
+        }
+
+        let base = today ^ lighting_hash;
+
         if self.filter_key == 0 && self.light_set_key == 0 {
-            today
+            base
         } else {
-            let mixed = today ^ self.filter_key.rotate_left(32).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ self.light_set_key.rotate_left(17);
+            let mixed = base ^ self.filter_key.rotate_left(32).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ self.light_set_key.rotate_left(17);
             mixed | (1 << 63)
         }
     }
@@ -4436,5 +4489,179 @@ mod tests {
         pane.night = true;
         let l = pane.lighting();
         assert!(l.sun_dir.is_none(), "night has no sun direction");
+    }
+
+    #[test]
+    fn pane_lighting_nan_site_does_not_panic() {
+        let mut pane = Pane3d::new();
+        let mut model = cadcraft_doc::ArchModel::default();
+        model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: f64::NAN, longitude: 0.0, true_north: 0.0, ..Default::default() });
+        // Syncing with a NaN site should not panic and should result in default lighting (no sun).
+        assert!(pane.sync(1, Some(&model)));
+        let l = pane.lighting();
+        assert!(l.sun.is_none(), "NaN site results in no sun");
+        assert!(l.sun_dir.is_none(), "NaN site results in no sun direction");
+    }
+
+    #[test]
+    fn pane_lighting_invalid_date_time_keeps_last_good_sun() {
+        let mut pane = site_pane();
+        // Establish a valid sun.
+        let l1 = pane.lighting();
+        assert!(l1.sun.is_some(), "valid date/time has a sun");
+        assert!(pane.sun_valid);
+
+        // Change to an invalid time.
+        pane.sun_time = "25:00".into();
+        let l2 = pane.lighting();
+        assert!(l2.sun.is_some(), "invalid time keeps the last good sun");
+        assert_eq!(l2.sun.map(|s| s.dir), l1.sun.map(|s| s.dir), "sun direction unchanged");
+        assert!(!pane.sun_valid, "invalid time flags sun_valid as false");
+
+        // Change to an invalid date.
+        pane.sun_date = "2026-13-01".into();
+        pane.sun_time = "12:00".into();
+        let l3 = pane.lighting();
+        assert!(l3.sun.is_some(), "invalid date keeps the last good sun");
+        assert_eq!(l3.sun.map(|s| s.dir), l1.sun.map(|s| s.dir), "sun direction unchanged");
+        assert!(!pane.sun_valid, "invalid date flags sun_valid as false");
+
+        // Restore valid date/time.
+        pane.sun_date = "2026-06-21".into();
+        pane.sun_time = "15:00".into();
+        let l4 = pane.lighting();
+        assert!(l4.sun.is_some(), "valid date/time restores sun");
+        assert!(pane.sun_valid, "valid date/time clears sun_valid flag");
+    }
+
+    #[test]
+    fn pane_scene_key_stable_on_camera_move_lighting_change_changes_key() {
+        let mut pane = site_pane();
+        let key1 = pane.scene_key();
+
+        // Camera move should not change scene key.
+        orbit_by_drag(&mut pane, 10.0, 10.0, 0.01);
+        let key2 = pane.scene_key();
+        assert_eq!(key1, key2, "camera move does not change scene key");
+
+        // Night toggle changes lighting, which should change the scene key (via lighting inputs).
+        pane.night = true;
+        let _ = pane.lighting(); // Trigger lighting update
+        let key3 = pane.scene_key();
+        assert_ne!(key1, key3, "night toggle changes scene key");
+
+        // Day toggle back should restore the key (or match the original).
+        pane.night = false;
+        let _ = pane.lighting();
+        let key4 = pane.scene_key();
+        assert_eq!(key1, key4, "day toggle restores scene key");
+    }
+
+    #[test]
+    fn pane_finalize_options_photoreal_overrides() {
+        use cadcraft_doc::arch::Technique;
+        let mut pane = Pane3d::new();
+        pane.view.look.technique = Technique::Photoreal;
+
+        // Default samples
+        let (opts, _) = pane.finalize_options();
+        assert_eq!(opts.bounces, 12, "Photoreal sets bounces to 12");
+        assert!(opts.adaptive, "Photoreal enables adaptive sampling");
+        assert_eq!(opts.denoise_mode, cadcraft_doc::arch::DenoiseMode::Learned, "Photoreal uses learned denoiser");
+        assert!(opts.clamp.is_some(), "Photoreal sets a clamp");
+
+        // Check that film is applied
+        let (_, lighting) = pane.finalize_options();
+        assert!(!lighting.film.is_neutral(), "Photoreal applies film");
+    }
+
+    #[test]
+    fn pane_finalize_options_custom_samples_respected() {
+        let mut pane = Pane3d::new();
+        pane.view.look.technique = cadcraft_doc::arch::Technique::Standard;
+
+        // Set custom samples
+        {
+            let mut f = lock_final(&pane.finalize);
+            f.samples = 128;
+        }
+
+        let (opts, _) = pane.finalize_options();
+        assert_eq!(opts.spp, 128, "Custom samples are respected for standard technique");
+        assert_eq!(opts.bounces, cadcraft_render3d::pathtrace::PathOptions::default().bounces, "Standard technique uses default bounces");
+    }
+
+    #[test]
+    fn pane_finalize_options_photoreal_custom_samples_respected() {
+        let mut pane = Pane3d::new();
+        pane.view.look.technique = cadcraft_doc::arch::Technique::Photoreal;
+
+        // Set custom samples
+        {
+            let mut f = lock_final(&pane.finalize);
+            f.samples = 256;
+        }
+
+        let (opts, _) = pane.finalize_options();
+        assert_eq!(opts.spp, 256, "Custom samples are respected even in Photoreal");
+        assert_eq!(opts.bounces, 12, "Photoreal settings still apply");
+    }
+
+    #[test]
+    fn pane_lighting_nan_longitude_does_not_panic() {
+        let mut pane = Pane3d::new();
+        let mut model = cadcraft_doc::ArchModel::default();
+        model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: 0.0, longitude: f64::NAN, true_north: 0.0, ..Default::default() });
+        // Syncing with a NaN longitude should not panic and should result in default lighting (no sun).
+        assert!(pane.sync(1, Some(&model)));
+        let l = pane.lighting();
+        assert!(l.sun.is_none(), "NaN longitude results in no sun");
+        assert!(l.sun_dir.is_none(), "NaN longitude results in no sun direction");
+    }
+
+    #[test]
+    fn pane_lighting_nan_site_with_night() {
+        let mut pane = Pane3d::new();
+        let mut model = cadcraft_doc::ArchModel::default();
+        model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: f64::NAN, longitude: f64::NAN, true_north: 0.0, ..Default::default() });
+        assert!(pane.sync(1, Some(&model)));
+        pane.night = true;
+        let l = pane.lighting();
+        assert!(l.sun.is_none(), "NaN site with night has no sun");
+        assert!(l.sun_dir.is_none(), "NaN site with night has no sun direction");
+    }
+
+    #[test]
+    fn pane_finalize_options_photoreal_with_lens_shift() {
+        let mut pane = Pane3d::new();
+        pane.view.look.technique = cadcraft_doc::arch::Technique::Photoreal;
+        pane.view.look.lens.shift = 0.5;
+        pane.view.look.lens.projection = cadcraft_doc::arch::LensProjection::Panini;
+
+        let (opts, lighting) = pane.finalize_options();
+        assert_eq!(opts.bounces, 12, "Photoreal settings still apply with lens shift");
+        assert!(opts.adaptive, "Photoreal enables adaptive sampling with lens shift");
+        assert_eq!(opts.denoise_mode, cadcraft_doc::arch::DenoiseMode::Learned, "Photoreal uses learned denoiser with lens shift");
+        assert!(opts.clamp.is_some(), "Photoreal sets a clamp with lens shift");
+        assert!(!lighting.film.is_neutral(), "Photoreal applies film with lens shift");
+    }
+
+    #[test]
+    fn pane_lighting_invalid_site_coordinates() {
+        let mut pane = Pane3d::new();
+        let mut model = cadcraft_doc::ArchModel::default();
+        // Latitude is valid, Longitude is NaN
+        model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: 51.05, longitude: f64::NAN, true_north: 0.0, ..Default::default() });
+        assert!(pane.sync(1, Some(&model)));
+        let l = pane.lighting();
+        assert!(l.sun.is_none(), "NaN longitude results in no sun");
+        assert!(l.sun_dir.is_none(), "NaN longitude results in no sun direction");
+
+        // Both NaN
+        model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: f64::NAN, longitude: f64::NAN, true_north: 0.0, ..Default::default() });
+        assert!(pane.sync(2, Some(&model)));
+        let l = pane.lighting();
+        assert!(l.sun.is_none(), "NaN lat/lon results in no sun");
+        assert!(l.sun_dir.is_none(), "NaN lat/lon results in no sun direction");
     }
 }
