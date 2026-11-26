@@ -2477,4 +2477,85 @@ mod tests {
         let shapes = solve_joins(&model);
         assert_eq!(shapes.len(), 0, "walls with infinity coordinates should produce no shapes");
     }
+
+    #[test]
+    fn solve_joins_on_a_self_touching_loop() {
+        let mut model = cadcraft_doc::ArchModel::default();
+        // A triangle where all three walls meet at three corners.
+        wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 1.0);
+        wall(&mut model, 1, Vec2::new(10.0, 0.0), Vec2::new(5.0, 10.0), 1.0);
+        wall(&mut model, 2, Vec2::new(5.0, 10.0), Vec2::new(0.0, 0.0), 1.0);
+
+        // Should not loop forever and should produce 3 shapes.
+        let shapes = solve_joins(&model);
+        assert_eq!(shapes.len(), 3);
+
+        // Each wall should have two L joins (one at each end).
+        for s in &shapes {
+            let l_count = s.joins.iter().filter(|j| matches!(j, Join::L(_))).count();
+            assert_eq!(l_count, 2, "shape {:?} should have 2 Join::L joins", s.id);
+        }
+    }
+
+    #[test]
+    fn t_join_from_below_meets_the_host_face() {
+        let mut model = cadcraft_doc::ArchModel::default();
+        wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(20.0, 0.0), 1.0); // host
+        wall(&mut model, 1, Vec2::new(10.0, -10.0), Vec2::new(10.0, 0.0), 1.0); // incoming from below
+
+        let shapes = solve_joins(&model);
+        assert_eq!(shapes.len(), 2);
+
+        let incoming = &shapes[1];
+        assert!(incoming.joins.iter().any(|j| matches!(j, Join::T(End::End))));
+
+        // The incoming wall's end face should lie on y = -0.5 (the host's lower face).
+        let on_face: Vec<Vec2> = incoming.polygon.iter().filter(|p| (p.y + 0.5).abs() < 1e-9).cloned().collect();
+        assert_eq!(on_face.len(), 2, "expected 2 vertices on the host face y=-0.5");
+
+        // No vertex should be above the host face.
+        for p in &incoming.polygon {
+            assert!(p.y <= -0.5 + 1e-9, "vertex {:?} above the host face", p);
+        }
+    }
+
+    #[test]
+    fn collinear_walls_with_different_thicknesses_butt() {
+        let mut model = cadcraft_doc::ArchModel::default();
+        wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 1.0);
+        wall(&mut model, 1, Vec2::new(10.0, 0.0), Vec2::new(20.0, 0.0), 2.0);
+
+        let shapes = solve_joins(&model);
+        assert_eq!(shapes.len(), 2);
+
+        // The thinner wall (0) should butt against the thicker wall (1).
+        // Wall 0's area should be 10.0 (10 * 1.0).
+        let a0 = polygon_area(&shapes[0].polygon);
+        assert!((a0 - 10.0).abs() < 1e-9, "wall 0 area should be 10.0, got {}", a0);
+
+        // Wall 1's area should be 20.0 (10 * 2.0).
+        let a1 = polygon_area(&shapes[1].polygon);
+        assert!((a1 - 20.0).abs() < 1e-9, "wall 1 area should be 20.0, got {}", a1);
+    }
+
+    #[test]
+    fn multiple_t_joins_on_one_host() {
+        let mut model = cadcraft_doc::ArchModel::default();
+        wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(20.0, 0.0), 1.0); // host
+        wall(&mut model, 1, Vec2::new(5.0, 10.0), Vec2::new(5.0, 0.0), 0.5); // incoming 1
+        wall(&mut model, 2, Vec2::new(15.0, 10.0), Vec2::new(15.0, 0.0), 0.5); // incoming 2
+
+        let shapes = solve_joins(&model);
+        assert_eq!(shapes.len(), 3);
+
+        // Both incoming walls should have T joins.
+        assert!(shapes[1].joins.iter().any(|j| matches!(j, Join::T(End::End))));
+        assert!(shapes[2].joins.iter().any(|j| matches!(j, Join::T(End::End))));
+
+        // The host wall should be unchanged (full length).
+        let host = &shapes[0];
+        let b = host.bounds();
+        assert!((b.min.x - 0.0).abs() < 1e-9, "host min.x: {}", b.min.x);
+        assert!((b.max.x - 20.0).abs() < 1e-9, "host max.x: {}", b.max.x);
+    }
 }
