@@ -208,7 +208,7 @@ mod tests {
             size: [0.9, 0.9, 0.9],
             ..Default::default()
         };
-        f1.id = d.arch.next_furnishing_id.into();
+        f1.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
         d.arch.furnishings.push(f1);
         d.arch.next_furnishing_id += 1;
         // Furnishing with NaN in size
@@ -223,7 +223,7 @@ mod tests {
             size: [f64::NAN, 0.9, 0.9],
             ..Default::default()
         };
-        f2.id = d.arch.next_furnishing_id.into();
+        f2.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
         d.arch.furnishings.push(f2);
         d.arch.next_furnishing_id += 1;
         // Furnishing with NaN in rotation
@@ -238,7 +238,7 @@ mod tests {
             size: [0.9, 0.9, 0.9],
             ..Default::default()
         };
-        f3.id = d.arch.next_furnishing_id.into();
+        f3.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
         d.arch.furnishings.push(f3);
         d.arch.next_furnishing_id += 1;
         // Valid furnishing
@@ -253,14 +253,14 @@ mod tests {
             size: [0.9, 0.9, 0.9],
             ..Default::default()
         };
-        f4.id = d.arch.next_furnishing_id.into();
+        f4.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
         d.arch.furnishings.push(f4);
         d.arch.next_furnishing_id += 1;
 
         let p = proxy_furnishing_entities(&d.arch);
         // Only the valid furnishing should produce a proxy
         assert_eq!(p.len(), 1, "only the valid furnishing should produce a proxy");
-        for (layer, tags) in &p {
+        for (_, layer, tags) in &p {
             for t in tags {
                 if t.code == 10 || t.code == 20 {
                     assert!(t.f64().is_finite(), "non-finite coordinate in proxy on layer {}", layer);
@@ -284,13 +284,13 @@ mod tests {
             size: [0.9, 0.9, 0.9],
             ..Default::default()
         };
-        f.id = d.arch.next_furnishing_id.into();
+        f.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
         d.arch.furnishings.push(f);
         d.arch.next_furnishing_id += 1;
 
         let p = proxy_furnishing_entities(&d.arch);
         assert_eq!(p.len(), 1, "furnishing at huge coordinates should produce a proxy");
-        for (layer, tags) in &p {
+        for (_, layer, tags) in &p {
             for t in tags {
                 if t.code == 10 || t.code == 20 {
                     assert!(t.f64().is_finite(), "non-finite coordinate in proxy on layer {}", layer);
@@ -314,13 +314,13 @@ mod tests {
             size: [0.0, 0.0, 0.0],
             ..Default::default()
         };
-        f.id = d.arch.next_furnishing_id.into();
+        f.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
         d.arch.furnishings.push(f);
         d.arch.next_furnishing_id += 1;
 
         let p = proxy_furnishing_entities(&d.arch);
         assert_eq!(p.len(), 1, "furnishing with zero size should still produce a proxy");
-        for (layer, tags) in &p {
+        for (_, layer, tags) in &p {
             for t in tags {
                 if t.code == 10 || t.code == 20 {
                     assert!(t.f64().is_finite(), "non-finite coordinate in proxy on layer {}", layer);
@@ -344,13 +344,13 @@ mod tests {
             size: [0.9, 0.9, 0.9],
             ..Default::default()
         };
-        f.id = d.arch.next_furnishing_id.into();
+        f.id = cadcraft_doc::ArchId(d.arch.next_furnishing_id);
         d.arch.furnishings.push(f);
         d.arch.next_furnishing_id += 1;
 
         let p = proxy_furnishing_entities(&d.arch);
         assert_eq!(p.len(), 1, "furnishing with rotation should produce a proxy");
-        for (layer, tags) in &p {
+        for (_, layer, tags) in &p {
             for t in tags {
                 if t.code == 10 || t.code == 20 {
                     assert!(t.f64().is_finite(), "non-finite coordinate in proxy on layer {}", layer);
