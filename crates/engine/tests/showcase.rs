@@ -1446,3 +1446,66 @@ fn the_showcase_stairs_have_pair_railings() {
         assert!(right.is_some(), "stair {} has no auto stairRight railing", stair_id);
     }
 }
+
+/// The showcase house has the phase-19 look cameras with their specific settings.
+#[test]
+fn the_showcase_has_phase19_look_cameras() {
+    let reply = &house().2;
+    let cams = house_rows("cameras");
+    let names: Vec<String> = cams.iter().map(|c| strd(c, "name", "")).collect();
+
+    // Verify the cameras exist
+    for name in ["dusk", "noon-hdri", "overview"] {
+        assert!(names.contains(&name.to_string()), "missing camera {}", name);
+    }
+
+    // Verify dusk camera settings
+    let dusk = cams.iter().find(|c| strd(c, "name", "") == "dusk").unwrap();
+    let dusk_look = dusk.get("look").cloned().unwrap_or(Value::Null);
+    assert_eq!(dusk_look.pointer("/sun/angle").and_then(|v| v.as_str()), Some("dusk"), "dusk sun angle");
+    assert_eq!(strd(&dusk_look, "lightSet", ""), "Evening", "dusk light set");
+    assert_eq!(dusk_look.pointer("/exposure/ev100").and_then(|v| v.as_f64()), Some(8.0), "dusk exposure");
+    assert_eq!(strd(&dusk_look, "technique", ""), "path", "dusk technique");
+
+    // Verify noon-hdri camera settings
+    let noon = cams.iter().find(|c| strd(c, "name", "") == "noon-hdri").unwrap();
+    let noon_look = noon.get("look").cloned().unwrap_or(Value::Null);
+    assert_eq!(strd(&noon_look, "technique", ""), "path", "noon technique");
+    assert_eq!(noon_look.pointer("/backdrop/kind").and_then(|v| v.as_str()), Some("hdri"), "noon backdrop kind");
+    assert_eq!(noon_look.pointer("/backdrop/image").and_then(|v| v.as_str()), Some("polyhaven:kloofendal-puresky"), "noon backdrop image");
+
+    // Verify overview camera settings
+    let over = cams.iter().find(|c| strd(c, "name", "") == "overview").unwrap();
+    assert_eq!(strd(&over, "kind", ""), "overview", "overview kind");
+    assert_eq!(over.pointer("/look/cutaway"), Some(&Value::Bool(true)), "overview cutaway");
+}
+
+/// The showcase house has the phase-16 ceilings and foundation.
+#[test]
+fn the_showcase_has_phase16_ceilings_and_foundation() {
+    let reply = &house().2;
+    let trays = house_rows("trays");
+    let soffits = house_rows("soffits");
+    let foundations = house_rows("foundations");
+
+    assert_eq!(trays.len(), 1, "one tray");
+    assert_eq!(soffits.len(), 1, "one soffit");
+    assert_eq!(foundations.len(), 1, "one foundation");
+
+    let foundation = &foundations[0];
+    assert_eq!(strd(foundation, "type", ""), "stem", "foundation type");
+}
+
+/// The showcase house has the kitchen cabinets of its drawing set.
+#[test]
+fn the_showcase_has_kitchen_cabinets() {
+    let reply = &house().2;
+    let cabs = house_rows("cabinets");
+    assert!(cabs.len() >= 10, "at least 10 cabinets");
+
+    // Check for specific cabinet types
+    let base = cabs.iter().filter(|c| strd(c, "kind", "") == "base").count();
+    let wall = cabs.iter().filter(|c| strd(c, "kind", "") == "wall").count();
+    assert!(base >= 3, "at least 3 base cabinets");
+    assert!(wall >= 2, "at least 2 wall cabinets");
+}
