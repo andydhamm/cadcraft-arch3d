@@ -490,10 +490,16 @@ impl Pane3d {
         let dir = cadcraft_arch::sun::sun_position(site.latitude, self.sun_date.trim(), self.sun_time.trim())
             .map(|sun| cadcraft_arch::site::true_to_drawing(Some(site), cadcraft_arch::sun::sun_dir(&sun)));
         match dir {
-            Some(d) => (look, Ok(Some([d[0], d[1], d[2]]))),
+            Some(d) if d[0].is_finite() && d[1].is_finite() && d[2].is_finite() => (look, Ok(Some([d[0], d[1], d[2]]))),
             // Night has no sun to place, so an unreadable entry does not matter.
             None if self.night => (look, Ok(None)),
+            // Invalid date/time or non-finite result: treat as no sun if we can't compute it,
+            // but if it's just a bad date/time we might want to keep the last good one?
+            // The spec says "an invalid entry keeps the last good sun".
+            // But if the SITE is NaN, we already returned Ok(None).
+            // If the date/time is bad, sun_position returns None.
             None => (look, Err(())),
+            _ => (look, Err(())),
         }
     }
 
