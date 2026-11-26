@@ -1427,4 +1427,63 @@ mod tests {
         assert!(has_frame, "missing garage-frame mesh");
         assert!(has_leaf, "missing garage-leaf mesh");
     }
+
+    /// Hostile opening dimensions (NaN/Inf in sill, width, height, recess) must
+    /// never leak into emitted vertices: any component whose input carries a
+    /// non-finite value is rejected whole (its merged mesh stays empty) or, when
+    /// the NaN is clamped away by `band_offset`, emits only finite coordinates.
+    /// The material-merge keeps `Mesh::push_prism`'s finite checks as the per-box
+    /// guard, so the merged per-material mesh is safe too.
+    #[test]
+    fn opening_meshes_hostile_dimensions_never_emit_non_finite_vertices() {
+        let model = wall_model();
+        let wm = walls_map(&model);
+        let span = wall_span(&model, &model.walls[0]);
+
+        let hostile = vec![
+            {
+                let mut o = window_opening();
+                o.sill = f64::NAN;
+                o
+            },
+            {
+                let mut o = window_opening();
+                o.width = f64::NAN;
+                o
+            },
+            {
+                let mut o = window_opening();
+                o.height = f64::INFINITY;
+                o
+            },
+            {
+                let mut o = window_opening();
+                o.recess = f64::NAN;
+                o
+            },
+            {
+                let mut o = door_opening();
+                o.sill = f64::NAN;
+                o
+            },
+            {
+                let mut o = door_opening();
+                o.width = f64::INFINITY;
+                o
+            },
+        ];
+
+        for o in &hostile {
+            for m in opening_meshes(&wm, o, span) {
+                for p in &m.positions {
+                    assert!(
+                        p[0].is_finite() && p[1].is_finite() && p[2].is_finite(),
+                        "non-finite vertex emitted for hostile opening kind={:?} style={:?}",
+                        o.kind,
+                        o.style
+                    );
+                }
+            }
+        }
+    }
 }
