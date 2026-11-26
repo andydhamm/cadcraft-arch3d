@@ -578,7 +578,7 @@ fn triangulated_facesets_reference_valid_point_indices() {
         // 1st param: the point list the face set indexes into; its point count is the bound.
         let point_list_count = match params.first() {
             Some(Token::Ref(r)) => match instances.get(r).map(|(_, p)| p.first()) {
-                Some(Token::List(pts)) => pts.len(),
+                Some(Some(Token::List(pts))) => pts.len(),
                 _ => 0,
             },
             _ => 0,
@@ -595,7 +595,7 @@ fn triangulated_facesets_reference_valid_point_indices() {
                                 Token::Int(i) => {
                                     assert!(
                                         *i >= 1 && *i <= point_list_count as i64,
-                                        "#{} {} index {i} is out of 1..{} (point list has {} pts)",
+                                        "#{} {} index {} is out of 1..{} (point list has {} pts)",
                                         n,
                                         name,
                                         i,
@@ -603,7 +603,7 @@ fn triangulated_facesets_reference_valid_point_indices() {
                                         point_list_count
                                     );
                                 }
-                                _ => panic!("#{} {} index {v} is not an integer", n, name),
+                                _ => panic!("index {v:?} is not an integer in #{} {}", n, name),
                             }
                         }
                     } else {
@@ -626,9 +626,9 @@ fn step_string_tokens_keep_escaped_quotes_and_hex_sequences_inside() {
     let mut p = StepParser::new("('a''b','x\\X41y',7)");
     match p.parse_params() {
         Ok(v) => {
-            assert_eq!(v.len(), 3, "{v}");
-            assert_eq!(v[0], Token::String("a'b".into()), "escaped quote broke the string: {v}");
-            assert_eq!(v[1], Token::String("x\\X41y".into()), "hex escape left the string: {v}");
+            assert_eq!(v.len(), 3, "{v:?}");
+            assert_eq!(v[0], Token::String("a'b".into()), "escaped quote broke the string: {v:?}");
+            assert_eq!(v[1], Token::String("x\\X41y".into()), "hex escape left the string: {v:?}");
             assert_eq!(v[2], Token::Int(7));
         }
         Err(e) => panic!("parser rejected a valid escaped-string list: {e}"),
@@ -659,16 +659,16 @@ fn step_parser_accepts_the_full_token_set_in_order() {
     let mut p = StepParser::new("('name','.ENUM.',7,3.5,(1,2),#2,$,*,IFCNAME(1.5))");
     match p.parse_params() {
         Ok(v) => {
-            assert_eq!(v.len(), 9, "{v}");
+            assert_eq!(v.len(), 9, "{v:?}");
             assert_eq!(v[0], Token::String("name".into()));
-            assert_eq!(v[1], Token::Enum("ENUM"));
+            assert_eq!(v[1], Token::Enum("ENUM".to_string()));
             assert_eq!(v[2], Token::Int(7));
             assert_eq!(v[3], Token::Real(3.5));
             assert_eq!(v[4], Token::List(vec![Token::Int(1), Token::Int(2)]));
             assert_eq!(v[5], Token::Ref(2));
             assert_eq!(v[6], Token::Dollar);
             assert_eq!(v[7], Token::Star);
-            assert_eq!(v[8], Token::Typed("IFCNAME", Box::new(Token::Real(1.5))));
+            assert_eq!(v[8], Token::Typed("IFCNAME".to_string(), Box::new(Token::Real(1.5))));
         }
         Err(e) => panic!("parser rejected a valid token list: {e}"),
     }
