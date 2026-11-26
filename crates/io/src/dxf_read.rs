@@ -73,6 +73,8 @@ struct Rx {
     curves: hatch::CurvePoints,
     /// IMAGE entity handle, as read (a repeated one reassigned) → its IMAGEDEF handle (upper case).
     image_defs: HashMap<Handle, String>,
+    /// Handles of architecture proxy entities found while reading.
+    arch_proxies: HashSet<Handle>,
 }
 
 /// Read a DXF file into a drawing.
