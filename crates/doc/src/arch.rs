@@ -3920,7 +3920,7 @@ mod tests {
 
         // Round trip preserves the opening, its id and its (dangling) host.
         let json = serde_json::to_string(&m).unwrap();
-        let back: ArchModel = serde_json::from_str(&json).unwrap();
+        let mut back: ArchModel = serde_json::from_str(&json).unwrap();
         assert_eq!(back.openings.len(), 1);
         assert_eq!(back.openings[0].id, ArchId(0));
         assert_eq!(back.openings[0].host, ArchId(7));
