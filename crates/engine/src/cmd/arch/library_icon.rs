@@ -177,7 +177,7 @@ fn run_library_icon(s: &mut Session, p: &Value) -> Result<Value> {
                     Some(reader) => (reader.encode_png)(&grey),
                     None => grey.rgba.clone(),
                 };
-                let hash = fnv1a64_hex(format!("category:{}|{}|{}|{}|v1", name, view.size, view.yaw, view.pitch).as_bytes());
+                let hash = fnv1a64_hex(format!("category:{}|{}|{}|{}|{}|v1", name, view.size, view.yaw, view.pitch, view.zoom).as_bytes());
                 return Ok(json!({ "item": name, "hash": hash, "png": crate::cmd::file::base64_encode(&raw), "cached": false, "size": view.size }));
             }
         },
@@ -338,6 +338,58 @@ mod tests {
         let mut s = crate::Session::new();
         let err = run_library_icon(&mut s, &json!({"item": "no-such-item", "cache": false})).unwrap_err();
         assert!(err.to_string().contains("no library item") || err.to_string().contains("no such"));
+    }
+
+    #[test]
+    fn category_icon_hash_changes_with_zoom() {
+        crate::library::testing::install_io();
+        let mut s = crate::Session::new();
+        let a = run_library_icon(&mut s, &json!({"category": "Furniture", "zoom": 1.0, "cache": false})).unwrap();
+        let b = run_library_icon(&mut s, &json!({"category": "Furniture", "zoom": 2.0, "cache": false})).unwrap();
+        assert_ne!(a["hash"], b["hash"]);
+    }
+
+    #[test]
+    fn item_icon_hash_changes_with_view_params() {
+        crate::library::testing::install_io();
+        let mut s = crate::Session::new();
+        let base = run_library_icon(&mut s, &json!({"item": "door:hinged", "cache": false})).unwrap();
+        let different_size = run_library_icon(&mut s, &json!({"item": "door:hinged", "size": 64, "cache": false})).unwrap();
+        let different_yaw = run_library_icon(&mut s, &json!({"item": "door:hinged", "yaw": 0.0, "cache": false})).unwrap();
+        let different_pitch = run_library_icon(&mut s, &json!({"item": "door:hinged", "pitch": 0.0, "cache": false})).unwrap();
+        let different_zoom = run_library_icon(&mut s, &json!({"item": "door:hinged", "zoom": 2.0, "cache": false})).unwrap();
+        assert_ne!(base["hash"], different_size["hash"]);
+        assert_ne!(base["hash"], different_yaw["hash"]);
+        assert_ne!(base["hash"], different_pitch["hash"]);
+        assert_ne!(base["hash"], different_zoom["hash"]);
+    }
+
+    #[test]
+    fn hostile_json_is_refused() {
+        crate::library::testing::install_io();
+        let mut s = crate::Session::new();
+        let err = run_library_icon(&mut s, &json!(42)).unwrap_err();
+        assert!(err.to_string().contains("object") || err.to_string().contains("parameters"));
+        let err2 = run_library_icon(&mut s, &json!(null)).unwrap_err();
+        assert!(err2.to_string().contains("object") || err2.to_string().contains("parameters"));
+        let err3 = run_library_icon(&mut s, &json!(["array"])).unwrap_err();
+        assert!(err3.to_string().contains("object") || err3.to_string().contains("parameters"));
+    }
+
+    #[test]
+    fn both_item_and_category_are_refused() {
+        crate::library::testing::install_io();
+        let mut s = crate::Session::new();
+        let err = run_library_icon(&mut s, &json!({"item": "door:hinged", "category": "Furniture", "cache": false})).unwrap_err();
+        assert!(err.to_string().contains("one of"));
+    }
+
+    #[test]
+    fn neither_item_nor_category_is_refused() {
+        crate::library::testing::install_io();
+        let mut s = crate::Session::new();
+        let err = run_library_icon(&mut s, &json!({"cache": false})).unwrap_err();
+        assert!(err.to_string().contains("one of"));
     }
 
     #[test]
