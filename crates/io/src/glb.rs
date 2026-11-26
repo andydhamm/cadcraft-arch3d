@@ -3441,4 +3441,165 @@ mod tests {
         let scene = p17_scene(&[("foundation", 0), ("foundation", 1), ("footing", 0), ("footing", 1)]);
         assert_eq!(node_names(&scene), ["foundation-fd0-0", "foundation-fd1-0", "footing-fd0-0", "footing-fd1-0"]);
     }
+
+    #[test]
+    fn painted_cabinet_parts_keep_unpainted_node_names() {
+        let scene = p17_scene(&[
+            ("paint:cabinet/cb1/carcass", 1),
+            ("paint:cabinet/cb1/front", 1),
+            ("paint:cabinet/cb1/counter", 1),
+            ("paint:cabinet/cb1/pull", 1),
+        ]);
+        assert_eq!(node_names(&scene), ["cabinet-cb1", "cabinet-cb1-front", "cabinet-cb1-counter", "cabinet-cb1-pull"]);
+    }
+
+    #[test]
+    fn painted_room_surfaces_keep_unpainted_node_names() {
+        let scene = p17_scene(&[
+            ("paint:room/r0/floor", 0),
+            ("paint:room/r0/ceiling", 0),
+            ("paint:roof/r0", 0),
+            ("paint:fixture/fx0", 0),
+            ("paint:countertop/ct0", 0),
+            ("paint:backsplash/bs0", 0),
+        ]);
+        assert_eq!(node_names(&scene), ["floor-r0", "ceiling-r0", "roof-r0p0", "fixture-fx0", "countertop-ct0", "backsplash-bs0"]);
+    }
+
+    #[test]
+    fn furnishing_sym_and_paint_parts_share_one_node() {
+        let mut scene = Scene3d::default();
+        scene.meshes = vec![
+            {
+                let mut m = wall_mesh();
+                m.material = "sym:chair:0".to_string();
+                m.object = ArchId(3);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "sym:chair:1".to_string();
+                m.object = ArchId(3);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "paint:furnishing/f3/0".to_string();
+                m.object = ArchId(3);
+                m
+            },
+        ];
+        let json = tests_json(&scene);
+        let nodes: Vec<&str> = json["nodes"].as_array().map(|a| a.iter().filter_map(|n| n["name"].as_str()).collect()).unwrap_or_default();
+        let count = nodes.iter().filter(|&&n| n == "furnishing-f3").count();
+        assert_eq!(count, 1, "{nodes:?}");
+        let mesh = json["meshes"].as_array().unwrap().iter().find(|m| m["name"] == "furnishing-f3").unwrap();
+        assert_eq!(mesh["primitives"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn painted_wall_sides_left_and_right_both_named() {
+        let scene = p17_scene(&[("paint:wall/w5/left", 5), ("paint:wall/w5/right", 5)]);
+        assert_eq!(node_names(&scene), ["wall-w5-left", "wall-w5-right"]);
+    }
+
+    #[test]
+    fn uv_for_mesh_with_tile_one_is_identity() {
+        let m = wall_mesh();
+        let mut scene = Scene3d::default();
+        scene.materials.insert("wall".to_string(), MaterialDef { tile: [1.0, 1.0], ..Default::default() });
+        let uvs = uv_for_mesh(&m, &scene);
+        assert_eq!(uvs, m.uvs);
+    }
+
+    #[test]
+    fn uv_for_mesh_with_large_tile_scales_down() {
+        let m = wall_mesh();
+        let mut scene = Scene3d::default();
+        scene.materials.insert("wall".to_string(), MaterialDef { tile: [2.0, 4.0], ..Default::default() });
+        let uvs = uv_for_mesh(&m, &scene);
+        assert_eq!(uvs[0], [0.0, 0.0]);
+        assert_eq!(uvs[1], [0.25, 0.0]);
+        assert_eq!(uvs[2], [0.25, 0.125]);
+    }
+
+    #[test]
+    fn uv_for_mesh_with_nonfinite_tile_is_identity() {
+        let m = wall_mesh();
+        let mut scene = Scene3d::default();
+        scene.materials.insert("wall".to_string(), MaterialDef { tile: [f64::NAN, 1.0], ..Default::default() });
+        let uvs = uv_for_mesh(&m, &scene);
+        assert_eq!(uvs, m.uvs);
+    }
+
+    #[test]
+    fn uv_for_mesh_with_zero_tile_is_identity() {
+        let m = wall_mesh();
+        let mut scene = Scene3d::default();
+        scene.materials.insert("wall".to_string(), MaterialDef { tile: [0.0, 0.0], ..Default::default() });
+        let uvs = uv_for_mesh(&m, &scene);
+        assert_eq!(uvs, m.uvs);
+    }
+
+    #[test]
+    fn material_with_tint_only_has_tinted_base_color() {
+        let mut scene = Scene3d::default();
+        scene.meshes = vec![{
+            let mut m = wall_mesh();
+            m.material = "paint:wall/w1/left".to_string();
+            m.object = ArchId(1);
+            m
+        }];
+        // Tint already multiplied into base_color per spec
+        scene.materials.insert(
+            "paint:wall/w1/left".to_string(),
+            MaterialDef { base_color: [128.0 / 255.0, 64.0 / 255.0, 32.0 / 255.0, 1.0], tint: Some([128, 64, 32]), ..Default::default() },
+        );
+        let json = tests_json(&scene);
+        let factor = &json["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"];
+        let values = factor.as_array().unwrap();
+        assert!((values[0].as_f64().unwrap() - 128.0 / 255.0).abs() < 1e-6);
+        assert!((values[1].as_f64().unwrap() - 64.0 / 255.0).abs() < 1e-6);
+        assert!((values[2].as_f64().unwrap() - 32.0 / 255.0).abs() < 1e-6);
+        assert!((values[3].as_f64().unwrap() - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn shares_a_node_painted_cabinet_pull_vs_other_parts() {
+        assert!(shares_a_node("paint:cabinet/cb1/pull"));
+        assert!(!shares_a_node("paint:cabinet/cb1/front"));
+        assert!(!shares_a_node("paint:cabinet/cb1/carcass"));
+        assert!(!shares_a_node("paint:cabinet/cb1/counter"));
+    }
+
+    #[test]
+    fn multiple_painted_furnishings_distinct_nodes() {
+        let mut scene = Scene3d::default();
+        scene.meshes = vec![
+            {
+                let mut m = wall_mesh();
+                m.material = "sym:s1:0".to_string();
+                m.object = ArchId(1);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "sym:s2:0".to_string();
+                m.object = ArchId(2);
+                m
+            },
+            {
+                let mut m = wall_mesh();
+                m.material = "paint:furnishing/f1/0".to_string();
+                m.object = ArchId(1);
+                m
+            },
+        ];
+        let json = tests_json(&scene);
+        let nodes: Vec<&str> = json["nodes"].as_array().map(|a| a.iter().filter_map(|n| n["name"].as_str()).collect()).unwrap_or_default();
+        let f1 = nodes.iter().filter(|&&n| n == "furnishing-f1").count();
+        let f2 = nodes.iter().filter(|&&n| n == "furnishing-f2").count();
+        assert_eq!(f1, 1, "{nodes:?}");
+        assert_eq!(f2, 1, "{nodes:?}");
+    }
 }
