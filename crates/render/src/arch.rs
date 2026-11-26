@@ -1922,7 +1922,7 @@ mod tests {
         // The outline is still the 5-vertex mitred ring.
         let outline = list.prims.iter().find(|p| p.handle == h && p.kind == Kind::Polyline && p.len >= 4).expect("bottom-wall outline");
         let pts = list.points(outline);
-        assert_eq!(pts.len, 5, "outline should be the closed mitred ring");
+        assert_eq!(pts.len(), 5, "outline should be the closed mitred ring");
         // Mitred corners present; raw corner (10.0, ±0.1) absent.
         assert!(pts.iter().any(|p| (p.x - (-t / 2.0)).abs() < 1e-6 && (p.y - (-t / 2.0)).abs() < 1e-6), "missing (-0.1,-0.1)");
         assert!(pts.iter().any(|p| (p.x - (10.0 + t / 2.0)).abs() < 1e-6 && (p.y - (-t / 2.0)).abs() < 1e-6), "missing (10.1,-0.1)");
@@ -1934,7 +1934,9 @@ mod tests {
         // Two 2-vertex gap-edge prims (one per side of the opening) are still cut.
         let gap_edges: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == h && p.kind == Kind::Polyline && p.len == 2).collect();
         assert_eq!(gap_edges.len(), 2, "expected 2 gap-edge prims, got {}", gap_edges.len());
-        assert!(!list.prims.iter().any(|p| p.kind == Kind::Tris && !p.handle == h && p.handle != h && false), "trivially true");
+        // The solved ring still triangulates to a single filled poché prim.
+        let tris_count = list.prims.iter().filter(|p| p.handle == h && p.kind == Kind::Tris).count();
+        assert_eq!(tris_count, 1, "expected 1 tris prim for the bottom wall, got {tris_count}");
     }
 
     /// A split (pony) wall keeps its lower type's filled poché.
@@ -2268,7 +2270,7 @@ mod tests {
         for tri in &list.tris {
             assert!(tri.is_finite(), "non-finite tri vertex in plan: {tri:?}");
         }
-        assert!(list.bounds.is_finite(), "bounds went non-finite");
+        assert!(list.bounds.max.is_finite() && list.bounds.min.is_finite(), "bounds went non-finite");
 
         // Each good wall draws exactly 2 prims (1 tris + 1 outline).
         assert_eq!(list.prims.iter().filter(|p| p.handle == arch_handle(d.arch.walls[0].id)).count(), 2, "wall 0 should draw 2 prims");
@@ -2336,7 +2338,7 @@ mod tests {
         for v in &list.verts {
             assert!(v.is_finite(), "huge-coordinate wall leaked a non-finite vertex");
         }
-        assert!(list.bounds.is_finite(), "bounds overflowed at huge coordinates");
+        assert!(list.bounds.max.is_finite() && list.bounds.min.is_finite(), "bounds overflowed at huge coordinates");
 
         let mx = list.bounds.max.x;
         assert!((mx - (scale + t / 2.0)).abs() < 1.0, "max x {} expected scale + 0.1 (no overflow)", mx);
