@@ -1018,6 +1018,73 @@ mod tests {
         s
     }
 
+    /// A session with a 10 m wall and an opening carrying non-finite values in the
+    /// stored geometry fields. `serde_json` cannot represent NaN/Inf, so every
+    /// affected row field and gap entry must come out as `null`.
+    fn session_with_nan_opening() -> Session {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening {
+                    host: wid,
+                    offset: f64::NAN,
+                    width: 0.9,
+                    height: f64::NAN,
+                    sill: f64::NAN,
+                    recess: f64::INFINITY,
+                    rough_width: f64::NAN,
+                    rough_height: f64::INFINITY,
+                    kind: OpeningKind::Window,
+                    ..Opening::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        s
+    }
+
+    /// A session with a wall and an opening whose stored geometry is all zero
+    /// (zero finished width, zero rough width), plus a second opening at
+    /// offset 8.0 with a normal finished size but a zero-height window.
+    fn session_with_zero_openings() -> Session {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening {
+                    host: wid,
+                    offset: 3.0,
+                    width: 0.0,
+                    height: 0.0,
+                    sill: 0.0,
+                    rough_width: 0.0,
+                    rough_height: 0.0,
+                    kind: OpeningKind::Window,
+                    ..Opening::default()
+                });
+                d.arch.push_opening(Opening {
+                    host: wid,
+                    offset: 8.0,
+                    width: 0.9,
+                    height: 0.0,
+                    sill: 1.2,
+                    recess: 0.05,
+                    rough_width: 0.0,
+                    rough_height: 0.0,
+                    kind: OpeningKind::CasedOpening,
+                    ..Opening::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        s
+    }
+
     #[test]
     fn inspect_walls_reports_handles() {
         let mut s = session_with_one_wall_and_opening();
@@ -1157,6 +1224,312 @@ mod tests {
         let o = &openings[0];
         let host = o["host"].as_str().expect("opening host must be a string");
         assert!(host.starts_with("w"), "wall label must start with 'w': {host}");
+    }
+
+    /// Non-finite values in the stored opening geometry (NaN offset/height/sill,
+    /// infinite recess/rough fields) serialize as `null`, and the `gap` formula
+    /// `rough_offset + rough_width` survives them: a NaN rough width makes both
+    /// gap endpoints null. The id, host and handle are ArchId-based and stay
+    /// well-formed strings.
+    #[test]
+    fn inspect_opening_nan_fields_serialize_as_null() {
+        let mut s = session_with_nan_opening();
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true, "symbols": true }));
+        let o = &v["openings"][0];
+        assert_eq!(o["id"], "o0", "id must be the o-label");
+        assert_eq!(o["host"], "w0", "host must be the wall label");
+        assert_eq!(o["handle"], "a0008000", "handle must stay unpadded lower-case hex");
+        assert_eq!(o["offset"], Value::Null, "NaN offset must serialize as null");
+        assert_eq!(o["height"], Value::Null, "NaN height must serialize as null");
+        assert_eq!(o["sill"], Value::Null, "NaN sill must serialize as null");
+        assert_eq!(o["recess"], Value::Null, "infinite recess must serialize as null");
+        assert_eq!(o["rough"]["width"], Value::Null, "NaN rough width must serialize as null");
+        assert_eq!(o["rough"]["height"], Value::Null, "infinite rough height must serialize as null");
+        let gap = o["gap"].as_array().expect("gap must be an array with the symbols flag");
+        assert_eq!(gap.len(), 2, "gap must be [start, end]");
+        assert!(gap[0].is_null(), "gap start must be null when the rough offset is NaN");
+        assert!(gap[1].is_null(), "gap end must be null when the rough width is NaN");
+        // The spec's field set must all be present even when the values are null.
+        assert!(o["kind"].is_string());
+        assert!(o["style"].is_string());
+        assert!(o["width"].is_number());
+        assert!(o["hinge"].is_string());
+        assert!(o["swing"].is_string());
+        assert!(o["layer"].is_string());
+    }
+
+    /// A zero-width opening (zero finished width, zero rough width) must not
+    /// blow up the `gap` arithmetic: the gap collapses to a single point
+    /// `[start, start]`. A zero-height opening still reports its stored
+    /// height, sill, recess and rough height of 0.0.
+    #[test]
+    fn inspect_opening_zero_width_gap_is_a_point() {
+        let mut s = session_with_zero_openings();
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true, "symbols": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert_eq!(openings.len(), 2, "expected two openings");
+        let zero = &openings[0];
+        let gap = zero["gap"].as_array().expect("gap must be an array");
+        assert_eq!(gap.len(), 2, "gap must be [start, end]");
+        let start = gap[0].as_f64().expect("gap start must be a number");
+        let end = gap[1].as_f64().expect("gap end must be a number");
+        assert!(start.is_finite() && end.is_finite(), "zero-width gap must be finite ({start}, {end})");
+        assert_eq!(start, end, "zero rough width must collapse the gap to a point");
+        assert_eq!(zero["width"], 0.0, "stored zero width must be reported");
+        assert_eq!(zero["height"], 0.0);
+        assert_eq!(zero["rough"]["width"], 0.0);
+        assert_eq!(zero["rough"]["height"], 0.0);
+        let tall = &openings[1];
+        assert_eq!(tall["height"], 0.0, "zero-height window keeps height 0.0");
+        assert_eq!(tall["sill"], 1.2, "sill must be the stored value, not derived");
+        assert_eq!(tall["recess"], 0.05);
+        assert_eq!(tall["kind"], "cased");
+    }
+
+    /// The gap span is the invariant the spec pins: `[rough_offset(o),
+    /// rough_offset(o) + rough_width]`, so the span must always equal the
+    /// reported (stored) rough width — regardless of how `rough_offset` places
+    /// the start. Pinned against a normal opening first, then against an
+    /// opening with an explicit non-default rough width, so a future change
+    /// that makes the gap drift from `rough_width` fails.
+    #[test]
+    fn inspect_opening_gap_span_matches_rough_width() {
+        let mut s = session_with_one_wall_and_opening();
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true, "symbols": true }));
+        let o = &v["openings"][0];
+        let gap = o["gap"].as_array().expect("gap must be an array with the symbols flag");
+        assert_eq!(gap.len(), 2);
+        let start = gap[0].as_f64().expect("gap start must be a number");
+        let end = gap[1].as_f64().expect("gap end must be a number");
+        assert!(start.is_finite() && end.is_finite(), "gap must be finite ({start}, {end})");
+        let rough_width = o["rough"]["width"].as_f64().expect("rough width must be a number");
+        assert!((end - start - rough_width).abs() < 1e-6, "gap span {span} must equal the stored rough width {rough_width}", span = end - start);
+
+        // A second, explicit-rough opening: same invariant must hold.
+        let mut s2 = Session::new();
+        match s2.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening {
+                    host: wid,
+                    offset: 4.0,
+                    width: 0.9,
+                    height: 2.0,
+                    sill: 0.6,
+                    rough_width: 1.1,
+                    rough_height: 2.2,
+                    kind: OpeningKind::Door,
+                    ..Opening::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v2 = exec(&mut s2, "arch.inspect", &json!({ "openings": true, "symbols": true }));
+        let o2 = &v2["openings"][0];
+        let gap2 = o2["gap"].as_array().expect("gap must be an array");
+        let start2 = gap2[0].as_f64().expect("gap start must be a number");
+        let end2 = gap2[1].as_f64().expect("gap end must be a number");
+        assert!((end2 - start2 - 1.1).abs() < 1e-6, "explicit rough width 1.1 must equal the gap span {span}", span = end2 - start2);
+        assert_eq!(o2["rough"]["height"], 2.2);
+    }
+
+    /// Every field the spec says to keep must carry the *stored* value: the
+    /// `sill` in particular must be `o.sill` verbatim (the spec calls this out
+    /// explicitly), and `rough` must be the stored `{width, height}`, not a
+    /// derived allowance.
+    #[test]
+    fn inspect_opening_reports_stored_sill_and_rough_dims() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening {
+                    host: wid,
+                    offset: 3.0,
+                    width: 0.9,
+                    height: 2.0,
+                    sill: 0.6,
+                    recess: 0.05,
+                    rough_width: 1.14,
+                    rough_height: 2.22,
+                    kind: OpeningKind::Window,
+                    ..Opening::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true }));
+        let o = &v["openings"][0];
+        assert_eq!(o["id"], "o0");
+        assert_eq!(o["host"], "w0");
+        assert_eq!(o["handle"], "a0008000");
+        assert_eq!(o["kind"], "window");
+        assert_eq!(o["offset"], 3.0);
+        assert_eq!(o["width"], 0.9, "width must be the stored value");
+        assert_eq!(o["height"], 2.0);
+        assert_eq!(o["sill"], 0.6, "sill must be the stored o.sill, not a derived value");
+        assert_eq!(o["recess"], 0.05);
+        assert_eq!(o["rough"]["width"], 1.14, "rough width must be the stored value");
+        assert_eq!(o["rough"]["height"], 2.22, "rough height must be the stored value");
+        assert!(o["style"].is_string());
+        assert!(o["hinge"].is_string());
+        assert!(o["swing"].is_string());
+        assert!(o["layer"].is_string());
+        // Two consecutive inspects must agree exactly (deterministic, no state).
+        let v2 = exec(&mut s, "arch.inspect", &json!({ "openings": true }));
+        assert_eq!(v["openings"], v2["openings"], "inspect must be deterministic across calls");
+    }
+
+    /// Huge finite values must serialize as numbers and the gap must stay
+    /// finite with the right span — no overflow to null on large-but-finite
+    /// offsets.
+    #[test]
+    fn inspect_opening_huge_finite_values_serialize() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening {
+                    host: wid,
+                    offset: 1e12,
+                    width: 0.9,
+                    height: 2.0,
+                    sill: 0.9,
+                    rough_width: 1.14,
+                    rough_height: 2.22,
+                    kind: OpeningKind::Window,
+                    ..Opening::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true, "symbols": true }));
+        let o = &v["openings"][0];
+        assert_eq!(o["offset"], 1e12, "huge finite offset must be reported");
+        assert_eq!(o["height"], 2.0);
+        assert_eq!(o["width"], 0.9);
+        assert_eq!(o["id"], "o0", "id is ArchId-based and unaffected by huge geometry");
+        assert_eq!(o["host"], "w0");
+        let gap = o["gap"].as_array().expect("gap must be an array");
+        let start = gap[0].as_f64().expect("gap start must be a finite number");
+        let end = gap[1].as_f64().expect("gap end must be a finite number");
+        assert!(start.is_finite() && end.is_finite(), "huge but finite opening must not overflow the gap ({start}, {end})");
+        assert!((end - start - 1.14).abs() < 1e-3, "gap span must equal rough width for huge offsets, got {span}", span = end - start);
+    }
+
+    /// Schedule numbers: two geometrically identical openings on different
+    /// walls share one number (the group's number, keyed by the group's lowest
+    /// id); an opening of a different kind carries a different number. All are
+    /// strings (never a raw id), and the key is always present.
+    #[test]
+    fn inspect_opening_number_groups_identical_items() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid0 =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                let wid1 =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 4.0), end: Vec2::new(10.0, 4.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening {
+                    host: wid0,
+                    offset: 2.0,
+                    width: 0.9,
+                    height: 2.1,
+                    sill: 0.6,
+                    kind: OpeningKind::Door,
+                    ..Opening::default()
+                });
+                d.arch.push_opening(Opening {
+                    host: wid0,
+                    offset: 6.0,
+                    width: 0.9,
+                    height: 2.1,
+                    sill: 0.6,
+                    kind: OpeningKind::Door,
+                    ..Opening::default()
+                });
+                d.arch.push_opening(Opening {
+                    host: wid1,
+                    offset: 3.0,
+                    width: 0.9,
+                    height: 2.1,
+                    sill: 0.6,
+                    kind: OpeningKind::Window,
+                    ..Opening::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert_eq!(openings.len(), 3);
+        let n0 = &openings[0]["number"];
+        let n1 = &openings[1]["number"];
+        let n2 = &openings[2]["number"];
+        assert!(n0.is_string(), "a door number must be a string (e.g. D01), got {n0:?}");
+        assert!(n1.is_string(), "a door number must be a string, got {n1:?}");
+        assert!(n2.is_string(), "a window number must be a string, got {n2:?}");
+        assert_eq!(n0, n1, "identical doors must carry the same schedule number");
+        assert_ne!(n0, n2, "a different kind must not share a door's schedule number");
+        // Without the openings flag the key must not leak.
+        let plain = exec(&mut s, "arch.inspect", &json!({}));
+        assert!(plain.get("openings").is_none());
+    }
+
+    /// The `openings` key is present and an empty array when there are no
+    /// openings, and absent entirely when the flag is not set.
+    #[test]
+    fn inspect_openings_empty_array_and_absent_by_flag() {
+        let mut s = Session::new();
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true }));
+        assert_eq!(v["openings"], json!([]), "no openings + flag must yield an empty array");
+        let plain = exec(&mut s, "arch.inspect", &json!({}));
+        assert!(plain.get("openings").is_none(), "no flag must omit the openings key");
+        // The same holds when other flags are on.
+        let walls = exec(&mut s, "arch.inspect", &json!({ "walls": true }));
+        assert!(walls.get("openings").is_none());
+        assert!(walls["walls"].is_array());
+    }
+
+    /// Multiple openings get distinct o-labels, host labels matching their wall,
+    /// and contiguous opening-range handles (`a0008000`, `a0008001`, …).
+    #[test]
+    fn inspect_multiple_openings_distinct_labels_and_handles() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid0 =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                let wid1 =
+                    d.arch.push_wall(Wall { start: Vec2::new(10.0, 0.0), end: Vec2::new(10.0, 8.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening { host: wid0, offset: 2.0, width: 0.9, height: 2.1, kind: OpeningKind::Door, ..Opening::default() });
+                d.arch.push_opening(Opening { host: wid1, offset: 3.0, width: 1.0, height: 1.8, kind: OpeningKind::Window, ..Opening::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert_eq!(openings.len(), 2);
+        assert_eq!(openings[0]["id"], "o0");
+        assert_eq!(openings[0]["host"], "w0");
+        assert_eq!(openings[0]["handle"], "a0008000");
+        assert_eq!(openings[1]["id"], "o1");
+        assert_eq!(openings[1]["host"], "w1");
+        assert_eq!(openings[1]["handle"], "a0008001");
+        // Handles must contain only lower-case hex digits (with the 'a' prefix).
+        for o in openings {
+            let h = o["handle"].as_str().expect("handle must be a string");
+            assert!(h.starts_with('a'));
+            assert!(h[1..].chars().all(|c| c.is_ascii_digit() || (c.is_ascii_lowercase() && c <= 'f')), "handle must be lower-case hex: {h}");
+        }
     }
 
     /// The opening `handle` field is lowercase hex with no padding.
@@ -4288,5 +4661,112 @@ mod tests {
         assert_eq!(walls[0]["exterior"], true);
         assert_eq!(walls[0]["id"], "w0");
         assert_eq!(walls[0]["handle"], "a0000000");
+    }
+
+    /// Every opening row carries a string `number` (its schedule number), even when it
+    /// forms a group of one. Pins that the `number` key is always present and a string.
+    #[test]
+    fn inspect_opening_number_is_always_a_string() {
+        let mut s = session_with_one_wall_and_opening();
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert!(!openings.is_empty(), "expected at least one opening");
+        for o in openings {
+            assert!(o["number"].is_string(), "number must be a string: {o:?}");
+        }
+    }
+
+    /// For a normal (positive-width) opening the gap is two finite, distinct endpoints
+    /// whose span equals the stored rough width. Pins that a non-degenerate gap is a
+    /// finite `[start, end]` with `end > start`.
+    #[test]
+    fn inspect_opening_normal_gap_is_two_finite_points() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening {
+                    host: wid,
+                    offset: 4.0,
+                    width: 0.9,
+                    height: 2.0,
+                    sill: 0.6,
+                    recess: 0.05,
+                    rough_width: 1.02,
+                    rough_height: 2.12,
+                    kind: OpeningKind::Window,
+                    ..Opening::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true, "symbols": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert_eq!(openings.len(), 1, "expected one opening");
+        let o = &openings[0];
+        let gap = o["gap"].as_array().expect("gap must be an array with the symbols flag");
+        assert_eq!(gap.len(), 2, "gap must be [start, end]");
+        let start = gap[0].as_f64().expect("gap start must be a number");
+        let end = gap[1].as_f64().expect("gap end must be a number");
+        assert!(start.is_finite() && end.is_finite(), "gap endpoints must be finite: ({start}, {end})");
+        assert!(end > start, "a positive-width opening has end > start: start {start}, end {end}");
+        assert!((end - start - 1.02).abs() < 1e-6, "gap span must equal the stored rough width 1.02: {span}", span = end - start);
+    }
+
+    /// Full field set and types for a normal opening (the spec's field list), pinned
+    /// against a single opening so a missing key or wrong type fails.
+    #[test]
+    fn inspect_opening_full_field_set_and_types() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening {
+                    host: wid,
+                    offset: 2.0,
+                    width: 0.9,
+                    height: 2.0,
+                    sill: 0.6,
+                    recess: 0.05,
+                    rough_width: 1.02,
+                    rough_height: 2.12,
+                    kind: OpeningKind::Door,
+                    ..Opening::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true, "symbols": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert_eq!(openings.len(), 1, "expected one opening");
+        let o = &openings[0];
+        // ids, labels and handle are strings; handle is in the opening range.
+        assert!(o["id"].is_string(), "id must be a string");
+        assert!(o["host"].is_string(), "host must be a string");
+        let handle = o["handle"].as_str().expect("handle must be a string");
+        assert_eq!(handle.len(), 8, "handle must be 8 chars: {handle}");
+        assert!(handle.starts_with("a000"), "handle must be in the opening range: {handle}");
+        assert!(handle[1..].chars().all(|c| c.is_ascii_digit() || (c.is_ascii_lowercase() && c <= 'f')), "handle must be lower-case hex: {handle}");
+        // kind, style, hinge, swing, layer are strings; number is the schedule number.
+        assert!(o["kind"].is_string(), "kind must be a string");
+        assert!(o["style"].is_string(), "style must be a string");
+        assert!(o["hinge"].is_string(), "hinge must be a string");
+        assert!(o["swing"].is_string(), "swing must be a string");
+        assert!(o["layer"].is_string(), "layer must be a string");
+        assert!(o["number"].is_string(), "number must be a string");
+        // numeric fields.
+        assert!(o["offset"].is_number(), "offset must be a number");
+        assert!(o["width"].is_number(), "width must be a number");
+        assert!(o["height"].is_number(), "height must be a number");
+        assert!(o["sill"].is_number(), "sill must be a number");
+        assert!(o["recess"].is_number(), "recess must be a number");
+        // rough is {width, height}.
+        assert!(o["rough"].is_object(), "rough must be an object");
+        assert!(o["rough"]["width"].is_number(), "rough.width must be a number");
+        assert!(o["rough"]["height"].is_number(), "rough.height must be a number");
     }
 }
