@@ -66,4 +66,21 @@ mod tests {
         let flat = BacksplashSegment { top: 0.5, ..seg(0.0, 1.0, 1.3) };
         assert!(backsplash_meshes(&Backsplash::default(), &[flat], 0.0).is_empty());
     }
+
+    #[test]
+    fn zero_thickness_and_degenerate_segments() {
+        let b = Backsplash { thickness: 0.0, ..Default::default() };
+        assert!(backsplash_meshes(&b, &[seg(0.0, 1.0, 1.3)], 0.0).is_empty());
+
+        let b_neg = Backsplash { thickness: -0.1, ..Default::default() };
+        assert!(backsplash_meshes(&b_neg, &[seg(0.0, 1.0, 1.3)], 0.0).is_empty());
+
+        // Zero length segment
+        let zero_len = BacksplashSegment { a: Vec2::new(0.0, 0.0), b: Vec2::new(0.0, 0.0), bottom: 0.9, top: 1.3, ..Default::default() };
+        assert!(backsplash_meshes(&Backsplash::default(), &[zero_len], 0.0).is_empty());
+
+        // Top below bottom
+        let inverted = BacksplashSegment { a: Vec2::new(0.0, 0.0), b: Vec2::new(1.0, 0.0), bottom: 1.3, top: 0.9, ..Default::default() };
+        assert!(backsplash_meshes(&Backsplash::default(), &[inverted], 0.0).is_empty());
+    }
 }
