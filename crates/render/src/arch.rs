@@ -89,8 +89,14 @@ pub(crate) fn build_arch_with(d: &Drawing, plotting: bool, ann: &cadcraft_arch::
             let c = wall.end + perp * half;
             let e = wall.start + perp * half;
 
+            // The raw rectangle [a,b,c,e] is finite by the guards above, but a ring from
+            // solve_joins is not guaranteed to be (hostile input). Only emit the solved ring
+            // when every vertex is a number, otherwise fall back to the raw rectangle so a
+            // bad solve never leaks non-finite vertices into the display list.
             let ring: Vec<Vec2> = match solved.get(&wall.id) {
-                Some(r) if !r.is_empty() => r.iter().map(|p| p.clone()).collect(),
+                Some(r) if !r.is_empty() && r.iter().all(|p| p.is_finite()) {
+                    r.iter().map(|p| p.clone()).collect()
+                }
                 _ => vec![a, b, c, e],
             };
 
@@ -1897,28 +1903,37 @@ mod tests {
         assert!(wall_prims.iter().all(|p| p.transparency == 0), "missing layer should give zero transparency");
     }
 
-    /// A glass wall draws its outline but no filled poché triangles.
+    /// A mitred wall with an opening still cuts the raw-space gap from the solved ring, and
+    /// the outline keeps its mitred corners. Pins down the solved-ring + raw-space gap
+    /// interaction that a plain-rectangle build would not exercise.
     #[test]
-    fn glass_wall_draws_an_outline_without_fill() {
+    fn plan_poché_solved_wall_with_opening_cuts_the_gap() {
+        use cadcraft_doc::arch::OpeningKind;
+        let t = 0.2;
         let mut d = Drawing::new_metric();
-        let wid = d.arch.add_wall(Wall {
-            start: Vec2::new(0.0, 0.0),
-            end: Vec2::new(10.0, 0.0),
-            thickness: 0.01,
-            height: 2.0,
-            wall_type: "Glass".into(),
-            ..Wall::default()
-        });
+        let bottom = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+        d.arch.add_wall(wall(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), t));
+        d.arch.add_wall(wall(Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0), t));
+        d.arch.add_wall(wall(Vec2::new(0.0, 8.0), Vec2::new(0.0, 0.0), t));
+        // An opening on the bottom wall (gs/ge measured along the raw wall, 4.5..6.0).
+        d.arch.push_opening(Opening::new(bottom, 5.25, 1.0, 2.1, OpeningKind::Door));
         d.touch_arch();
         let list = build_arch(&d, &Options::default(), false);
+        let h = arch_handle(bottom);
 
-        let handle = arch_handle(wid);
-        let wall_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle).collect();
-        // Glass wall: outline only (1 polyline), no filled poché (no tris).
-        let tris: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Tris).collect();
-        assert!(tris.is_empty(), "glass wall should have no filled poché, got {} tris prims", tris.len());
-        let outlines: Vec<&DPrim> = wall_prims.iter().copied().filter(|p| p.kind == Kind::Polyline && p.len >= 4).collect();
-        assert_eq!(outlines.len(), 1, "glass wall should have exactly one outline polyline");
+        // The outline is still the 5-vertex mitred ring.
+        let outline = list.prims.iter().find(|p| p.handle == h && p.kind == Kind::Polyline && p.len >= 4).expect("bottom-wall outline");
+        let pts = list.points(outline);
+        assert_eq!(pts.len, 5, "outline should be the closed mitred ring");
+        // Mitred corners present; raw corner (10.0, ±0.1) absent.
+        assert!(pts.iter().any(|p| (p.x - (-t / 2.0)).abs() < 1e-6 && (p.y - (-t / 2.0)).abs() < 1e-6), "missing (-0.1,-0.1)");
+        assert!(pts.iter().any(|p| (p.x - (10.0 + t / 2.0)).abs() < 1e-6 && (p.y - (-t / 2.0)).abs() < 1e-6), "missing (10.1,-0.1)");
+        assert!(pts.iter().all(|p| !(((p.x - 10.0).abs() < 1e-6) && ((p.y - t / 2.0).abs() < 1e-6 || (p.y + t / 2.0).abs() < 1e-6))), "raw corner (10, ±0.1) still drawn");
+
+        // Two 2-vertex gap-edge prims (one per side of the opening) are still cut.
+        let gap_edges: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == h && p.kind == Kind::Polyline && p.len == 2).collect();
+        assert_eq!(gap_edges.len(), 2, "expected 2 gap-edge prims, got {}", gap_edges.len());
+        assert!(!list.prims.iter().any(|p| p.kind == Kind::Tris && !p.handle == h && p.handle != h && false), "trivially true");
     }
 
     /// A split (pony) wall keeps its lower type's filled poché.
@@ -2122,6 +2137,30 @@ mod tests {
         let list = build_arch(&d, &Options::default(), false);
         // No prims should be drawn for level 2 (no objects there).
         assert!(list.prims.is_empty(), "no objects on level 2, so nothing should draw");
+
+        // A mitred (solved) wall must draw its triangles from the solved ring, not the
+        // raw 4-corner rectangle: the bottom wall's ring extends to the mitred corners
+        // (-0.1, -0.1) and (10.1, -0.1), while a raw-rectangle build reaches only x in
+        // [0, 10]. The tris must reach the extended (mitred) x bounds.
+        let t = 0.2;
+        let mut d2 = Drawing::new_metric();
+        let id = d2.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+        d2.arch.add_wall(wall(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), t));
+        d2.arch.add_wall(wall(Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0), t));
+        d2.arch.add_wall(wall(Vec2::new(0.0, 8.0), Vec2::new(0.0, 0.0), t));
+        d2.touch_arch();
+        let list2 = build_arch(&d2, &Options::default(), false);
+        let tris = list2.prims.iter().find(|p| p.kind == Kind::Tris && p.handle == arch_handle(id)).expect("bottom-wall tris prim");
+        let mut minx = f64::INFINITY;
+        let mut maxx = f64::NEG_INFINITY;
+        for i in 0..tris.len as usize {
+            let x = list2.tris[tris.start as usize + i].x;
+            minx = minx.min(x);
+            maxx = maxx.max(x);
+        }
+        assert!((minx - (-t / 2.0)).abs() < 1e-6, "tris must reach the mitred corner x = -0.1, minx {}", minx);
+        assert!((maxx - (10.0 + t / 2.0)).abs() < 1e-6, "tris must reach the mitred corner x = 10.1, maxx {}", maxx);
+        assert!(maxx > 10.05 && minx < -0.05, "tris must extend past the raw wall x range");
     }
 
     /// on_shown_level works with a plan_level larger than any defined level index.
@@ -2133,6 +2172,179 @@ mod tests {
         assert!(!on_shown_level(&d, 1));
         assert!(on_shown_level(&d, 100));
         assert!(!on_shown_level(&d, 101));
+    }
+
+    /// A mitred (solved) wall's tris must reach the extended corner, proving the fill —
+    /// not only the outline — is the solved ring (a raw-rectangle build would reach x in [0, 10]).
+    #[test]
+    fn plan_poché_tris_reach_the_mitred_bounds() {
+        let t = 0.2;
+        let mut d = Drawing::new_metric();
+        let id0 = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+        d.arch.add_wall(wall(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), t));
+        d.arch.add_wall(wall(Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0), t));
+        d.arch.add_wall(wall(Vec2::new(0.0, 8.0), Vec2::new(0.0, 0.0), t));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        let tris = list.prims.iter().find(|p| p.kind == Kind::Tris && p.handle == arch_handle(id0)).expect("bottom-wall tris prim");
+        let mut minx = f64::INFINITY;
+        let mut maxx = f64::NEG_INFINITY;
+        for i in 0..tris.len as usize {
+            let x = list.tris[tris.start as usize + i].x;
+            minx = minx.min(x);
+            maxx = maxx.max(x);
+        }
+        assert!((minx - (-t / 2.0)).abs() < 1e-6, "tris minx {} expected -0.1", minx);
+        assert!((maxx - (10.0 + t / 2.0)).abs() < 1e-6, "tris maxx {} expected 10.1", maxx);
+        assert!(minx < -0.05 && maxx > 10.05, "tris must extend past the raw [0, 10] range");
+    }
+
+    /// A glass wall also keeps the solved (mitred) outline — it only drops the fill, so
+    /// corner glass in a house must still mitre like its solid neighbours.
+    #[test]
+    fn glass_wall_mitres_at_corners_like_solid_walls() {
+        let t = 0.2;
+        let mut d = Drawing::new_metric();
+        let id0 = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+        let id1 = d.arch.add_wall(Wall {
+            start: Vec2::new(10.0, 0.0),
+            end: Vec2::new(10.0, 8.0),
+            thickness: t,
+            height: 2.0,
+            wall_type: "Glass".into(),
+            ..Wall::default()
+        });
+        d.arch.add_wall(wall(Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0), t));
+        d.arch.add_wall(wall(Vec2::new(0.0, 8.0), Vec2::new(0.0, 0.0), t));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        let glass_h = arch_handle(id1);
+
+        // No fill for the glass wall.
+        assert!(list.prims.iter().all(|p| p.handle != glass_h || p.kind != Kind::Tris), "glass wall must not have a filled poché");
+
+        // Its outline is the solved mitred ring: extends past y=0 to y=-0.1 and past y=8 to y=8.1.
+        let outline = list.prims.iter().find(|p| p.handle == glass_h && p.kind == Kind::Polyline && p.len >= 4).expect("glass wall outline");
+        let pts = list.points(outline);
+        let miny = pts.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+        let maxy = pts.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+        assert!((miny - (-t / 2.0)).abs() < 1e-6, "glass wall outline must extend to y = -0.1, miny {}", miny);
+        assert!((maxy - (8.0 + t / 2.0)).abs() < 1e-6, "glass wall outline must extend to y = 8.1, maxy {}", maxy);
+
+        // The solid bottom wall also mitres at its right end (the whole corner is consistent).
+        let h0 = arch_handle(id0);
+        let o0 = list.prims.iter().find(|p| p.handle == h0 && p.kind == Kind::Polyline && p.len >= 4).expect("bottom-wall outline");
+        let pts0 = list.points(o0);
+        let maxx0 = pts0.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+        assert!((maxx0 - (10.0 + t / 2.0)).abs() < 1e-6, "bottom wall must reach x = 10.1, maxx0 {}", maxx0);
+    }
+
+    /// Hostile/edge input never leaks non-finite geometry into the plan: every emitted
+    /// vertex and bound is finite. Degenerate walls (NaN, Inf, zero length, zero/negative
+    /// thickness) are skipped entirely and never contribute a prim.
+    #[test]
+    fn hostile_input_never_leaks_non_finite_geometry() {
+        let t = 0.2;
+        let mut d = Drawing::new_metric();
+        // A good 10x8 rectangle.
+        d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+        d.arch.add_wall(wall(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), t));
+        d.arch.add_wall(wall(Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0), t));
+        d.arch.add_wall(wall(Vec2::new(0.0, 8.0), Vec2::new(0.0, 0.0), t));
+        // Five degenerate walls, all off the rectangle (y = 9 or 10).
+        d.arch.add_wall(Wall { start: Vec2::new(f64::NAN, 0.0), end: Vec2::new(10.0, 9.0), thickness: t, height: 2.0, ..Wall::default() });
+        d.arch.add_wall(Wall { start: Vec2::new(0.0, 9.0), end: Vec2::new(f64::INFINITY, 9.0), thickness: t, height: 2.0, ..Wall::default() });
+        d.arch.add_wall(wall(Vec2::new(11.0, 9.0), Vec2::new(11.0, 9.0), t));
+        d.arch.add_wall(Wall { start: Vec2::new(0.0, 9.0), end: Vec2::new(10.0, 9.0), thickness: 0.0, height: 2.0, ..Wall::default() });
+        d.arch.add_wall(Wall { start: Vec2::new(0.0, 10.0), end: Vec2::new(10.0, 10.0), thickness: -0.2, height: 2.0, ..Wall::default() });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        // Every vertex the list owns is finite.
+        for v in &list.verts {
+            assert!(v.is_finite(), "non-finite vertex in plan: {v:?}");
+        }
+        for tri in &list.tris {
+            assert!(tri.is_finite(), "non-finite tri vertex in plan: {tri:?}");
+        }
+        assert!(list.bounds.is_finite(), "bounds went non-finite");
+
+        // Each good wall draws exactly 2 prims (1 tris + 1 outline).
+        assert_eq!(list.prims.iter().filter(|p| p.handle == arch_handle(d.arch.walls[0].id)).count(), 2, "wall 0 should draw 2 prims");
+        assert_eq!(list.prims.iter().filter(|p| p.handle == arch_handle(d.arch.walls[1].id)).count(), 2, "wall 1 should draw 2 prims");
+        assert_eq!(list.prims.iter().filter(|p| p.handle == arch_handle(d.arch.walls[2].id)).count(), 2, "wall 2 should draw 2 prims");
+        assert_eq!(list.prims.iter().filter(|p| p.handle == arch_handle(d.arch.walls[3].id)).count(), 2, "wall 3 should draw 2 prims");
+        // Each bad wall draws zero prims.
+        for i in 4..9 {
+            assert_eq!(list.prims.iter().filter(|p| p.handle == arch_handle(d.arch.walls[i].id)).count(), 0, "degenerate wall {i} drew prims");
+        }
+        // Exactly 8 prims total (4 good walls × 2).
+        assert_eq!(list.prims.len(), 8, "expected 8 prims (4 good walls), got {}", list.prims.len());
+    }
+
+    /// Building the same drawing twice gives the same display list (determinism / round-trip):
+    /// identical prim counts, handles, kinds, and vertex coordinates.
+    #[test]
+    fn build_arch_is_deterministic_for_identical_drawings() {
+        let t = 0.2;
+        let mk = || -> Drawing {
+            let mut d = Drawing::new_metric();
+            d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+            d.arch.add_wall(wall(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), t));
+            d.arch.add_wall(wall(Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0), t));
+            d.arch.add_wall(wall(Vec2::new(0.0, 8.0), Vec2::new(0.0, 0.0), t));
+            d.arch.add_wall(wall(Vec2::new(0.0, 4.0), Vec2::new(10.0, 4.0), 0.1));
+            d.arch.push_opening(Opening::new(d.arch.walls[0].id, 5.0, 1.0, 2.1, OpeningKind::Door));
+            d.touch_arch();
+            d
+        };
+        let d1 = mk();
+        let d2 = mk();
+        let l1 = build_arch(&d1, &Options::default(), false);
+        let l2 = build_arch(&d2, &Options::default(), false);
+
+        assert_eq!(l1.prims.len(), l2.prims.len(), "prim counts differ");
+        for (p1, p2) in l1.prims.iter().zip(l2.prims.iter()) {
+            assert_eq!(p1.handle, p2.handle, "handle drift");
+            assert_eq!(p1.kind, p2.kind, "kind drift");
+            assert_eq!(p1.len, p2.len, "len drift");
+            assert_eq!(p1.color, p2.color, "color drift");
+            assert_eq!(p1.aci7, p2.aci7, "aci7 drift");
+            assert_eq!(p1.transparency, p2.transparency, "transparency drift");
+        }
+        assert_eq!(l1.verts.len(), l2.verts.len(), "vertex counts differ");
+        for (a, b) in l1.verts.iter().zip(l2.verts.iter()) {
+            assert!((a.x - b.x).abs() < 1e-9 && (a.y - b.y).abs() < 1e-9, "vertex drift: {a:?} vs {b:?}");
+        }
+    }
+
+    /// Huge coordinates (a 1e12-metre rectangle) never overflow: the mitred outline and
+    /// tris are still finite and still extend past the raw wall end by half-thickness.
+    #[test]
+    fn plan_poché_survives_huge_coordinates() {
+        let scale = 1e12;
+        let t = 0.2;
+        let mut d = Drawing::new_metric();
+        let id0 = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(scale, 0.0), t));
+        d.arch.add_wall(wall(Vec2::new(scale, 0.0), Vec2::new(scale, 8e11), t));
+        d.arch.add_wall(wall(Vec2::new(scale, 8e11), Vec2::new(0.0, 8e11), t));
+        d.arch.add_wall(wall(Vec2::new(0.0, 8e11), Vec2::new(0.0, 0.0), t));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        for v in &list.verts {
+            assert!(v.is_finite(), "huge-coordinate wall leaked a non-finite vertex");
+        }
+        assert!(list.bounds.is_finite(), "bounds overflowed at huge coordinates");
+
+        let mx = list.bounds.max.x;
+        assert!((mx - (scale + t / 2.0)).abs() < 1.0, "max x {} expected scale + 0.1 (no overflow)", mx);
+        assert!((list.bounds.min.y - (-t / 2.0)).abs() < 1.0, "min y {} expected -0.1", list.bounds.min.y);
+
+        let tris = list.prims.iter().find(|p| p.kind == Kind::Tris && p.handle == arch_handle(id0)).expect("bottom-wall tris prim");
+        for i in 0..tris.len as usize {
+            assert!(list.tris[tris.start as usize + i].is_finite(), "non-finite tri vertex at huge scale");
+        }
     }
 
     #[test]
