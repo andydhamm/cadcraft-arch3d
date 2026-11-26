@@ -956,6 +956,24 @@ mod tests {
     }
 
     #[test]
+    fn regenerate_empty_model_is_noop() {
+        let mut s = Session::new();
+        // Execute a command that changes the drawing (e.g. line)
+        s.execute("line", &json!({"points": [[0,0],[1,1]]})).unwrap();
+
+        // The regenerate hook should run but do nothing because auto_dims is empty.
+        // We verify this by checking that the Arc pointer hasn't changed if we could,
+        // but primarily that no extra undo step was pushed by the hook itself.
+        let undo_count = s.state().unwrap().undo.len();
+
+        // Another command
+        s.execute("line", &json!({"points": [[1,1],[2,2]]})).unwrap();
+
+        // Should have 2 undo steps (one for each line), not more.
+        assert_eq!(s.state().unwrap().undo.len(), undo_count + 1);
+    }
+
+    #[test]
     fn regenerate_unchanged_model_keeps_arc() {
         let mut s = house();
         s.execute("dimauto", &json!({})).unwrap();
@@ -980,6 +998,56 @@ mod tests {
         let after_arc_2 = s.doc().unwrap().clone();
 
         assert!(Arc::ptr_eq(&before_arc_2, &after_arc_2), "Arc should be identical for read-only command");
+    }
+
+    #[test]
+    fn regenerate_non_finite_geometry_is_safe() {
+        let mut s = Session::new();
+        // Create a wall with NaN coordinates
+        if let Ok(d) = s.doc_mut() {
+            let w = cadcraft_doc::Wall {
+                start: cadcraft_geom::Vec2::new(f64::NAN, 0.0),
+                end: cadcraft_geom::Vec2::new(10.0, 0.0),
+                thickness: 0.2,
+                height: 2.4,
+                exterior: true,
+                ..Default::default()
+            };
+            d.arch.push_wall(w);
+            d.touch_arch();
+        }
+
+        // dimauto should not crash
+        let r = s.execute("dimauto", &json!({}));
+        assert!(r.is_ok(), "dimauto should handle non-finite geometry without crashing");
+
+        // The dimensions might be invalid, but the command shouldn't panic.
+        // We just check that we can still inspect.
+        let v = s.execute("arch.inspect", &json!({ "autoDims": true })).unwrap();
+        assert!(v["autoDims"].is_array());
+    }
+
+    #[test]
+    fn regenerate_edited_rows_are_preserved() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+
+        // Edit a dimension
+        let north = row(&s, 0, "north", AutoRowKind::Walls).unwrap();
+        let h = north.handles[0];
+        s.execute("dimedit", &json!({"handles": [h.hex()], "mode": "new", "text": "EDITED"})).unwrap();
+
+        // Verify it's marked edited
+        assert!(row(&s, 0, "north", AutoRowKind::Walls).unwrap().edited);
+
+        // Change the model (move w5)
+        s.execute("dimdrive", &json!({"dimension": north.handles[1].hex(), "value": 5.6, "object": "w5"})).unwrap();
+
+        // The edited row should still be edited and have the same handles
+        let after = row(&s, 0, "north", AutoRowKind::Walls).unwrap();
+        assert!(after.edited);
+        assert_eq!(after.handles, north.handles);
+        assert_eq!(dim(&s, h).text, "EDITED");
     }
 
     #[test]
