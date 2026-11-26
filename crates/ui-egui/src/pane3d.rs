@@ -559,6 +559,11 @@ impl Pane3d {
                     // At night the sun light is off, but a named sun angle still has a direction.
                     let dir = if self.night { self.view.sun_dir } else { sun_dir };
                     let mut l = cadcraft_render3d::look::lighting_for(&look, dir, budget).with_moon(if self.night { None } else { self.moon_dir });
+                    if !look.sun.on || dir.is_none() {
+                        l.sun = None;
+                        l.sun_dir = None;
+                        l.sun_shadow = false;
+                    }
                     l.meter_night = true;
                     if self.environment_for.as_ref() == Some(&(look, sun_dir)) {
                         l.environment = self.environment.clone();
