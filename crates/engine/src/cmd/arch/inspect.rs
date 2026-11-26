@@ -3964,4 +3964,98 @@ mod tests {
         assert_eq!(cameras[0]["modified"], false);
         assert_eq!(cameras[1]["modified"], true);
     }
+
+    /// Three walls carrying known finishes each report their own `name()`; a wall with
+    /// no finish reports `finish: null`. Pins the per-variant mapping and the null
+    /// default together.
+    #[test]
+    fn inspect_wall_finish_each_variant_and_null() {
+        let s = session_with(|m| {
+            m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), ..Wall::default() });
+            m.walls[0].finish = Some(cadcraft_doc::arch::Finish::Brick);
+            m.push_wall(Wall { start: Vec2::new(6.0, 0.0), end: Vec2::new(10.0, 0.0), ..Wall::default() });
+            m.walls[1].finish = Some(cadcraft_doc::arch::Finish::Wood);
+            m.push_wall(Wall { start: Vec2::new(11.0, 0.0), end: Vec2::new(15.0, 0.0), ..Wall::default() });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({}));
+        let walls = v["walls"].as_array().expect("walls array missing");
+        assert_eq!(walls.len(), 3);
+        assert_eq!(v["walls"][0]["finish"], "brick");
+        assert_eq!(v["walls"][1]["finish"], "wood");
+        assert_eq!(v["walls"][2]["finish"], Value::Null);
+        assert!(v["walls"][2].get("finish").is_some(), "null finish still carries the key");
+    }
+
+    /// A room without `floor_finish` reports `floorFinish: null` (the null case the spec
+    /// pins for walls but never for rooms), while a finished room reports its name.
+    #[test]
+    fn inspect_floor_finish_null_when_unset() {
+        let s = session_with(|m| {
+            m.push_room(Room {
+                name: "Finished".into(),
+                room_type: RoomType::Living,
+                level: 0,
+                polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 3.0), Vec2::new(0.0, 3.0)],
+                floor_finish: Some(cadcraft_doc::arch::Finish::Wood),
+                ..Room::default()
+            });
+            m.push_room(Room {
+                name: "Bare".into(),
+                room_type: RoomType::Living,
+                level: 0,
+                polygon: vec![Vec2::new(5.0, 0.0), Vec2::new(9.0, 0.0), Vec2::new(9.0, 3.0), Vec2::new(5.0, 3.0)],
+                ..Room::default()
+            });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "rooms": true }));
+        let rooms = v["rooms"].as_array().expect("rooms array missing");
+        assert_eq!(rooms.len(), 2);
+        assert_eq!(v["rooms"][0]["floorFinish"], "wood");
+        assert_eq!(v["rooms"][1]["floorFinish"], Value::Null);
+        assert!(v["rooms"][1].get("floorFinish").is_some(), "null floorFinish still carries the key");
+    }
+
+    /// A roof without `covering` reports `covering: null` (the null case never asserted
+    /// before), while a covered roof reports its name.
+    #[test]
+    fn inspect_roof_covering_null_when_unset() {
+        use cadcraft_doc::arch::{Finish, Roof};
+        let s = session_with(|m| {
+            m.push_roof(Roof { covering: Some(Finish::Shingles), ..Roof::default() });
+            m.push_roof(Roof { covering: None, ..Roof::default() });
+        });
+        let v = exec(&mut s, "arch.inspect", &json!({ "roofs": true }));
+        let roofs = v["roofs"].as_array().expect("roofs array missing");
+        assert_eq!(roofs.len(), 2);
+        assert_eq!(v["roofs"][0]["covering"], "shingles");
+        assert_eq!(v["roofs"][1]["covering"], Value::Null);
+        assert!(v["roofs"][1].get("covering").is_some(), "null covering still carries the key");
+    }
+
+    /// Reporting a wall's finish is read-only: the stored finish survives the call, the
+    /// arch revision is unchanged, and the plain `{}` inspect still shows the finish.
+    #[test]
+    fn inspect_wall_finish_is_read_only() {
+        use cadcraft_doc::arch::Finish;
+        let s = session_with(|m| {
+            m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), ..Wall::default() });
+            m.walls[0].finish = Some(Finish::Brick);
+        });
+        let before = match s.doc() {
+            Ok(d) => d.arch_revision,
+            Err(_) => 0,
+        };
+        let v = exec(&mut s, "arch.inspect", &json!({}));
+        assert_eq!(v["walls"][0]["finish"], "brick");
+        let stored = match s.doc() {
+            Ok(d) => d.arch.walls[0].finish.map(Finish::name) == Some("brick"),
+            Err(_) => false,
+        };
+        assert!(stored, "stored wall finish must survive inspect");
+        let after = match s.doc() {
+            Ok(d) => d.arch_revision,
+            Err(_) => 0,
+        };
+        assert_eq!(before, after, "arch.inspect must not bump arch_revision");
+    }
 }
