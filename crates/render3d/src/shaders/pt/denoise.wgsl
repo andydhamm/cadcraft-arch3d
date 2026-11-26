@@ -3,7 +3,9 @@
 // each tap weighted by its luminance distance in the two pixels' combined variance, its normal and
 // albedo distance to the centre (sigma_c, sigma_n, sigma_a); the guides come from the path
 // tracer's AOVs (guide[2i] albedo, guide[2i + 1] normal). A pixel whose albedo guide has w = 1 is
-// a hit; taps without a hit are skipped and a pixel without a hit is copied.
+// a hit; taps without a hit are skipped and a pixel without a hit is copied. A hit pixel with no
+// measured variance (w = 0) copies through unchanged: its samples were all identical, so it has no
+// noise to average out and a neighbour's noise must not leak in.
 
 // `guide_roughness` = 1 adds the first-hit roughness (guide[2i].w - 1) as an edge-stopping guide
 // (sigma_r) and narrows the colour sigma on glossy centre pixels; 0 is the plain filter.
@@ -52,6 +54,13 @@ fn atrous_main(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     let rgb0 = c0.rgb;
     let v0 = c0.w;
+    // A pixel with no measured noise (variance 0 or non-finite) copies through unchanged:
+    // its samples were all identical, so it has no noise to average out and a neighbour's
+    // noise must not leak in. This must run before any tap weighting.
+    if (v0 <= 1.0e-8 || !(v0 == v0)) {
+        dst[i] = vec4<f32>(rgb0, c0.w);
+        return;
+    }
     let a0 = guide[2u * i].rgb;
     let n0 = guide[2u * i + 1u].xyz;
     let denom_a = dp.sigma_a * dp.sigma_a + 1.0e-8;

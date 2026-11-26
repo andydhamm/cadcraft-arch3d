@@ -471,6 +471,131 @@ mod tests {
     }
 
     #[test]
+    fn denoise_zero_variance_constant_image_is_identity() {
+        // With w = 0 the colour-weight denominator is (sigma_c^2 * (0 + 0) + 1e-8) = 16e-8.
+        // For a constant image every tap has dl = 0, so every weight = b3(dx)*b3(dy) * 1 * 1 * 1
+        // and the weighted average of a constant is that constant. The read-back resets w to 1.
+        let Some(gpu) = compute() else { return };
+        let count = (N as usize) * (N as usize);
+        let color: Vec<[f32; 4]> = vec![[0.5, 0.5, 0.5, 0.0]; count];
+        let aov: Vec<[f32; 4]> = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+        let out = denoise(&gpu, &color, &aov, (N, N)).unwrap();
+        for (i, p) in out.iter().enumerate() {
+            assert!(
+                (p[0] - 0.5).abs() <= 1e-6 && (p[1] - 0.5).abs() <= 1e-6 && (p[2] - 0.5).abs() <= 1e-6,
+                "constant zero-variance pixel {i}: {p:?}"
+            );
+            assert_eq!(p[3], 1.0, "read-back must set w = 1");
+        }
+    }
+
+    #[test]
+    fn denoise_zero_variance_preserves_noisy_colour() {
+        // Zero variance on a genuinely noisy image: the colour-weight denominator is ~16e-8,
+        // so any neighbour with |dl| > ~1e-4 gets weight exp(-(dl^2)/16e-8) ~= 0. Only the
+        // centre tap (dl = 0) survives, and each pixel outputs its own colour — the filter is
+        // identity in the per-pixel RGB sense.
+        let Some(gpu) = compute() else { return };
+        let mut noise = Noise(0xdeadbeef);
+        let count = (N as usize) * (N as usize);
+        let color: Vec<[f32; 4]> = (0..count)
+            .map(|_| {
+                let v = 0.5 * (1.0 + 0.2 * noise.next());
+                [v, v, v, 0.0]
+            })
+            .collect();
+        let aov: Vec<[f32; 4]> = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+        let out = denoise(&gpu, &color, &aov, (N, N)).unwrap();
+        for (i, (in_px, out_px)) in color.iter().zip(out.iter()).enumerate() {
+            let diff = (in_px[0] - out_px[0]).abs().max((in_px[1] - out_px[1]).abs()).max((in_px[2] - out_px[2]).abs());
+            assert!(diff <= 1e-5, "zero-variance pixel {i} was denoised: in={in_px:?} out={out_px:?}");
+            assert_eq!(out_px[3], 1.0);
+        }
+    }
+
+    #[test]
+    fn zero_variance_image_is_byte_identity() {
+        // The zero-variance early return: the centre pixel copies through, so every pixel's RGB
+        // comes back bit-exact and only w is reset to 1.
+        let Some(gpu) = compute() else { return };
+        let mut noise = Noise(0x9a2b_c1d4);
+        let count = (N as usize) * (N as usize);
+        let color: Vec<[f32; 4]> = (0..count)
+            .map(|_| {
+                let v = 0.5 * (1.0 + 0.2 * noise.next());
+                [v, v, v, 0.0]
+            })
+            .collect();
+        let aov: Vec<[f32; 4]> = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+        let out = denoise(&gpu, &color, &aov, (N, N)).unwrap();
+        for (i, (in_px, out_px)) in color.iter().zip(out.iter()).enumerate() {
+            assert_eq!(in_px[0], out_px[0], "pixel {i} r must be bit-exact: {in_px:?} -> {out_px:?}");
+            assert_eq!(in_px[1], out_px[1], "pixel {i} g must be bit-exact: {out_px:?}");
+            assert_eq!(in_px[2], out_px[2], "pixel {i} b must be bit-exact: {out_px:?}");
+            assert_eq!(out_px[3], 1.0, "pixel {i} w must be reset to 1");
+        }
+    }
+
+    #[test]
+    fn zero_variance_pixels_do_not_freeze_their_noisy_neighbours() {
+        // The early return must stop only the centre pixel. A noisy pixel (w = 0.1) next to a
+        // zero-variance constant must still be denoised: its denominator uses the sum of both
+        // pixels' variances, so the noisy pixel's own w keeps the filter wide.
+        let Some(gpu) = compute() else { return };
+        let mut noise = Noise(0x7f5a_023c);
+        let count = (N as usize) * (N as usize);
+        let color: Vec<[f32; 4]> = (0..count)
+            .map(|i| {
+                let x = i % (N as usize);
+                if x < (N / 2) as usize {
+                    [0.5, 0.5, 0.5, 0.0]
+                } else {
+                    let v = 0.5 * (1.0 + 0.2 * noise.next());
+                    [v, v, v, 0.1]
+                }
+            })
+            .collect();
+        let aov: Vec<[f32; 4]> = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+        let raw = rmse(&color.iter().map(|p| [p[0], p[1], p[2], 1.0]).collect::<Vec<[f32; 4]>>(), 0.5);
+        let out = denoise(&gpu, &color, &aov, (N, N)).unwrap();
+        // Left half (zero variance) is untouched.
+        for (i, p) in out.iter().enumerate() {
+            if i % (N as usize) < (N / 2) as usize {
+                assert!((p[0] - 0.5).abs() <= 1e-9, "zero-variance half drifted at pixel {i}: {p:?}");
+            }
+        }
+        // Right half (noisy) is still denoised.
+        assert!(raw > 0.04, "the noisy half is not noisy: {raw}");
+        let clean = rmse(&out, 0.5);
+        assert!(clean <= 0.3 * raw, "the noisy half was frozen instead of denoised: {raw} -> {clean}");
+    }
+
+    #[test]
+    fn zero_variance_at_small_and_edge_sizes_is_byte_identity() {
+        // Degenerate sizes that are not multiples of the workgroup, with zero variance: taps
+        // outside the image are skipped and the centre copies through, so every pixel is
+        // bit-exact.
+        let Some(gpu) = compute() else { return };
+        for (w, h) in [(1u32, 1u32), (5u32, 9u32), (9u32, 5u32)] {
+            let count = (w * h) as usize;
+            let color: Vec<[f32; 4]> = (0..count)
+                .map(|i| {
+                    let v = 0.5 + 0.01 * (i as f32);
+                    [v, v - 0.02, v + 0.03, 0.0]
+                })
+                .collect();
+            let aov: Vec<[f32; 4]> = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+            let out = denoise(&gpu, &color, &aov, (w, h)).unwrap();
+            for (i, (in_px, out_px)) in color.iter().zip(out.iter()).enumerate() {
+                assert_eq!(in_px[0], out_px[0], "({w}x{h}) pixel {i} r: {in_px:?} -> {out_px:?}");
+                assert_eq!(in_px[1], out_px[1], "({w}x{h}) pixel {i} g: {out_px:?}");
+                assert_eq!(in_px[2], out_px[2], "({w}x{h}) pixel {i} b: {out_px:?}");
+                assert_eq!(out_px[3], 1.0, "({w}x{h}) pixel {i} w must be reset to 1");
+            }
+        }
+    }
+
+    #[test]
     fn buffers_that_do_not_fit_the_size_are_refused() {
         let Some(gpu) = compute() else { return };
         let color = vec![[0.5, 0.5, 0.5, 1.0]; 4];
@@ -664,5 +789,46 @@ mod tests {
             out03.iter().zip(&out1000).all(|(a, b)| a.iter().zip(b.iter()).all(|(x, y)| (x - y).abs() <= 1e-6)),
             "roughness 1000.0 differs from roughness 0.3"
         );
+    }
+
+    #[test]
+    fn a_nan_variance_is_treated_as_zero_and_is_identity() {
+        let Some(gpu) = compute() else { return };
+        let color = vec![[0.3, 0.6, 0.9, f32::NAN], [0.1, 0.2, 0.4, f32::INFINITY], [0.5, 0.5, 0.5, -0.01]];
+        let aov: Vec<[f32; 4]> = (0..3).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+        let out = denoise(&gpu, &color, &aov, (3, 1)).unwrap();
+        // A non-finite or negative w is read as 0 variance, so each hit pixel copies
+        // through unchanged and the read-back resets w to 1.
+        for (i, (in_px, out_px)) in color.iter().zip(out.iter()).enumerate() {
+            assert_eq!(in_px[0], out_px[0], "pixel {i} r not identity: {in_px:?} -> {out_px:?}");
+            assert_eq!(in_px[1], out_px[1], "pixel {i} g not identity: {in_px:?} -> {out_px:?}");
+            assert_eq!(in_px[2], out_px[2], "pixel {i} b not identity: {in_px:?} -> {out_px:?}");
+            assert_eq!(out_px[3], 1.0, "pixel {i} w not reset to 1: {out_px:?}");
+        }
+    }
+
+    #[test]
+    fn zero_width_or_zero_height_is_refused() {
+        let Some(gpu) = compute() else { return };
+        let color = vec![[0.5, 0.5, 0.5, 1.0], [0.5, 0.5, 0.5, 1.0]];
+        let aov = vec![[0.5, 0.5, 0.5, 1.0], [0.5, 0.5, 0.5, 1.0], [0.5, 0.5, 0.5, 1.0], [0.5, 0.5, 0.5, 1.0]];
+        assert!(denoise(&gpu, &color, &aov, (0, 2)).is_err(), "(0, 2): empty width is refused");
+        assert!(denoise(&gpu, &color, &aov, (2, 0)).is_err(), "(2, 0): empty height is refused");
+    }
+
+    #[test]
+    fn a_uniform_image_with_variance_stays_uniform() {
+        let Some(gpu) = compute() else { return };
+        let (w, h) = (7u32, 5u32);
+        let count = (w * h) as usize;
+        let color = vec![[0.3, 0.5, 0.8, 4.0]; count];
+        let aov: Vec<[f32; 4]> = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+        let out = denoise(&gpu, &color, &aov, (w, h)).unwrap();
+        for (i, (in_px, out_px)) in color.iter().zip(out.iter()).enumerate() {
+            for c in 0..3 {
+                assert!((out_px[c] - in_px[c]).abs() <= 1.0e-4, "pixel {i} channel {c} broke uniformity: {in_px:?} -> {out_px:?}");
+            }
+            assert_eq!(out_px[3], 1.0, "pixel {i} w not reset to 1");
+        }
     }
 }
