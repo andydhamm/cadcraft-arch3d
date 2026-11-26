@@ -960,7 +960,6 @@ mod tests {
         let mut s = house();
         s.execute("dimauto", &json!({})).unwrap();
 
-        let before_arc = s.doc().unwrap().clone();
         let undo_count = s.state().unwrap().undo.len();
 
         // Run a command that doesn't change the arch model significantly or triggers regenerate with no changes.
@@ -970,19 +969,17 @@ mod tests {
         // If the arch_revision doesn't change, regenerate returns early.
         s.execute("line", &json!({"points": [[0, 20], [1, 20]]})).unwrap();
 
-        let after_arc = s.doc().unwrap();
-
         // The Arc should be different because the drawing changed (line added).
         // But the key is that regenerate didn't push an *extra* undo step.
         assert_eq!(s.state().unwrap().undo.len(), undo_count + 1);
 
         // If we run a command that *doesn't* change the drawing (e.g. a read-only command),
         // the Arc should be identical.
-        let before_arc_2 = s.doc().unwrap();
+        let before_arc_2 = s.doc().unwrap().clone();
         s.execute("arch.inspect", &json!({})).unwrap();
-        let after_arc_2 = s.doc().unwrap();
+        let after_arc_2 = s.doc().unwrap().clone();
 
-        assert!(Arc::ptr_eq(&before_arc_2, after_arc_2), "Arc should be identical for read-only command");
+        assert!(Arc::ptr_eq(&before_arc_2, &after_arc_2), "Arc should be identical for read-only command");
     }
 
     #[test]
