@@ -71,9 +71,9 @@ fn object<'a>(cmd: &str, p: &'a Value) -> Result<Option<&'a Map<String, Value>>>
     }
 }
 
-/// A field that is present and not `null`.
+/// A field that is present (even if `null`).
 fn get<'a>(m: Option<&'a Map<String, Value>>, key: &str) -> Option<&'a Value> {
-    m.and_then(|m| m.get(key)).filter(|v| !v.is_null())
+    m.and_then(|m| m.get(key))
 }
 
 /// A required non-empty string.
