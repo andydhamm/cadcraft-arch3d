@@ -3527,7 +3527,7 @@ mod tests {
     fn uv_for_mesh_with_nonfinite_tile_is_identity() {
         let m = wall_mesh();
         let mut scene = Scene3d::default();
-        scene.materials.insert("wall".to_string(), MaterialDef { tile: [f64::NAN, 1.0], ..Default::default() });
+        scene.materials.insert("wall".to_string(), MaterialDef { tile: [f32::NAN, 1.0], ..Default::default() });
         let uvs = uv_for_mesh(&m, &scene);
         assert_eq!(uvs, m.uvs);
     }
