@@ -865,4 +865,96 @@ mod tests {
         view_look(&mut f, &lighting);
         assert_eq!(f.near, None, "near_clip 1000.001 must be rejected");
     }
+
+    /// A clip box with min > max in one axis is still accepted (the box is used as given; the
+    /// shader's `any(wpos < min) || any(wpos > max)` discards everything in that axis, which is
+    /// the same as clipping away the whole scene — not a crash, not a clamp).
+    #[test]
+    fn look_clip_inverted_axis_is_accepted() {
+        use cadcraft_doc::arch::ClipBox;
+        let inverted = ClipBox { min: [0.0, 0.0, 5.0], max: [10.0, 10.0, 1.0], ..Default::default() };
+        let clip = look_clip(&cadcraft_doc::arch::Look { clip: Some(inverted), ..Default::default() });
+        assert!(clip.is_some(), "an inverted box is not rejected, it clips everything in that axis");
+        let [min, max] = clip.unwrap();
+        assert_eq!(min[2], 5.0);
+        assert_eq!(max[2], 1.0);
+    }
+
+    /// A clip box with all-zero extent (a point) is accepted; the shader discards everything
+    /// except the single point on the box's faces.
+    #[test]
+    fn look_clip_zero_extent_is_accepted() {
+        use cadcraft_doc::arch::ClipBox;
+        let point = ClipBox { min: [1.0, 2.0, 3.0], max: [1.0, 2.0, 3.0], ..Default::default() };
+        let clip = look_clip(&cadcraft_doc::arch::Look { clip: Some(point), ..Default::default() });
+        assert!(clip.is_some());
+        let [min, max] = clip.unwrap();
+        assert_eq!((min, max), ([1.0, 2.0, 3.0], [1.0, 2.0, 3.0]));
+    }
+
+    /// `fill_clip` on a frame with no clip box leaves the draw's flags, clip_min and clip_max
+    /// exactly as `PbrUniform::new` made them (the default look is unchanged).
+    #[test]
+    fn fill_clip_without_box_leaves_draw_unchanged() {
+        let scene = Scene3d::default();
+        let before = PbrUniform::new(&Light::DEFAULT, 1.0, &Draw::default(), STYLE_SHADED, [0.0; 3]);
+        let mut after = before;
+        let f = FrameLook::default();
+        fill_clip(&mut after, &f);
+        assert_eq!(bytemuck::bytes_of(&before), bytemuck::bytes_of(&after));
+    }
+
+    /// `fill_clip` with a clip box sets the flag and the box even when the frame's tone_map is 0
+    /// (the unlit legacy look): the clip is a view property, not an exposure one, so hidden-line
+    /// and technical draws are clipped too.
+    #[test]
+    fn fill_clip_applies_to_hidden_line_and_technical() {
+        use cadcraft_doc::arch::ClipBox;
+        let scene = Scene3d::default();
+        let mut lighting = Lighting::default();
+        lighting.look.clip = Some(ClipBox { min: [-1.0, -2.0, -3.0], max: [4.0, 5.0, 2.0], ..Default::default() });
+        let mut f = FrameLook::default();
+        view_look(&mut f, &lighting);
+        assert!(f.clip.is_some());
+        // A hidden-line draw takes the clip flag and box.
+        let before = PbrUniform::new(&Light::DEFAULT, 1.0, &Draw::default(), STYLE_HIDDEN_LINE, [0.0; 3]);
+        let mut after = before;
+        fill_clip(&mut after, &f);
+        assert_eq!(after.flags & PBR_FLAG_CLIP, PBR_FLAG_CLIP);
+        assert_eq!((after.clip_min, after.clip_max), ([-1.0, -2.0, -3.0], [4.0, 5.0, 2.0]));
+        // A technical draw too.
+        let before_t = PbrUniform::new(&Light::DEFAULT, 1.0, &Draw::default(), STYLE_TECHNICAL, [0.0; 3]);
+        let mut after_t = before_t;
+        fill_clip(&mut after_t, &f);
+        assert_eq!(after_t.flags & PBR_FLAG_CLIP, PBR_FLAG_CLIP);
+        assert_eq!((after_t.clip_min, after_t.clip_max), ([-1.0, -2.0, -3.0], [4.0, 5.0, 2.0]));
+    }
+
+    /// `view_look` with a near_clip of exactly f32::MIN_POSITIVE (the smallest positive normal)
+    /// is accepted; a denormal or negative is rejected.
+    #[test]
+    fn view_look_near_clip_smallest_positive() {
+        let mut lighting = Lighting::default();
+        lighting.look.near_clip = Some(f64::from(f32::MIN_POSITIVE));
+        let mut f = FrameLook::default();
+        view_look(&mut f, &lighting);
+        assert!(f.near.is_some(), "the smallest positive normal is accepted");
+        lighting.look.near_clip = Some(-f64::from(f32::MIN_POSITIVE));
+        view_look(&mut f, &lighting);
+        assert_eq!(f.near, None, "a negative near clip is rejected");
+    }
+
+    /// A clip box whose corners are at the f32 extremes is accepted (finite), and `fill_clip`
+    /// writes them without clamping.
+    #[test]
+    fn look_clip_f32_extremes_are_written() {
+        use cadcraft_doc::arch::ClipBox;
+        let big =
+            ClipBox { min: [-f64::from(f32::MAX), -f64::from(f32::MAX), -f64::from(f32::MAX)], max: [f64::from(f32::MAX); 3], ..Default::default() };
+        let clip = look_clip(&cadcraft_doc::arch::Look { clip: Some(big), ..Default::default() });
+        assert!(clip.is_some());
+        let [min, max] = clip.unwrap();
+        assert_eq!(min[0], -f32::MAX);
+        assert_eq!(max[0], f32::MAX);
+    }
 }

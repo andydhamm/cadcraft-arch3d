@@ -2121,6 +2121,75 @@ mod tests {
         assert_eq!(filtered_scene_key(0, 0), key);
     }
 
+    /// `filtered_scene_key` with the same revision but different hidden keys always differs, and
+    /// the high bit is always set so it never collides with a plain revision.
+    #[test]
+    fn filtered_scene_key_high_bit_always_set() {
+        for rev in [0u64, 1, u64::MAX, u64::MAX >> 1] {
+            for hk in [0u64, 1, u64::MAX] {
+                let k = filtered_scene_key(rev, hk);
+                assert!(k >> 63 == 1, "high bit set for rev={rev} hk={hk}: {k}");
+            }
+        }
+    }
+
+    /// `hidden_set_key` with a filter that has only a clip box and no hidden objects: the key is
+    /// the same as the default filter's (the clip is stripped before hashing).
+    #[test]
+    fn hidden_set_key_strips_clip_only() {
+        let mut f = ViewFilter::default();
+        f.clip = Some(cadcraft_arch3d::view_filter::ClipBox::default());
+        let k1 = hidden_set_key(&f);
+        let k2 = hidden_set_key(&ViewFilter::default());
+        assert_eq!(k1, k2, "a clip-only filter has the same hidden-set key as the default");
+    }
+
+    /// `hidden_set_key` with a filter that has only a near clip and no hidden objects: same key.
+    #[test]
+    fn hidden_set_key_strips_near_only() {
+        let mut f = ViewFilter::default();
+        f.near = Some(5.0);
+        let k1 = hidden_set_key(&f);
+        let k2 = hidden_set_key(&ViewFilter::default());
+        assert_eq!(k1, k2, "a near-only filter has the same hidden-set key as the default");
+    }
+
+    /// `shadow_casting_lights` with a scene that has only strip lights: zero shadow-casting lights.
+    #[test]
+    fn shadow_casting_lights_all_strips() {
+        let mut scene = cadcraft_arch3d::Scene3d::default();
+        scene.lights.push(cadcraft_arch3d::light::SceneLight { kind: cadcraft_arch3d::light::LightKind::Strip, ..Default::default() });
+        scene.lights.push(cadcraft_arch3d::light::SceneLight { kind: cadcraft_arch3d::light::LightKind::Strip, ..Default::default() });
+        assert_eq!(shadow_casting_lights(&scene), 0, "strips never cast fixture shadows");
+    }
+
+    /// `moon_dir_for` with a model that has an HDRI backdrop and a look that overrides it with
+    /// Sky: the look wins, so the moon is kept.
+    #[test]
+    fn moon_dir_for_look_overrides_model_hdri() {
+        use cadcraft_engine::doc::arch::{ArchModel, Backdrop};
+        let mut model = ArchModel::default();
+        model.backdrop = Some(Backdrop::Hdri { image: "x.hdr".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.sun.on = false;
+        look.backdrop = Some(Backdrop::Sky);
+        assert!(moon_dir_for(&model, &look).is_some(), "the look's Sky backdrop overrides the model's HDRI");
+    }
+
+    /// `moon_dir_for` with a model that has no backdrop and a look that sets HDRI: the look's
+    /// HDRI withholds the moon.
+    #[test]
+    fn moon_dir_for_look_hdri_withholds_moon() {
+        use cadcraft_engine::doc::arch::{ArchModel, Backdrop};
+        let model = ArchModel::default();
+        let mut look = Look::default();
+        look.sky.on = true;
+        look.sun.on = false;
+        look.backdrop = Some(Backdrop::Hdri { image: "x.hdr".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 });
+        assert!(moon_dir_for(&model, &look).is_none(), "the look's HDRI backdrop withholds the moon");
+    }
+
     #[test]
     fn hidden_set_key_with_empty_filter() {
         let filter = ViewFilter::default();
