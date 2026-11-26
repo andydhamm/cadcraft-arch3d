@@ -1678,4 +1678,45 @@ mod tests {
         // from_part("cabinet") should give Cabinet.
         assert_eq!(ArchKind::from_part("cabinet"), ArchKind::Cabinet);
     }
+
+    #[test]
+    fn probe_hits_a_furnishing_by_its_box() {
+        use cadcraft_doc::arch::{Furnishing, Level, SymbolMesh, SymbolPart};
+
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+
+        let part = SymbolPart {
+            positions: vec![[-0.5, -0.5, 0.0], [0.5, -0.5, 0.0], [0.5, 0.5, 0.0], [-0.5, 0.5, 0.0]],
+            normals: vec![[0.0, 0.0, 1.0]; 4],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            ..Default::default()
+        };
+        model.symbols.insert("cube".into(), SymbolMesh { key: "cube".into(), parts: vec![part], ..Default::default() });
+
+        let f = Furnishing { id: ArchId(1), symbol: "cube".into(), size: [2.0, 2.0, 2.0], at: [5.0, 5.0], elevation: 0.0, ..Default::default() };
+        model.furnishings.push(f);
+
+        let scene = Scene3d::build(&model);
+
+        // Probe inside the box (5, 5, 1)
+        let hit = probe(&scene, Vec3::new(5.0, 5.0, 1.0));
+        assert!(hit.is_some(), "Probe inside furnishing box should hit");
+        let hit = hit.unwrap();
+        assert_eq!(hit.id, "f1");
+        assert_eq!(hit.part, "furnishing");
+        assert_eq!(hit.level, 0.0);
+
+        // Probe outside the box (5, 5, 3) - above the 2m height
+        assert!(probe(&scene, Vec3::new(5.0, 5.0, 3.0)).is_none(), "Probe above furnishing box should miss");
+
+        // Probe outside the box (8, 5, 1) - to the right
+        assert!(probe(&scene, Vec3::new(8.0, 5.0, 1.0)).is_none(), "Probe right of furnishing box should miss");
+    }
+
+    #[test]
+    fn part_of_maps_painted_furnishing() {
+        let m = Mesh::new("paint:furnishing/f1/0", ArchId(1));
+        assert_eq!(part_of(&m), "furnishing");
+    }
 }
