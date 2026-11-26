@@ -1528,7 +1528,7 @@ mod tests {
         for o in openings {
             let h = o["handle"].as_str().expect("handle must be a string");
             assert!(h.starts_with('a'));
-            assert!(h[1..].chars().all(|c| c.is_ascii_lowercase() && (c.is_ascii_digit() || c <= 'f')), "handle must be lower-case hex: {h}");
+            assert!(h[1..].chars().all(|c| c.is_ascii_digit() || (c.is_ascii_lowercase() && c <= 'f')), "handle must be lower-case hex: {h}");
         }
     }
 
@@ -4661,5 +4661,112 @@ mod tests {
         assert_eq!(walls[0]["exterior"], true);
         assert_eq!(walls[0]["id"], "w0");
         assert_eq!(walls[0]["handle"], "a0000000");
+    }
+
+    /// Every opening row carries a string `number` (its schedule number), even when it
+    /// forms a group of one. Pins that the `number` key is always present and a string.
+    #[test]
+    fn inspect_opening_number_is_always_a_string() {
+        let mut s = session_with_one_wall_and_opening();
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert!(!openings.is_empty(), "expected at least one opening");
+        for o in openings {
+            assert!(o["number"].is_string(), "number must be a string: {o:?}");
+        }
+    }
+
+    /// For a normal (positive-width) opening the gap is two finite, distinct endpoints
+    /// whose span equals the stored rough width. Pins that a non-degenerate gap is a
+    /// finite `[start, end]` with `end > start`.
+    #[test]
+    fn inspect_opening_normal_gap_is_two_finite_points() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening {
+                    host: wid,
+                    offset: 4.0,
+                    width: 0.9,
+                    height: 2.0,
+                    sill: 0.6,
+                    recess: 0.05,
+                    rough_width: 1.02,
+                    rough_height: 2.12,
+                    kind: OpeningKind::Window,
+                    ..Opening::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true, "symbols": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert_eq!(openings.len(), 1, "expected one opening");
+        let o = &openings[0];
+        let gap = o["gap"].as_array().expect("gap must be an array with the symbols flag");
+        assert_eq!(gap.len(), 2, "gap must be [start, end]");
+        let start = gap[0].as_f64().expect("gap start must be a number");
+        let end = gap[1].as_f64().expect("gap end must be a number");
+        assert!(start.is_finite() && end.is_finite(), "gap endpoints must be finite: ({start}, {end})");
+        assert!(end > start, "a positive-width opening has end > start: start {start}, end {end}");
+        assert!((end - start - 1.02).abs() < 1e-6, "gap span must equal the stored rough width 1.02: {span}", span = end - start);
+    }
+
+    /// Full field set and types for a normal opening (the spec's field list), pinned
+    /// against a single opening so a missing key or wrong type fails.
+    #[test]
+    fn inspect_opening_full_field_set_and_types() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening {
+                    host: wid,
+                    offset: 2.0,
+                    width: 0.9,
+                    height: 2.0,
+                    sill: 0.6,
+                    recess: 0.05,
+                    rough_width: 1.02,
+                    rough_height: 2.12,
+                    kind: OpeningKind::Door,
+                    ..Opening::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true, "symbols": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert_eq!(openings.len(), 1, "expected one opening");
+        let o = &openings[0];
+        // ids, labels and handle are strings; handle is in the opening range.
+        assert!(o["id"].is_string(), "id must be a string");
+        assert!(o["host"].is_string(), "host must be a string");
+        let handle = o["handle"].as_str().expect("handle must be a string");
+        assert_eq!(handle.len(), 8, "handle must be 8 chars: {handle}");
+        assert!(handle.starts_with("a000"), "handle must be in the opening range: {handle}");
+        assert!(handle[1..].chars().all(|c| c.is_ascii_digit() || (c.is_ascii_lowercase() && c <= 'f')), "handle must be lower-case hex: {handle}");
+        // kind, style, hinge, swing, layer are strings; number is the schedule number.
+        assert!(o["kind"].is_string(), "kind must be a string");
+        assert!(o["style"].is_string(), "style must be a string");
+        assert!(o["hinge"].is_string(), "hinge must be a string");
+        assert!(o["swing"].is_string(), "swing must be a string");
+        assert!(o["layer"].is_string(), "layer must be a string");
+        assert!(o["number"].is_string(), "number must be a string");
+        // numeric fields.
+        assert!(o["offset"].is_number(), "offset must be a number");
+        assert!(o["width"].is_number(), "width must be a number");
+        assert!(o["height"].is_number(), "height must be a number");
+        assert!(o["sill"].is_number(), "sill must be a number");
+        assert!(o["recess"].is_number(), "recess must be a number");
+        // rough is {width, height}.
+        assert!(o["rough"].is_object(), "rough must be an object");
+        assert!(o["rough"]["width"].is_number(), "rough.width must be a number");
+        assert!(o["rough"]["height"].is_number(), "rough.height must be a number");
     }
 }
