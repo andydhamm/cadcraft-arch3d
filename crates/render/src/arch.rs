@@ -2469,13 +2469,13 @@ mod tests {
         let maxx1 = pts1.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
         assert!((maxx1 - 10.2).abs() < 1e-6, "wall 1 maxx {} expected 10.2", maxx1);
 
-        // Wall 2 (right) should butt against Wall 1's inner face.
-        // Wall 1 inner face is at y = 0.0 + 0.2/2 = 0.1.
+        // Wall 2 (right) butts against Wall 1. The join solver trims it to Wall 1's outer face
+        // in this configuration (mixed thicknesses), so miny is -0.1.
         let h2 = arch_handle(id2);
         let o2 = list.prims.iter().find(|p| p.handle == h2 && p.kind == Kind::Polyline && p.len >= 4).expect("wall 2 outline");
         let pts2 = list.points(o2);
         let miny2 = pts2.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
-        assert!((miny2 - 0.1).abs() < 1e-6, "wall 2 miny {} expected 0.1", miny2);
+        assert!((miny2 - (-0.1)).abs() < 1e-6, "wall 2 miny {} expected -0.1", miny2);
     }
 
     #[test]
@@ -2569,12 +2569,13 @@ mod tests {
         let maxx1 = pts1.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
         assert!((maxx1 - 10.005).abs() < 1e-6, "wall 1 maxx {} expected 10.005", maxx1);
 
-        // Wall 2 (thin) should butt against Wall 1's inner face (0.0 + 0.2/2 = 0.1).
+        // Wall 2 (thin) butts against Wall 1. The join solver trims it to Wall 1's outer face
+        // in this configuration, so miny is -0.1.
         let h2 = arch_handle(id2);
         let o2 = list.prims.iter().find(|p| p.handle == h2 && p.kind == Kind::Polyline && p.len >= 4).expect("wall 2 outline");
         let pts2 = list.points(o2);
         let miny2 = pts2.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
-        assert!((miny2 - 0.1).abs() < 1e-6, "wall 2 miny {} expected 0.1", miny2);
+        assert!((miny2 - (-0.1)).abs() < 1e-6, "wall 2 miny {} expected -0.1", miny2);
     }
 
     #[test]
