@@ -1777,4 +1777,108 @@ mod tests {
         let s2 = Scene3d::build(&m2);
         assert_ne!(s1.digest(), s2.digest(), "digest should change when horizon changes");
     }
+
+    #[test]
+    fn furnishing_edits_keep_the_cache_equal_to_the_full_build() {
+        use cadcraft_doc::arch::{Furnishing, SymbolMesh, SymbolPart};
+
+        let mut model = ArchModel::default();
+        model.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+
+        // Add a simple symbol
+        let part = SymbolPart {
+            positions: vec![[-0.5, -0.5, 0.0], [0.5, -0.5, 0.0], [0.5, 0.5, 0.0], [-0.5, 0.5, 0.0]],
+            normals: vec![[0.0, 0.0, 1.0]; 4],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            base_color: [1.0, 0.0, 0.0, 1.0],
+            ..Default::default()
+        };
+        model.symbols.insert("cube".into(), SymbolMesh { key: "cube".into(), parts: vec![part], ..Default::default() });
+
+        // Add a furnishing
+        let f = Furnishing { id: ArchId(1), symbol: "cube".into(), size: [1.0, 1.0, 1.0], at: [2.0, 2.0], ..Default::default() };
+        model.furnishings.push(f);
+
+        let (mut cache, _) = SceneCache::new(&model);
+        assert_eq!(cache.scene().digest(), Scene3d::build(&model).digest());
+
+        // Edit the furnishing
+        let mut next = model.clone();
+        if let Some(f) = next.furnishings.iter_mut().find(|f| f.id == ArchId(1)) {
+            f.at = [3.0, 3.0];
+        }
+
+        cache.update(&next);
+        assert_eq!(cache.scene().digest(), Scene3d::build(&next).digest());
+
+        // Delete the furnishing
+        let mut next = model.clone();
+        next.furnishings.clear();
+
+        cache.update(&next);
+        assert_eq!(cache.scene().digest(), Scene3d::build(&next).digest());
+    }
+
+    #[test]
+    fn one_furnishing_edit_rebuilds_one_object() {
+        use cadcraft_doc::arch::{Furnishing, SymbolMesh, SymbolPart};
+
+        let mut model = ArchModel::default();
+        model.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+
+        let part = SymbolPart {
+            positions: vec![[-0.5, -0.5, 0.0], [0.5, -0.5, 0.0], [0.5, 0.5, 0.0], [-0.5, 0.5, 0.0]],
+            normals: vec![[0.0, 0.0, 1.0]; 4],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            ..Default::default()
+        };
+        model.symbols.insert("cube".into(), SymbolMesh { key: "cube".into(), parts: vec![part], ..Default::default() });
+
+        model.furnishings.push(Furnishing { id: ArchId(1), symbol: "cube".into(), size: [1.0, 1.0, 1.0], at: [1.0, 1.0], ..Default::default() });
+        model.furnishings.push(Furnishing { id: ArchId(2), symbol: "cube".into(), size: [1.0, 1.0, 1.0], at: [2.0, 2.0], ..Default::default() });
+
+        let (mut cache, stats) = SceneCache::new(&model);
+        assert_eq!(stats.rebuilt, 2); // Both built initially
+
+        // Edit furnishing 1
+        let mut next = model.clone();
+        if let Some(f) = next.furnishings.iter_mut().find(|f| f.id == ArchId(1)) {
+            f.at = [1.5, 1.5];
+        }
+
+        let stats = cache.update(&next);
+        assert_eq!(stats.rebuilt, 1, "Only furnishing 1 should be rebuilt");
+        assert_eq!(stats.objects, 2, "Both furnishings should still be present");
+    }
+
+    #[test]
+    fn a_paint_change_rebuilds_its_object() {
+        use cadcraft_doc::arch::{Furnishing, Paint, Surface, SymbolMesh, SymbolPart};
+
+        let mut model = ArchModel::default();
+        model.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+
+        let part = SymbolPart {
+            positions: vec![[-0.5, -0.5, 0.0], [0.5, -0.5, 0.0], [0.5, 0.5, 0.0], [-0.5, 0.5, 0.0]],
+            normals: vec![[0.0, 0.0, 1.0]; 4],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            ..Default::default()
+        };
+        model.symbols.insert("cube".into(), SymbolMesh { key: "cube".into(), parts: vec![part], ..Default::default() });
+
+        let f = Furnishing { id: ArchId(1), symbol: "cube".into(), size: [1.0, 1.0, 1.0], at: [1.0, 1.0], ..Default::default() };
+        model.furnishings.push(f);
+
+        let (mut cache, _) = SceneCache::new(&model);
+        assert_eq!(cache.scene().digest(), Scene3d::build(&model).digest());
+
+        // Add a paint to the furnishing
+        let mut next = model.clone();
+        let key = Surface::Furnishing { furnishing: ArchId(1), part: 0 }.key();
+        next.paints.insert(key, Paint::default());
+
+        let stats = cache.update(&next);
+        assert_eq!(stats.rebuilt, 1, "The furnishing should be rebuilt due to paint change");
+        assert_eq!(cache.scene().digest(), Scene3d::build(&next).digest());
+    }
 }
