@@ -339,7 +339,7 @@ fn a_view_with_empty_dimension_text_draws_no_text_prims() {
     let list = build(&d, false);
     let dims = dims_prims(&list, h, &ink);
     assert_eq!(dims.len(), 5, "empty text must still draw 2 extensions + dim line + 2 ticks");
-    assert_eq!(list.prims.iter().filter(|p| p.handle == h && p.color == *ink).collect::<Vec<_>>().len(), 5, "no text strokes for empty text",);
+    assert_eq!(list.prims.iter().filter(|p| p.handle == h && p.color == ink).collect::<Vec<_>>().len(), 5, "no text strokes for empty text",);
 }
 
 /// A left-measuring dimension (a -> b pointing -x) still keeps its text upright and centred
