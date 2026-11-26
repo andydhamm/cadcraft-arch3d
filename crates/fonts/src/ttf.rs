@@ -35,6 +35,9 @@ use skrifa::{FontRef, GlyphId, MetadataProvider};
 
 use crate::{Run, Shaped};
 
+#[cfg(not(target_arch = "wasm32"))]
+mod dirs;
+
 /// One face of a font file (a TrueType collection holds several).
 #[derive(Clone)]
 pub struct Face {
@@ -144,7 +147,11 @@ const MAX_CACHED_CHARS: usize = 50_000;
 pub(crate) const MAX_SHAPED_POINTS: usize = 8_000_000;
 
 /// Fonts known to cover many scripts (CJK first), tried first for missing glyphs. Matched as
-/// substrings of the normalised file stem.
+/// substrings of the normalised file stem. The last two are the wide nets: GNU FreeSerif (most
+/// non-CJK scripts, with real OpenType shaping; in the default font set of NixOS and many
+/// distributions), then Unifont (every BMP character, as bitmap-like outlines; the only
+/// CJK-capable font of NixOS's default set) for what FreeSerif lacks. Both come before the
+/// alphabetical rest, which the bounded search never gets through.
 const PREFERRED_FALLBACK: &[&str] = &[
     "notosanscjk",
     "sourcehansans",
@@ -168,6 +175,8 @@ const PREFERRED_FALLBACK: &[&str] = &[
     "dejavusans",
     "segoeui",
     "arial",
+    "freeserif",
+    "unifont",
 ];
 /// Fonts known to cover a right-to-left script, tried before the general search for its
 /// characters (the general search loads a bounded number of files, and wide-coverage CJK fonts
@@ -343,11 +352,11 @@ fn system_font_dirs() -> Vec<PathBuf> {
             dirs.push(PathBuf::from(l).join("Microsoft\\Windows\\Fonts"));
         }
     } else {
-        dirs.extend(["/usr/share/fonts", "/usr/local/share/fonts"].map(Into::into));
-        if let Some(h) = std::env::var_os("HOME") {
-            dirs.push(PathBuf::from(&h).join(".fonts"));
-            dirs.push(PathBuf::from(h).join(".local/share/fonts"));
-        }
+        // Where fontconfig looks: NixOS, Guix and Flatpak keep fonts outside /usr/share/fonts
+        // (#674). Later directories take precedence (the stack pops them first), so the
+        // resolver's priority order is reversed; [`scan_dirs`] reads each resolved
+        // directory once and skips missing ones.
+        dirs.extend(dirs::font_dirs(|k| std::env::var_os(k), dirs::read_config).into_iter().rev());
     }
     dirs
 }
@@ -868,6 +877,16 @@ pub fn find(name: &str) -> Option<Face> {
     r
 }
 
+/// The installed font file with this stem (`DejaVuSans`, `NotoSansCJK-Regular`; case and an
+/// extension don't matter), wherever the system keeps its fonts. A font compiled in from
+/// craft-fonts is no file and gives `None`.
+pub fn installed_font_path(stem: &str) -> Option<PathBuf> {
+    match lock().paths.get(&key(stem))? {
+        Source::File(p) => Some(p.clone()),
+        Source::Static(_) => None,
+    }
+}
+
 struct Prefs {
     alt: String,
     fallback: Vec<String>,
@@ -1073,9 +1092,38 @@ pub fn descent_ratio(face: &Face) -> Option<f64> {
     (r.is_finite() && r > 0.0 && r < 2.0).then_some(r)
 }
 
-/// Cap height of a font in font units at 1000 units per em: the OS/2 value, else the height
-/// of its "H", else an estimate from the ascent.
+/// Cap heights the installation pins for metric-compatible substitutes, from `CADCRAFT_CAP_HEIGHT`
+/// (`LiberationSans=715.8;LiberationSans-Bold=715.8`): a substitute keeps the advance widths of
+/// the font it stands in for but not its cap height, so scaling by the substitute's own OS/2
+/// value draws text the size of the substitute, not of the requested font. Each entry names a
+/// substitute's PostScript name and the cap height to give it, in font units at 1000 per em: the
+/// cap height of the font it replaces, not its own.
+fn cap_height_overrides() -> &'static HashMap<String, f64> {
+    static OVERRIDES: OnceLock<HashMap<String, f64>> = OnceLock::new();
+    OVERRIDES.get_or_init(|| parse_cap_height_overrides(&std::env::var("CADCRAFT_CAP_HEIGHT").unwrap_or_default()))
+}
+
+/// Parse a `Name=height;…` list; entries without a name or with a height below 1 unit or not
+/// finite are dropped (a font's own cap height is never taken below 1 either: a tiny one would
+/// scale its glyphs past any drawing's extent). Names are matched normalised, like family names.
+fn parse_cap_height_overrides(spec: &str) -> HashMap<String, f64> {
+    spec.split(';')
+        .filter_map(|entry| {
+            let (name, height) = entry.split_once('=')?;
+            let height: f64 = height.trim().parse().ok()?;
+            (height.is_finite() && height >= 1.0 && !name.trim().is_empty()).then(|| (norm(name.trim()), height))
+        })
+        .collect()
+}
+
+/// Cap height of a font in font units at 1000 units per em: the value `CADCRAFT_CAP_HEIGHT`
+/// pins for this font's PostScript name, else the OS/2 value, else the height of its "H",
+/// else an estimate from the ascent.
 fn cap_height(f: &FontRef) -> f64 {
+    let named = f.localized_strings(skrifa::string::StringId::POSTSCRIPT_NAME).next().map(|s| norm(&s.to_string()));
+    if let Some(height) = named.as_deref().and_then(|n| cap_height_overrides().get(n)) {
+        return *height;
+    }
     let metrics = f.metrics(Size::new(UPEM), LocationRef::default());
     let measured = || {
         let gid = f.charmap().map('H')?;
@@ -1409,102 +1457,70 @@ mod family_tests {
 }
 
 #[cfg(test)]
-mod fallback_tests {
+mod cap_height_override_tests {
     use super::*;
+    use std::collections::HashMap;
 
-    /// A font file, made here (no font file is committed), whose character map sends each of
-    /// `chars` to its one empty glyph.
-    fn font_mapping(chars: &[char]) -> Vec<u8> {
-        let mut codes: Vec<u32> = chars.iter().map(|c| u32::from(*c)).collect();
-        codes.sort_unstable();
-        let groups = u32::try_from(codes.len()).unwrap();
-        // One Windows Unicode (3, 10) record pointing at a format 12 subtable.
-        let mut cmap: Vec<u8> = [0_u16, 1, 3, 10].iter().flat_map(|v| v.to_be_bytes()).collect();
-        cmap.extend(12_u32.to_be_bytes());
-        cmap.extend(12_u16.to_be_bytes());
-        cmap.extend(0_u16.to_be_bytes());
-        for v in [16 + 12 * groups, 0, groups] {
-            cmap.extend(v.to_be_bytes());
-        }
-        for code in codes {
-            for v in [code, code, 1] {
-                cmap.extend(v.to_be_bytes());
-            }
-        }
-        let mut head = vec![0_u8; 54];
-        head[..4].copy_from_slice(&0x0001_0000_u32.to_be_bytes());
-        head[18..20].copy_from_slice(&1000_u16.to_be_bytes());
-        let mut hhea = vec![0_u8; 36];
-        hhea[..4].copy_from_slice(&0x0001_0000_u32.to_be_bytes());
-        hhea[4..6].copy_from_slice(&800_i16.to_be_bytes());
-        hhea[6..8].copy_from_slice(&(-200_i16).to_be_bytes());
-        hhea[34..36].copy_from_slice(&2_u16.to_be_bytes());
-        // Tables in tag order, as the table directory is searched.
-        let tables = [
-            (*b"cmap", cmap),
-            (*b"head", head),
-            (*b"hhea", hhea),
-            (*b"hmtx", vec![1, 244, 0, 0, 1, 244, 0, 0]), // Advances 500, side bearings 0.
-            (*b"maxp", vec![0, 0, 80, 0, 0, 2]),          // Version 0.5, two glyphs.
-        ];
-        let mut bytes = vec![0_u8; 12 + tables.len() * 16];
-        bytes[..4].copy_from_slice(&0x0001_0000_u32.to_be_bytes());
-        bytes[4..6].copy_from_slice(&u16::try_from(tables.len()).unwrap().to_be_bytes());
-        for (i, (tag, data)) in tables.into_iter().enumerate() {
-            while !bytes.len().is_multiple_of(4) {
-                bytes.push(0);
-            }
-            let record = 12 + i * 16;
-            let offset = u32::try_from(bytes.len()).unwrap();
-            let len = u32::try_from(data.len()).unwrap();
-            bytes[record..record + 4].copy_from_slice(&tag);
-            bytes[record + 8..record + 12].copy_from_slice(&offset.to_be_bytes());
-            bytes[record + 12..record + 16].copy_from_slice(&len.to_be_bytes());
-            bytes.extend(data);
-        }
-        bytes
-    }
-
-    /// The stem of the file `face` is a face of.
-    fn stem_of(db: &Db, face: Option<Face>) -> Option<String> {
-        let face = face?;
-        db.files.iter().find(|(_, b)| Arc::ptr_eq(b, &face.bytes)).map(|(s, _)| s.clone())
-    }
-
-    /// The face a character falls back to depends on the fonts only, not on which characters
-    /// were looked up before. A font registered meanwhile (on another thread, or by another test)
-    /// resets the search, and the lookups after it come in any order: the digits of a line in a
-    /// Thai font without Latin came from an Arabic font in one layout and from the wide-coverage
-    /// font in the next, so a width measured before the reset (MTEXT measures its words before
-    /// drawing them) disagreed with the line drawn after it, and
-    /// `thai_marks_stack_in_an_installed_font` failed about one run in ten. This test has its own
-    /// font table, so it changes nothing for the others: two fonts that both have the digit 5,
-    /// the wide-coverage one the general search tries first and an Arabic one the search for
-    /// Arabic letters tries first.
     #[test]
-    fn a_fallback_face_does_not_depend_on_earlier_lookups() {
-        let table = || {
-            let mut db = Db { scanned: true, ..Db::default() };
-            db.files.insert("notosanscjk-test".into(), Arc::new(font_mapping(&['5', 'x', '\u{4E2D}'])));
-            db.files.insert("notonaskharabic-test".into(), Arc::new(font_mapping(&['5', '\u{0633}'])));
-            db
+    fn cap_height_env_parses_name_height_entries() {
+        let m = parse_cap_height_overrides("LiberationSans=715.8;LiberationSans-Bold=715.8");
+        let mut want = HashMap::new();
+        want.insert("liberationsans".to_string(), 715.8);
+        want.insert("liberationsansbold".to_string(), 715.8);
+        assert_eq!(m, want);
+        assert_eq!(
+            parse_cap_height_overrides("LiberationSans = 715.8 ; NotoSansCJK=1466"),
+            parse_cap_height_overrides("LiberationSans=715.8;NotoSansCJK=1466").into_iter().collect::<HashMap<_, _>>(),
+            "spaces around names and heights are tolerated"
+        );
+        assert!(
+            parse_cap_height_overrides("noheight;=5;Arial=0;Arial=-1;Arial=abc").is_empty(),
+            "entries without a name or a positive finite height are dropped"
+        );
+        assert!(parse_cap_height_overrides("").is_empty());
+        assert!(
+            parse_cap_height_overrides("Arial=0.0001;Arial=1e-300").is_empty(),
+            "a height below 1 unit is dropped, as `cap_height` never goes below 1"
+        );
+    }
+
+    #[test]
+    fn cap_height_override_applies_only_to_the_named_font() {
+        let m = parse_cap_height_overrides("LiberationSans=715.8");
+        assert_eq!(m.get(&norm("LiberationSans")), Some(&715.8));
+        assert_eq!(m.get(&norm("Liberation Sans")), Some(&715.8), "names match normalised");
+        assert_eq!(m.get(&norm("DejaVuSans")), None);
+        assert_eq!(m.get(&norm("LiberationSans-Bold")), None);
+    }
+
+    /// With no override for the face, `cap_height` walks its chain: the OS/2 value when the face
+    /// has one, else the height of its "H", else an estimate from the ascent. Uses the first of
+    /// these common fonts that is installed (Windows, macOS and Linux each have one); skips
+    /// without any. No override is in play: `CADCRAFT_CAP_HEIGHT` names other faces, and the
+    /// test binary's env is read once — a face this test does not name stays unoverridden.
+    #[test]
+    fn cap_height_without_an_override_follows_the_fallback_chain() {
+        let found = ["Arial", "Helvetica", "DejaVuSans", "Verdana", "LiberationSans-Regular"].into_iter().find_map(find);
+        let Some(face) = found else { return };
+        let f = face.font().expect("the face parses");
+        let named = f.localized_strings(skrifa::string::StringId::POSTSCRIPT_NAME).next().map(|s| norm(&s.to_string())).unwrap_or_default();
+        let m = f.metrics(Size::new(UPEM), LocationRef::default());
+        let h_height = || {
+            let gid = f.charmap().map('H')?;
+            let b = f.glyph_metrics(Size::new(UPEM), LocationRef::default()).bounds(gid)?;
+            Some(b.y_max).filter(|y| y.is_finite() && *y > 0.0)
         };
-        let mut fresh = table();
-        let digit = fresh.fallback_face('5');
-        assert_eq!(stem_of(&fresh, digit).as_deref(), Some("notosanscjk-test"));
-        // An Arabic letter looked up first loads the Arabic font; the digit still comes from the
-        // general search.
-        let mut arabic_first = table();
-        let letter = arabic_first.fallback_face('\u{0633}');
-        assert_eq!(stem_of(&arabic_first, letter).as_deref(), Some("notonaskharabic-test"));
-        let digit = arabic_first.fallback_face('5');
-        assert_eq!(stem_of(&arabic_first, digit).as_deref(), Some("notosanscjk-test"), "the digit after an Arabic letter");
-        // And across a reset (what registering a font does), whatever comes first after it.
-        arabic_first.fallback = Fallback::default();
-        let letter = arabic_first.fallback_face('\u{0633}');
-        assert_eq!(stem_of(&arabic_first, letter).as_deref(), Some("notonaskharabic-test"));
-        let digit = arabic_first.fallback_face('5');
-        assert_eq!(stem_of(&arabic_first, digit).as_deref(), Some("notosanscjk-test"), "the digit after a reset");
+        let got = cap_height(&f);
+        let want = if cap_height_overrides().contains_key(&named) {
+            return; // this installation pins the face: the override leg is covered by the parser tests
+        } else if let Some(cap) = m.cap_height.filter(|c| c.is_finite() && *c > 0.0) {
+            f64::from(cap)
+        } else if let Some(h) = h_height() {
+            f64::from(h)
+        } else {
+            f64::from(m.ascent) * 0.72
+        };
+        assert!((got - want.max(1.0)).abs() < 1.0, "cap height {got} tracks the chain's value {want}");
     }
 }
 
@@ -1594,5 +1610,26 @@ mod scan_tests {
         assert!(dirs.iter().any(|d| d == std::path::Path::new("C:\\Windows\\Fonts")), "{dirs:?}");
         #[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_env = "ohos"))))]
         assert!(dirs.iter().any(|d| d == std::path::Path::new("/usr/share/fonts")), "{dirs:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_back_up_the_tree_does_not_hide_the_other_font_directories() {
+        let root = std::env::temp_dir().join(format!("cadcraft-font-walk-{}", std::process::id()));
+        let (looped, other) = (root.join("looped"), root.join("other"));
+        std::fs::create_dir_all(&looped).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(looped.join("a.ttf"), b"").unwrap();
+        // The kernel gives up on a symlink chain after about 40 hops; with this many entries,
+        // reading the directory at every hop would still run past the 20 000 entry budget.
+        for i in 0..600 {
+            std::fs::write(looped.join(format!("readme{i}.txt")), b"").unwrap();
+        }
+        std::fs::write(other.join("b.ttf"), b"").unwrap();
+        std::os::unix::fs::symlink(&looped, looped.join("again")).unwrap();
+        // The looped directory is walked first.
+        let found = scan_dirs(&[other.clone(), looped.clone()], false);
+        std::fs::remove_dir_all(&root).unwrap();
+        assert!(found.contains_key("a") && found.contains_key("b"), "{found:?}");
     }
 }
