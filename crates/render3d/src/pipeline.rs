@@ -1573,4 +1573,59 @@ mod tests {
         let draw = Draw { alpha: f32::NAN, ..Default::default() };
         assert!(!draw.is_blended());
     }
+
+    #[test]
+    fn upload_empty_scene_has_placeholder_buffers() {
+        let scene = Scene3d::default();
+        let Some((device, _queue)) = crate::gputest::shared_device() else { return };
+        let meshes = upload(&device, &scene);
+
+        // Should have placeholder buffers but zero counts
+        assert_eq!(meshes.vertex_count, 0);
+        assert_eq!(meshes.index_count, 0);
+        assert!(meshes.draws.is_empty());
+
+        // Buffers should exist (not be null/zero-sized in a way that crashes wgpu)
+        // wgpu buffers are opaque, but we can check they were created by calling methods or just trusting the struct.
+        // The main check is that upload didn't panic and returned valid GpuMeshes.
+    }
+
+    #[test]
+    fn upload_mesh_with_out_of_range_indices_drops_them() {
+        let mut mesh = Mesh::new("wall", ArchId(1));
+        // 3 vertices
+        mesh.positions.push([0.0, 0.0, 0.0]);
+        mesh.positions.push([1.0, 0.0, 0.0]);
+        mesh.positions.push([0.0, 1.0, 0.0]);
+        mesh.normals.push([0.0, 0.0, 1.0]);
+        mesh.normals.push([0.0, 0.0, 1.0]);
+        mesh.normals.push([0.0, 0.0, 1.0]);
+        mesh.uvs.push([0.0, 0.0]);
+        mesh.uvs.push([1.0, 0.0]);
+        mesh.uvs.push([0.0, 1.0]);
+
+        // Indices: one valid triangle (0,1,2), one invalid (0,1,99)
+        mesh.indices = vec![0, 1, 2, 0, 1, 99];
+
+        let scene = Scene3d { meshes: vec![mesh], ..Default::default() };
+        let Some((device, _queue)) = crate::gputest::shared_device() else { return };
+
+        let meshes = upload(&device, &scene);
+
+        // Only the first triangle should be kept
+        assert_eq!(meshes.index_count, 3);
+        assert_eq!(meshes.vertex_count, 3);
+        assert_eq!(meshes.draws.len(), 1);
+    }
+
+    #[test]
+    fn pbr_uniform_sanitizes_nan_camera_pos() {
+        let light = crate::light::Light::DEFAULT;
+        let draw = Draw::default();
+        let cam = [f32::NAN, f32::INFINITY, f32::NEG_INFINITY];
+        let p = PbrUniform::new(&light, 1.0, &draw, STYLE_SHADED, cam);
+
+        // Non-finite camera components should be zeroed out
+        assert_eq!(p.camera_pos, [0.0, 0.0, 0.0]);
+    }
 }
