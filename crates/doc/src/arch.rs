@@ -5420,7 +5420,8 @@ mod tests {
     fn view_kind_defaults_and_round_trip() {
         assert_eq!(ViewKind::default(), ViewKind::Elevation);
         for k in [ViewKind::Elevation, ViewKind::Section, ViewKind::Interior] {
-            assert_eq!(serde_json::from_str(&serde_json::to_string(&k).unwrap()), k, "{k}");
+            let back: ViewKind = serde_json::from_str(&serde_json::to_string(&k).unwrap()).unwrap();
+            assert_eq!(back, k, "{k:?}");
         }
     }
 }
