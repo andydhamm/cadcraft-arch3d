@@ -3853,6 +3853,143 @@ mod tests {
     }
 
     #[test]
+    fn opening_handle_range_is_exactly_32768_wide() {
+        // The opening range occupies [base + 0x8000, base + 0x10000).
+        // id 32767 is the last in-range opening; id 32768 lands at the room offset.
+        let base = ARCH_HANDLE_BASE;
+        let in_range = opening_handle(ArchId(32767));
+        assert!(is_opening_handle(in_range), "opening 32767 must be in range");
+        assert!(is_arch_handle(in_range), "opening 32767 must be an arch handle");
+        assert!(!is_room_handle(in_range), "opening 32767 must not be a room handle");
+
+        let out_of_range = opening_handle(ArchId(32768));
+        assert!(!is_opening_handle(out_of_range), "opening 32768 must NOT be in range (it is the room range start)");
+        assert!(is_room_handle(out_of_range), "opening 32768 must land in the room range");
+        assert!(is_arch_handle(out_of_range), "opening 32768 must still be an arch handle");
+
+        // The range width matches the spec constant.
+        let lower = base.saturating_add(OPENING_HANDLE_OFFSET);
+        let upper = base.saturating_add(OPENING_HANDLE_OFFSET).saturating_add(1u64 << 15);
+        assert_eq!(upper - lower, 1u64 << 15, "opening range width must be 32768");
+        assert!(lower > base, "opening offset must be above base");
+        // Room range begins exactly where opening range ends.
+        assert_eq!(upper, base.saturating_add(ROOM_HANDLE_OFFSET), "opening upper bound must equal room lower bound");
+    }
+
+    #[test]
+    fn opening_counter_independent_of_wall_and_room_counters() {
+        // Create a heavy workload of walls and rooms first.
+        let mut m = ArchModel::default();
+        for _ in 0..50 {
+            m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), 0.2));
+        }
+        for _ in 0..10 {
+            m.push_room(Room::default());
+        }
+
+        // Openings must still start at o0.
+        let o0 = m.push_opening(Opening::new(ArchId(0), 0.5, 0.9, 2.1, OpeningKind::Door));
+        assert_eq!(o0, ArchId(0), "first opening must be o0 even after 50 walls");
+        assert_eq!(o0.label, "o0".to_string(), "opening 0 label must be o0");
+
+        let o1 = m.push_opening(Opening::new(ArchId(1), 0.5, 0.9, 2.1, OpeningKind::Window));
+        assert_eq!(o1, ArchId(1));
+        assert_eq!(o1.label, "o1".to_string(), "opening 1 label must be o1");
+
+        // Wall and room counters are unaffected.
+        assert_eq!(m.next_wall_id(), ArchId(50));
+        assert_eq!(m.next_room_id, 10);
+        assert_eq!(m.next_opening_id, 2);
+
+        // Now create more walls; opening counter stays put.
+        let w50 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), 0.2));
+        assert_eq!(w50, ArchId(50));
+        assert_eq!(m.next_opening_id, 2, "wall creation must not advance the opening counter");
+    }
+
+    #[test]
+    fn opening_new_clamps_non_finite_values() {
+        // NaN offset -> 0.0
+        let o = Opening::new(ArchId(1), f64::NAN, 0.9, 2.1, OpeningKind::Door);
+        assert_eq!(o.offset, 0.0);
+
+        // NaN width -> 0.9
+        let o2 = Opening::new(ArchId(1), 1.0, f64::NAN, 2.1, OpeningKind::Door);
+        assert_eq!(o2.width, 0.9);
+
+        // NaN height -> 2.1
+        let o3 = Opening::new(ArchId(1), 1.0, 0.9, f64::NAN, OpeningKind::Door);
+        assert_eq!(o3.height, 2.1);
+
+        // Inf values also clamp
+        let o4 = Opening::new(ArchId(1), f64::INFINITY, f64::INFINITY, f64::INFINITY, OpeningKind::Door);
+        assert_eq!(o4.offset, 0.0);
+        assert_eq!(o4.width, 0.9);
+        assert_eq!(o4.height, 2.1);
+
+        // -Inf also clamps (finite check passes, so value is used as-is)
+        let o5 = Opening::new(ArchId(1), f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY, OpeningKind::Door);
+        // -Infinity is not finite, so it clamps
+        assert_eq!(o5.offset, 0.0);
+        assert_eq!(o5.width, 0.9);
+        assert_eq!(o5.height, 2.1);
+
+        // Normal finite values pass through unchanged.
+        let o6 = Opening::new(ArchId(1), 3.5, 1.2, 2.8, OpeningKind::GarageDoor);
+        assert_eq!(o6.offset, 3.5);
+        assert_eq!(o6.width, 1.2);
+        assert_eq!(o6.height, 2.8);
+    }
+
+    #[test]
+    fn arch_model_round_trip_preserves_separate_id_spaces() {
+        let mut m = ArchModel::default();
+        // Create walls and openings interleaved.
+        let w0 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        let w1 = m.push_wall(Wall::new(Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), 0.2));
+        let o0 = m.push_opening(Opening::new(w0, 1.0, 0.9, 2.1, OpeningKind::Door));
+        let o1 = m.push_opening(Opening::new(w1, 1.0, 0.9, 2.1, OpeningKind::Window));
+        assert_eq!(w0, ArchId(0));
+        assert_eq!(w1, ArchId(1));
+        assert_eq!(o0, ArchId(0));
+        assert_eq!(o1, ArchId(1));
+
+        let json = serde_json::to_string(&m).unwrap();
+        let back: ArchModel = serde_json::from_str(&json).unwrap();
+
+        // Wall ids preserved.
+        assert_eq!(back.walls.len(), 2);
+        assert_eq!(back.walls[0].id, ArchId(0));
+        assert_eq!(back.walls[1].id, ArchId(1));
+
+        // Opening ids preserved (separate space, not wall ids).
+        assert_eq!(back.openings.len(), 2);
+        assert_eq!(back.openings[0].id, ArchId(0));
+        assert_eq!(back.openings[1].id, ArchId(1));
+        assert_eq!(back.openings[0].host, ArchId(0)); // host is wall id 0
+        assert_eq!(back.openings[1].host, ArchId(1)); // host is wall id 1
+
+        // Counters preserved.
+        assert_eq!(back.next_id, 2);
+        assert_eq!(back.next_opening_id, 2);
+        assert_eq!(back.next_room_id, 0);
+
+        // Labels still work after round trip.
+        assert_eq!(wall_label(back.walls[0].id), "w0");
+        assert_eq!(opening_label(back.openings[0].id), "o0");
+        assert_eq!(opening_label(back.openings[1].id), "o1");
+
+        // Handles still work.
+        let wh0 = arch_handle(back.walls[0].id);
+        let oh0 = opening_handle(back.openings[0].id);
+        assert_ne!(wh0, oh0);
+        assert!(is_opening_handle(oh0));
+        assert!(!is_opening_handle(wh0));
+        assert_eq!(handle_json(oh0), "a0008000");
+        assert_eq!(handle_json(wh0), "a0000000");
+    }
+
+    #[test]
     fn validate_flags_duplicate_opening_ids() {
         let mut m = ArchModel::default();
         let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
