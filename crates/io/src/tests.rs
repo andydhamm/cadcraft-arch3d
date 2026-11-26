@@ -1,4 +1,5 @@
 use cadcraft_color::Color;
+use cadcraft_doc::OpeningKind;
 use cadcraft_doc::*;
 use cadcraft_geom::{PolyVertex, Vec2, Vec3};
 
