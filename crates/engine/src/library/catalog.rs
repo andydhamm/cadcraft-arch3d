@@ -1137,7 +1137,7 @@ mod tests {
         // A valid user record is accepted, forced to the "user" catalog and editable.
         let v = json!({"record": {"id": "user:z", "name": "Z", "category": "Furniture"}});
         let r = user_record(&v).expect("valid user record");
-        assert_eq!((r.catalog, r.read_only), ("user", false));
+        assert_eq!((r.catalog.as_str(), r.read_only), ("user", false));
         // A bad profile in a user record is still refused (never repaired).
         let bad = json!({"record": {"id": "user:z", "name": "Z", "profile": [[0.0, 0.0], [0.01, 0.0]]}});
         assert!(user_record(&bad).is_err());
