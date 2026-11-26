@@ -2340,6 +2340,150 @@ mod tests {
         assert!(v2["railings"].is_null(), "railings key absent without the flag");
     }
 
+    /// A railing that follows a stair reports the stair's label in `follows`.
+    #[test]
+    fn inspect_railing_follows_stair_label() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let st_id = d.arch.push_stair(Stair {
+                    start: Vec2::new(1.0, 2.0),
+                    direction: 0.0,
+                    width: 1.0,
+                    from_level: 0,
+                    to_level: 1,
+                    rise: 2.7,
+                    shape: StairShape::Straight,
+                    risers: 16,
+                    riser_height: 0.16875,
+                    tread_depth: 0.254,
+                    treads: 15,
+                    run: 3.81,
+                    landing_depth: 0.0,
+                    well: vec![],
+                    well_room: None,
+                    ..Stair::default()
+                });
+                d.arch.push_railing(Railing {
+                    path: vec![Vec2::new(0.0, 0.0), Vec2::new(5.0, 0.0)],
+                    level: 1,
+                    height: 0.914,
+                    style: RailingStyle::Balusters,
+                    thickness: 0.05,
+                    baluster_gap: 0.099,
+                    follows: Some(st_id),
+                    ..Railing::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "railings": true }));
+        let rails = v["railings"].as_array().expect("railings array missing");
+        assert_eq!(rails.len(), 1, "expected one railing");
+        assert_eq!(rails[0]["follows"], "s0", "follows should be the stair label");
+    }
+
+    /// Stair and railing handles are lowercase hex with the correct proxy offsets.
+    #[test]
+    fn inspect_stair_and_railing_handle_formats() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_stair(Stair::default());
+                d.arch.push_railing(Railing::default());
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "stairs": true, "railings": true }));
+        let stairs = v["stairs"].as_array().expect("stairs array missing");
+        let rails = v["railings"].as_array().expect("railings array missing");
+        let stair_handle = stairs[0]["handle"].as_str().expect("stair handle must be a string");
+        let rail_handle = rails[0]["handle"].as_str().expect("railing handle must be a string");
+        assert_eq!(stair_handle, "a0020000", "stair handle must be a0020000, got {stair_handle}");
+        assert_eq!(rail_handle, "a0028000", "railing handle must be a0028000, got {rail_handle}");
+        assert!(stair_handle.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()), "stair handle must be lowercase hex");
+        assert!(rail_handle.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()), "railing handle must be lowercase hex");
+    }
+
+    /// A stair with NaN direction serializes direction as 0.0 (not null).
+    #[test]
+    fn inspect_stair_nan_direction_serializes_as_zero() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_stair(Stair { direction: f64::NAN, ..Stair::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "stairs": true }));
+        let stairs = v["stairs"].as_array().expect("stairs array missing");
+        assert_eq!(stairs.len(), 1, "expected one stair");
+        assert_eq!(stairs[0]["direction"], 0.0, "NaN direction should serialize as 0.0");
+    }
+
+    /// A room with NaN deck_height serializes deckHeight as null.
+    #[test]
+    fn inspect_room_nan_deck_height() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_room(Room {
+                    name: "Deck".into(),
+                    room_type: RoomType::Deck,
+                    level: 0,
+                    polygon: vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 3.0), Vec2::new(0.0, 3.0)],
+                    deck_height: Some(f64::NAN),
+                    ..Room::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "rooms": true }));
+        let rooms = v["rooms"].as_array().expect("rooms array missing");
+        assert_eq!(rooms.len(), 1, "expected one room");
+        assert!(rooms[0]["deckHeight"].is_null(), "NaN deckHeight should serialize as null");
+    }
+
+    /// A stair with an empty well polygon serializes well as an empty array.
+    #[test]
+    fn inspect_stair_empty_well() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_stair(Stair { well: vec![], ..Stair::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "stairs": true }));
+        let stairs = v["stairs"].as_array().expect("stairs array missing");
+        assert_eq!(stairs.len(), 1, "expected one stair");
+        let well = stairs[0]["well"].as_array().expect("well must be an array");
+        assert_eq!(well.len(), 0, "empty well should serialize as empty array");
+    }
+
+    /// A railing with an empty path serializes path as an empty array.
+    #[test]
+    fn inspect_railing_empty_path() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_railing(Railing { path: vec![], ..Railing::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "railings": true }));
+        let rails = v["railings"].as_array().expect("railings array missing");
+        assert_eq!(rails.len(), 1, "expected one railing");
+        let path = rails[0]["path"].as_array().expect("path must be an array");
+        assert_eq!(path.len(), 0, "empty path should serialize as empty array");
+    }
+
     /// A closed loop of 4 walls has 4 shapes but 8 joined ends (2 per corner).
     #[test]
     fn arch_inspect_counts_joins_for_closed_loop() {

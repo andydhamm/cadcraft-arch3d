@@ -169,13 +169,16 @@ impl Mesh {
     /// Append a closed prism (ring extruded from z0 to z1) to this mesh.
     ///
     /// The ring must be a polygon of at least 3 finite vertices with non-zero
-    /// area. A clockwise ring is automatically flipped to counter-clockwise so
-    /// that normals point outward. Both end caps and all four side faces per
-    /// edge are included. Side faces share vertices with the caps, so the
-    /// resulting mesh is a closed 2-manifold.
+    /// area, and `z0`/`z1` must be finite. A clockwise ring is automatically
+    /// flipped to counter-clockwise so that normals point outward. Both end
+    /// caps and all four side faces per edge are included. Side faces share
+    /// vertices with the caps, so the resulting mesh is a closed 2-manifold.
     ///
     /// World-box UVs: u = x (world), v = z (world).
     pub fn push_prism(&mut self, ring: &[Vec2], z0: f64, z1: f64) {
+        if !z0.is_finite() || !z1.is_finite() {
+            return;
+        }
         let n = ring.len() as u32;
         if n < 3 {
             return;
@@ -901,6 +904,25 @@ mod tests {
         let degenerate = WallShape::new(ArchId(1), vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)], (Vec2::ZERO, Vec2::ZERO));
         let m = crate::walls::extrude_wall(&degenerate, 2.5, 0.0, "wall");
         assert!(m.is_none(), "degenerate (2-vertex) wall must produce no mesh");
+    }
+
+    /// A non-finite `z0` or `z1` must be rejected before any vertex is emitted,
+    /// consistent with `push_prism_with_holes`. Previously the NaN/Inf height
+    /// leaked into the vertex positions and was only caught later by the scene's
+    /// finite filter; a direct caller could observe non-manifold NaN geometry.
+    #[test]
+    fn push_prism_rejects_non_finite_heights() {
+        let mut nan_z0 = Mesh::new("wall", ArchId(1));
+        nan_z0.push_prism(&square_ring(), f64::NAN, 2.5);
+        assert!(nan_z0.positions.is_empty(), "NaN z0 must emit no positions");
+        assert!(nan_z0.normals.is_empty(), "NaN z0 must emit no normals");
+        assert!(nan_z0.indices.is_empty(), "NaN z0 must emit no indices");
+
+        let mut inf_z1 = Mesh::new("wall", ArchId(1));
+        inf_z1.push_prism(&square_ring(), 0.0, f64::INFINITY);
+        assert!(inf_z1.positions.is_empty(), "Inf z1 must emit no positions");
+        assert!(inf_z1.normals.is_empty(), "Inf z1 must emit no normals");
+        assert!(inf_z1.indices.is_empty(), "Inf z1 must emit no indices");
     }
 
     /// Properly-crossing segments return true; touching, collinear, or parallel
@@ -1913,5 +1935,71 @@ mod tests {
         let mut m = Mesh::new("wall", ArchId(1));
         m.push_prism(&ring, 0.0, 2.5);
         m
+    }
+
+    /// Reversing the winding of the same ring must produce an identical mesh:
+    /// `push_prism` normalises a CW ring to CCW before any vertex is emitted, so
+    /// a CW ring and its CCW reversal feed the identical input to the rest of the
+    /// function and must emit bit-identical geometry. Pins the determinism of the
+    /// single-`triangulate` p2 change across both winding directions.
+    #[test]
+    fn push_prism_cw_and_ccw_reversed_rings_produce_identical_meshes() {
+        let ccw = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 4.0), Vec2::new(1.0, 3.0), Vec2::new(0.0, 4.0)];
+        let cw: Vec<Vec2> = ccw.iter().rev().cloned().collect();
+        let mut m_a = Mesh::new("wall", ArchId(1));
+        m_a.push_prism(&cw, 0.0, 2.5);
+        let mut m_b = Mesh::new("wall", ArchId(1));
+        m_b.push_prism(&ccw, 0.0, 2.5);
+        assert_eq!(m_a.positions, m_b.positions, "CW and reversed-CCW rings must emit the same positions");
+        assert_eq!(m_a.normals, m_b.normals, "CW and reversed-CCW rings must emit the same normals");
+        assert_eq!(m_a.uvs, m_b.uvs, "CW and reversed-CCW rings must emit the same uvs");
+        assert_eq!(m_a.indices, m_b.indices, "CW and reversed-CCW rings must emit the same indices");
+        assert!(m_a.is_manifold(), "CW-normalised ring must be a closed manifold");
+        assert!(m_b.is_manifold(), "CCW ring must be a closed manifold");
+    }
+
+    /// A concave (reflex) ring must still yield a closed 2-manifold: the caps
+    /// share one `triangulate(&ring)` result and every side quad shares its ring
+    /// edge with exactly one cap triangle, so the position-based edge pairing in
+    /// `is_manifold` closes up. A 5-gon gives 2 caps × 3 triangles + 5 side quads
+    /// × 2 triangles = 16 triangles.
+    #[test]
+    fn push_prism_concave_ring_is_manifold() {
+        let ring = concave_ring();
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism(&ring, 0.0, 2.5);
+        assert!(m.is_manifold(), "concave ring prism must be a closed manifold");
+        assert_eq!(m.triangle_count(), 16, "expected 16 triangles for a 5-gon prism, got {}", m.triangle_count());
+    }
+
+    /// A non-finite vertex in the ring (like a non-finite `z0`/`z1`) is rejected
+    /// before any vertex is emitted, so a direct caller never observes NaN geometry.
+    #[test]
+    fn push_prism_nan_vertex_in_ring_emits_nothing() {
+        let mut ring = square_ring();
+        ring[1].y = f64::NAN;
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism(&ring, 0.0, 2.5);
+        assert!(m.positions.is_empty(), "NaN ring vertex must emit no positions");
+        assert!(m.normals.is_empty(), "NaN ring vertex must emit no normals");
+        assert!(m.uvs.is_empty(), "NaN ring vertex must emit no uvs");
+        assert!(m.indices.is_empty(), "NaN ring vertex must emit no indices");
+        assert!(m.is_manifold(), "empty mesh must remain a closed manifold");
+    }
+
+    /// Huge ring coordinates must be emitted as finite f32 and still form a
+    /// closed 2-manifold (the position-key quantisation uses i64, so a 1e6 m
+    /// scale is safely representable).
+    #[test]
+    fn push_prism_huge_coordinates_is_manifold() {
+        let s = 1e6;
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(s, 0.0), Vec2::new(s, s), Vec2::new(0.0, s)];
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism(&ring, 0.0, 1e5);
+        for p in &m.positions {
+            assert!(p[0].is_finite() && p[1].is_finite() && p[2].is_finite(), "huge ring must emit only finite vertices: {:?}", p);
+        }
+        assert!(m.is_manifold(), "1e6 m square prism must be a closed manifold");
+        assert_eq!(m.triangle_count(), 12, "expected 12 triangles for a 4-gon prism, got {}", m.triangle_count());
     }
 }
