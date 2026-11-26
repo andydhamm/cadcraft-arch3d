@@ -5823,7 +5823,7 @@ mod tests {
     fn per_wall_messages_are_keyed_by_arch_id_display() {
         let mut m = ArchModel::default();
         let i0 = m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
-        let i1 = m.push_wall(Wall { base_level: 99, ..Wall::default() });
+        let i1 = m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(1.0, 0.0), base_level: 99, ..Wall::default() });
         let i2 = m.push_wall(Wall { start: Vec2::new(f64::INFINITY, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
         let msgs = m.validate();
         assert_eq!(msgs.len(), 3);
@@ -5873,5 +5873,65 @@ mod tests {
         assert_eq!(back.walls[0].end, Vec2::new(0.0, 0.0));
         assert!(m.validate().iter().any(|s| s.contains("zero or near-zero length")), "in-memory zero-length wall not flagged");
         assert!(back.validate().iter().any(|s| s.contains("zero or near-zero length")), "zero-length wall not flagged after round trip");
+    }
+
+    /// A single wall with several independent violations reports *each* one, in the spec's
+    /// per-wall order (length, type, level); only non-finite endpoints skip the rest.
+    #[test]
+    fn independent_wall_checks_report_in_spec_order() {
+        let mut m = ArchModel::default();
+        let id =
+            m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), wall_type: "Bogus".into(), base_level: 99, ..Wall::default() });
+        let msgs = m.validate();
+        assert_eq!(msgs.len(), 3);
+        assert_eq!(msgs[0], format!("{}: zero or near-zero length", id));
+        assert_eq!(msgs[1], format!("{}: unknown wall type `Bogus`", id));
+        assert_eq!(msgs[2], format!("{}: unknown level 99", id));
+    }
+
+    /// Duplicate-id messages are emitted in first-appearance order, one per repeated id,
+    /// regardless of which wall copies the id.
+    #[test]
+    fn duplicate_wall_id_messages_appear_in_first_appearance_order() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), 0.2));
+        m.push_wall(Wall::new(Vec2::new(2.0, 0.0), Vec2::new(3.0, 0.0), 0.2));
+        m.push_wall(Wall::new(Vec2::new(0.0, 2.0), Vec2::new(1.0, 2.0), 0.2));
+        m.push_wall(Wall::new(Vec2::new(2.0, 2.0), Vec2::new(3.0, 2.0), 0.2));
+        m.push_wall(Wall::new(Vec2::new(0.0, 4.0), Vec2::new(1.0, 4.0), 0.2));
+        m.walls[2].id = ArchId(0); // repeats id 0 (first seen at index 0)
+        m.walls[4].id = ArchId(1); // repeats id 1 (first seen at index 1)
+        assert_eq!(m.validate(), vec!["duplicate wall id w0", "duplicate wall id w1"]);
+    }
+
+    /// The thickness message is exactly `w{n}: thickness {t} below minimum {MIN_WALL_THICKNESS}`,
+    /// with `{t}` as Rust's `Display` of the offending value (NaN stays `NaN`).
+    #[test]
+    fn thickness_message_formats_value_and_minimum_exactly() {
+        let mut m = ArchModel::default();
+        let id = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), f64::NAN));
+        assert_eq!(m.validate(), vec![format!("{}: thickness NaN below minimum {}", id, MIN_WALL_THICKNESS)]);
+
+        let mut m2 = ArchModel::default();
+        let id2 = m2.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), -1.0));
+        assert_eq!(m2.validate(), vec![format!("{}: thickness -1 below minimum {}", id2, MIN_WALL_THICKNESS)]);
+    }
+
+    /// validate() is deterministic and does not mutate the wall data: two calls on the same
+    /// model yield identical messages and the walls are unchanged.
+    #[test]
+    fn validate_is_deterministic_and_does_not_mutate_walls() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.0));
+        m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), f64::NAN));
+        let before = m.walls.clone();
+        let a = m.validate();
+        let b = m.validate();
+        assert_eq!(a, b);
+        assert_eq!(m.walls, before);
+        assert_eq!(
+            a,
+            vec![format!("w0: thickness 0 below minimum {}", MIN_WALL_THICKNESS), format!("w1: thickness NaN below minimum {}", MIN_WALL_THICKNESS),]
+        );
     }
 }
