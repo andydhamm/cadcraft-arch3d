@@ -559,6 +559,121 @@ fn rooted_entities_have_unique_global_ids() {
     }
 }
 
+// Spec: every IFCTRIANGULATEDFACESET's 4th parameter is a list of 3-integer
+// lists, each index in 1..=the point count of the point list its 1st parameter
+// references. The existing cartesian test only checked structure; this pins the
+// bound check that was left as a TODO there.
+#[test]
+fn triangulated_facesets_reference_valid_point_indices() {
+    let mut session = build_demo_house();
+    let text = export_ifc(&mut session);
+    let instances = parse_data(&text).expect("Failed to parse DATA section");
+
+    let mut saw_face_set = false;
+    for (n, (name, params)) in &instances {
+        if name != "IFCTRIANGULATEDFACESET" {
+            continue;
+        }
+        saw_face_set = true;
+        // 1st param: the point list the face set indexes into; its point count is the bound.
+        let point_list_count = match params.first() {
+            Some(Token::Ref(r)) => match instances.get(r).map(|(_, p)| p.first()) {
+                Some(Token::List(pts)) => pts.len(),
+                _ => 0,
+            },
+            _ => 0,
+        };
+        // 4th param: the index list, a list of 3-integer lists.
+        match params.get(3) {
+            Some(Token::List(indices)) => {
+                assert!(!indices.is_empty(), "#{} {} has an empty index list", n, name);
+                for tri in indices {
+                    if let Token::List(vals) = tri {
+                        assert_eq!(vals.len(), 3, "#{} {} triangle has {} indices", n, name, vals.len());
+                        for v in vals {
+                            match v {
+                                Token::Int(i) => {
+                                    assert!(
+                                        *i >= 1 && *i <= point_list_count as i64,
+                                        "#{} {} index {i} is out of 1..{} (point list has {} pts)",
+                                        n,
+                                        name,
+                                        i,
+                                        point_list_count,
+                                        point_list_count
+                                    );
+                                }
+                                _ => panic!("#{} {} index {v} is not an integer", n, name),
+                            }
+                        }
+                    } else {
+                        panic!("#{} {} index triangle is not a list of three", n, name);
+                    }
+                }
+            }
+            _ => panic!("#{n} {name} 4th param is not a list of index lists"),
+        }
+    }
+    assert!(saw_face_set, "no IFCTRIANGULATEDFACESET found; the demo house should have bodies");
+}
+
+// Spec: a string is '...' with '' as an escaped quote and \Xhh / \X2...\X0\
+// sequences staying inside the string. Those must land in one String token and
+// never break the enclosing list.
+#[test]
+fn step_string_tokens_keep_escaped_quotes_and_hex_sequences_inside() {
+    // 'a''b' -> a'b ; 'x\X41y' -> x\X41y (the \Xhh stays inside the string).
+    let mut p = StepParser::new("('a''b','x\\X41y',7)");
+    match p.parse_params() {
+        Ok(v) => {
+            assert_eq!(v.len(), 3, "{v}");
+            assert_eq!(v[0], Token::String("a'b".into()), "escaped quote broke the string: {v}");
+            assert_eq!(v[1], Token::String("x\\X41y".into()), "hex escape left the string: {v}");
+            assert_eq!(v[2], Token::Int(7));
+        }
+        Err(e) => panic!("parser rejected a valid escaped-string list: {e}"),
+    }
+}
+
+// Spec: "Any other character sequence is a parse error." The parser must actually
+// reject malformed STEP rather than silently accept it.
+#[test]
+fn step_parser_rejects_malformed_parameter_lists() {
+    // Each input is a malformed parameter list: an unterminated string, a
+    // missing closing paren, and a dangling '#'. None may parse to a valid token list.
+    let malformed = ["('unterminated", "(1, 2, 3", "(#"];
+    for bad in malformed {
+        let mut p = StepParser::new(bad);
+        match p.parse_params() {
+            Err(_) => {}
+            Ok(v) => panic!("parser accepted malformed list {bad:?} as {v:?}"),
+        }
+    }
+}
+
+// Spec token set: #n ref, $, *, string, .enum., int, real, list (...) and a typed
+// value IFCNAME(token). A well-formed list exercising each kind in order must
+// parse to exactly those tokens.
+#[test]
+fn step_parser_accepts_the_full_token_set_in_order() {
+    let mut p = StepParser::new("('name','.ENUM.',7,3.5,(1,2),#2,$,*,IFCNAME(1.5))");
+    match p.parse_params() {
+        Ok(v) => {
+            assert_eq!(v.len(), 9, "{v}");
+            assert_eq!(v[0], Token::String("name".into()));
+            assert_eq!(v[1], Token::Enum("ENUM"));
+            assert_eq!(v[2], Token::Int(7));
+            assert_eq!(v[3], Token::Real(3.5));
+            assert_eq!(v[4], Token::List(vec![Token::Int(1), Token::Int(2)]));
+            assert_eq!(v[5], Token::Ref(2));
+            assert_eq!(v[6], Token::Dollar);
+            assert_eq!(v[7], Token::Star);
+            assert_eq!(v[8], Token::Typed("IFCNAME", Box::new(Token::Real(1.5))));
+        }
+        Err(e) => panic!("parser rejected a valid token list: {e}"),
+    }
+}
+
 fn is_global_id(s: &str) -> bool {
     if s.len() != 22 {
         return false;
