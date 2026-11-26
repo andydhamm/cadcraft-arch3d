@@ -978,7 +978,7 @@ mod tests {
 
         // If we run a command that *doesn't* change the drawing (e.g. a read-only command),
         // the Arc should be identical.
-        let before_arc_2 = s.doc().unwrap().clone();
+        let before_arc_2 = s.doc().unwrap();
         s.execute("arch.inspect", &json!({})).unwrap();
         let after_arc_2 = s.doc().unwrap();
 
