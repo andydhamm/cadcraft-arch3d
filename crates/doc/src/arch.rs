@@ -3890,11 +3890,11 @@ mod tests {
         // Openings must still start at o0.
         let o0 = m.push_opening(Opening::new(ArchId(0), 0.5, 0.9, 2.1, OpeningKind::Door));
         assert_eq!(o0, ArchId(0), "first opening must be o0 even after 50 walls");
-        assert_eq!(o0.label, "o0".to_string(), "opening 0 label must be o0");
+        assert_eq!(opening_label(o0), "o0".to_string(), "opening 0 label must be o0");
 
         let o1 = m.push_opening(Opening::new(ArchId(1), 0.5, 0.9, 2.1, OpeningKind::Window));
         assert_eq!(o1, ArchId(1));
-        assert_eq!(o1.label, "o1".to_string(), "opening 1 label must be o1");
+        assert_eq!(opening_label(o1), "o1".to_string(), "opening 1 label must be o1");
 
         // Wall and room counters are unaffected.
         assert_eq!(m.next_wall_id(), ArchId(50));
@@ -3905,6 +3905,94 @@ mod tests {
         let w50 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), 0.2));
         assert_eq!(w50, ArchId(50));
         assert_eq!(m.next_opening_id, 2, "wall creation must not advance the opening counter");
+    }
+
+    #[test]
+    fn opening_id_counter_does_not_reuse_ids_after_removal() {
+        let mut m = ArchModel::default();
+        let o0 = m.push_opening(Opening::new(ArchId(0), 1.0, 0.9, 2.1, OpeningKind::Door));
+        let o1 = m.push_opening(Opening::new(ArchId(0), 1.5, 0.9, 2.1, OpeningKind::Door));
+        assert_eq!((o0, o1), (ArchId(0), ArchId(1)));
+        assert_eq!(m.next_opening_id, 2);
+
+        // Removing an opening frees no id: the counter is monotonic and never decrements,
+        // so a later push must get a fresh id rather than reusing o0/o1.
+        assert_eq!(m.remove_opening(o0), true);
+        assert_eq!(m.remove_opening(o1), true);
+        let o2 = m.push_opening(Opening::new(ArchId(0), 1.0, 0.9, 2.1, OpeningKind::Window));
+        assert_eq!(o2, ArchId(2), "a fresh opening after two removals must not reuse o0/o1");
+        assert_eq!(m.openings.len(), 1);
+        assert_eq!(m.openings[0].id, o2);
+        assert_eq!(m.next_opening_id, 3, "removals must not rewind the counter");
+        assert!(m.opening(ArchId(0)).is_none(), "o0 must be gone");
+        assert!(m.opening(ArchId(1)).is_none(), "o1 must be gone");
+        assert_eq!(m.opening(ArchId(2)).unwrap().kind, OpeningKind::Window);
+
+        // Removing a missing id is a no-op and does not change the counter.
+        assert_eq!(m.remove_opening(ArchId(999)), false);
+        assert_eq!(m.next_opening_id, 3);
+    }
+
+    #[test]
+    fn opening_and_wall_handles_share_a000_prefix_and_are_distinct() {
+        let id = ArchId(4);
+        let wh = arch_handle(id);
+        let oh = opening_handle(id);
+        // Both live inside the hex `a000…` range that picking/selection already recognise.
+        let wh_hex = wh.hex().to_lowercase();
+        let oh_hex = oh.hex().to_lowercase();
+        assert!(wh_hex.starts_with("ffffffff0000"), "wall handle hex is `{wh_hex}`");
+        assert!(oh_hex.starts_with("ffffffff0000"), "opening handle hex is `{oh_hex}`");
+        // Both are recognisable as arch handles; only the opening one is an opening handle.
+        assert!(is_arch_handle(wh));
+        assert!(is_arch_handle(oh));
+        assert!(is_opening_handle(oh));
+        assert!(!is_opening_handle(wh));
+        // The two proxies must never collide.
+        assert_ne!(wh, oh);
+        // The JSON spelling keeps the `a000…` form for both, with the opening low bits
+        // offset by 0x8000 from its wall counterpart.
+        assert_eq!(handle_json(wh), "a0000004");
+        assert_eq!(handle_json(oh), "a0008004");
+    }
+
+    #[test]
+    fn validate_rejects_manually_constructed_non_finite_opening() {
+        let mut m = ArchModel::default();
+        let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+
+        // `push_opening` does not clamp (only `Opening::new` does), so a NaN/Inf numeric
+        // carries straight into the model; validation must reject it.
+        let mut bad = Opening::new(wid, 1.0, f64::NAN, 2.1, OpeningKind::Door);
+        m.push_opening(bad);
+        let msgs = m.validate();
+        assert!(msgs.iter().any(|s| s.contains("non-finite")), "non-finite opening width not reported: {msgs:?}");
+
+        // A missing host must also be reported for a finite opening.
+        let mut ghost = Opening::new(wid, 1.0, 0.9, 2.1, OpeningKind::Door);
+        ghost.host = ArchId(999);
+        m.push_opening(ghost);
+        let msgs2 = m.validate();
+        assert!(msgs2.iter().any(|s| s.contains("unknown host wall")), "missing host not reported: {msgs2:?}");
+
+        // A negative sill is finite, so the sill check (not the non-finite one) must fire.
+        let mut neg = Opening::new(wid, 1.0, 0.9, 2.1, OpeningKind::Door);
+        neg.sill = -1.0;
+        m.push_opening(neg);
+        let msgs3 = m.validate();
+        assert!(msgs3.iter().any(|s| s.contains("negative sill")), "negative sill not reported: {msgs3:?}");
+    }
+
+    #[test]
+    fn wall_and_opening_labels_and_display_keep_their_forms() {
+        assert_eq!(wall_label(ArchId(0)), "w0");
+        assert_eq!(wall_label(ArchId(42)), "w42");
+        assert_eq!(opening_label(ArchId(0)), "o0");
+        assert_eq!(opening_label(ArchId(42)), "o42");
+        // ArchId::Display stays the legacy `w{n}` even for an opening id (it is used in
+        // error messages); the kind is only recovered through the separate label functions.
+        assert_eq!(format!("{}", ArchId(0)), "w0");
+        assert_eq!(format!("{}", ArchId(7)), "w7");
     }
 
     #[test]
