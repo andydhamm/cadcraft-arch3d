@@ -1433,8 +1433,10 @@ mod tests {
         // point_in_polygon with NaN vertices is unreliable, but if it finds the room,
         // room_centre should check vertex finiteness.
         run(&mut s, PLACE, json!({ "item": "armchair", "at": [0.5, 0.5] }));
-        let e = refused(&mut s, CENTRE, json!({ "id": "f0", "on": "room" }));
+        let undo_before = s.state().map(|st| st.undo.len()).unwrap_or_default();
+        let e = s.execute(CENTRE, &json!({ "id": "f0", "on": "room" })).unwrap_err().to_string();
         assert!(e.contains("not in a room") || e.contains("no finite extent"), "{e}");
+        assert_eq!(s.state().map(|st| st.undo.len()).unwrap_or_default(), undo_before, "{e} made an undo step");
         assert_eq!(model(&s).furnishings[0].at, [0.5, 0.5], "the furnishing stays put");
     }
 
@@ -1500,9 +1502,12 @@ mod tests {
                 f.at = [f64::NAN, f64::NAN];
             }
         }
-        let e = refused(&mut s, CENTRE, json!({ "id": "f0", "on": "room" }));
-        assert!(e.contains("not in a room") || e.contains("no finite extent"), "{e}");
-        let e = refused(&mut s, CENTRE, json!({ "id": "f0", "on": "wall" }));
-        assert!(e.contains("no wall face within 0.3 m"), "{e}");
+        let undo_before = s.state().map(|st| st.undo.len()).unwrap_or_default();
+        let e = s.execute(CENTRE, &json!({ "id": "f0", "on": "room" })).unwrap_err().to_string();
+        assert!(e.contains("no finite position") || e.contains("not in a room") || e.contains("no finite extent"), "{e}");
+        assert_eq!(s.state().map(|st| st.undo.len()).unwrap_or_default(), undo_before, "{e} made an undo step");
+        let e = s.execute(CENTRE, &json!({ "id": "f0", "on": "wall" })).unwrap_err().to_string();
+        assert!(e.contains("no finite position") || e.contains("no wall face within 0.3 m"), "{e}");
+        assert_eq!(s.state().map(|st| st.undo.len()).unwrap_or_default(), undo_before, "{e} made an undo step");
     }
 }
