@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-26 00:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-26 00:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23**
 
-12,334 workspace tests passing at the last merge · 1428 segments merged in all · 0 of 15 seats working
+12,339 workspace tests passing at the last merge · 1429 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -33,7 +33,7 @@ Updated 2026-11-26 00:00 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — |  · expected done Nov 26 05:29–Dec 11 02:04 UTC |
+| 23 | Phase 23 | pending | — |  · expected done Nov 26 05:44–Dec 11 02:19 UTC |
 
 ## Phase 23 segments
 
@@ -44,6 +44,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 26 00:01 | `harden-p15-render3d-clay` | merged | 12,339 pass | tturbo-mac |
 | Nov 25 23:35 | `harden-p15-doc-electrical` | merged | 12,334 pass | tturbo-mac |
 | Nov 25 22:50 | `harden-p15-render3d-technical` | merged | 12,327 pass | tturbo-mac |
 | Nov 25 22:28 | `harden-p15-arch3d-spanning-walls` | merged | 12,319 pass | tturbo-mac |
@@ -55,7 +56,6 @@ none yet
 | Nov 25 15:29 | `harden-p16-tray-i18n` | merged | 12,275 pass | tturbo-mac |
 | Nov 25 14:48 | `harden-p22g-learned-kitchen-error` | merged | 12,275 pass | tturbo-mac |
 | Nov 25 09:00 | `harden-p15-docs-user-guide` | merged | 12,271 pass | tturbo-mac |
-| Nov 25 08:33 | `harden-p16-tray-commands` | refused | 12,275 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
