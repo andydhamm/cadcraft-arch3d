@@ -2841,7 +2841,7 @@ impl ArchModel {
                 continue;
             }
 
-            if !(w.thickness > MIN_WALL_THICKNESS) {
+            if !w.thickness.is_finite() || !(w.thickness > MIN_WALL_THICKNESS) {
                 messages.push(format!("{}: thickness {} below minimum {}", id, w.thickness, MIN_WALL_THICKNESS));
             }
 
@@ -2863,19 +2863,19 @@ impl ArchModel {
             }
         }
 
+        // Duplicate ids, one message each, in first-appearance order (walk the
+        // walls twice: mark ids seen twice, then emit in wall order).
         let mut seen = std::collections::HashSet::new();
-        let mut dupes = Vec::new();
+        let mut dupes = std::collections::HashSet::new();
         for w in &self.walls {
-            if seen.contains(&w.id) {
-                if !dupes.contains(&w.id) {
-                    dupes.push(w.id);
-                }
-            } else {
-                seen.insert(w.id);
+            if !seen.insert(w.id) {
+                dupes.insert(w.id);
             }
         }
-        for id in &dupes {
-            messages.push(format!("duplicate wall id {}", id));
+        for w in &self.walls {
+            if dupes.remove(&w.id) {
+                messages.push(format!("duplicate wall id {}", w.id));
+            }
         }
 
         if self.openings.len() > MAX_OPENINGS {
