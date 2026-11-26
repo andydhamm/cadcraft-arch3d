@@ -5923,7 +5923,7 @@ mod tests {
     fn validate_is_deterministic_and_does_not_mutate_walls() {
         let mut m = ArchModel::default();
         m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.0));
-        m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), f64::NAN));
+        m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), f64::INFINITY));
         let before = m.walls.clone();
         let a = m.validate();
         let b = m.validate();
@@ -5931,7 +5931,7 @@ mod tests {
         assert_eq!(m.walls, before);
         assert_eq!(
             a,
-            vec![format!("w0: thickness 0 below minimum {}", MIN_WALL_THICKNESS), format!("w1: thickness NaN below minimum {}", MIN_WALL_THICKNESS),]
+            vec![format!("w0: thickness 0 below minimum {}", MIN_WALL_THICKNESS), format!("w1: thickness inf below minimum {}", MIN_WALL_THICKNESS),]
         );
     }
 }
