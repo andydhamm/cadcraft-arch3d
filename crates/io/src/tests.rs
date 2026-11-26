@@ -1,4 +1,5 @@
 use cadcraft_color::Color;
+use cadcraft_doc::OpeningKind;
 use cadcraft_doc::*;
 use cadcraft_geom::{PolyVertex, Vec2, Vec3};
 
@@ -1904,30 +1905,6 @@ fn empty_arch_writes_no_xrecord() {
 }
 
 #[test]
-fn arch_xrecord_roundtrip_stability() {
-    let mut d = sample();
-    d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
-    d.arch.push_wall(Wall::new(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), 0.15));
-
-    let text1 = write_dxf(&d);
-    let back1 = read_dxf(text1.as_bytes()).unwrap();
-
-    // Verify walls survived
-    assert_eq!(back1.arch.walls.len(), 2);
-    assert_eq!(back1.arch.walls[0].start, Vec2::new(0.0, 0.0));
-
-    // Write again and verify stability
-    let text2 = write_dxf(&back1);
-    let back2 = read_dxf(text2.as_bytes()).unwrap();
-
-    assert_eq!(back2.arch.walls.len(), 2);
-    assert_eq!(back2.arch.walls, back1.arch.walls);
-
-    // Ensure only one XRECORD entry exists in the second write too
-    assert_eq!(text2.matches("CADCRAFT_ARCH").count(), 1);
-}
-
-#[test]
 fn arch_xrecord_handles_empty_model_gracefully() {
     let mut d = Drawing::new_metric();
     // Explicitly ensure arch is empty
@@ -1986,6 +1963,71 @@ fn arch_xrecord_ignores_garbage_payload() {
     let back = read_dxf(corrupt_text.as_bytes()).unwrap();
     // Should not panic, and should likely result in empty arch model because parsing failed
     assert!(back.arch.is_empty() || back.arch.walls.is_empty());
+}
+
+#[test]
+fn arch_xrecord_roundtrip_stability() {
+    let mut d = sample();
+    d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+    d.arch.push_wall(Wall::new(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), 0.15));
+
+    let text1 = write_dxf(&d);
+    let back1 = read_dxf(text1.as_bytes()).unwrap();
+
+    // Verify walls survived
+    assert_eq!(back1.arch.walls.len(), 2);
+    assert_eq!(back1.arch.walls[0].start, Vec2::new(0.0, 0.0));
+
+    // Write again and verify stability
+    let text2 = write_dxf(&back1);
+    let back2 = read_dxf(text2.as_bytes()).unwrap();
+
+    assert_eq!(back2.arch.walls.len(), 2);
+    assert_eq!(back2.arch.walls, back1.arch.walls);
+
+    // Ensure only one XRECORD entry exists in the second write too
+    assert_eq!(text2.matches("CADCRAFT_ARCH").count(), 1);
+}
+
+#[test]
+fn arch_xrecord_handles_nan_in_wall_geometry() {
+    let mut d = Drawing::new_metric();
+    // Push a wall with NaN coordinates
+    d.arch.push_wall(Wall { start: Vec2::new(f64::NAN, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, ..Default::default() });
+
+    let text = write_dxf(&d);
+    // The writer should either skip the wall or write it as-is (JSON allows NaN as null or string depending on config, but serde_json usually errors or skips).
+    // If it writes, the reader should handle it gracefully (skip or default).
+    // We just ensure it doesn't panic.
+
+    let back = read_dxf(text.as_bytes()).unwrap();
+    // Depending on serialization, the wall might be dropped or have default values.
+    // We just check that the model is valid (no panic).
+    assert!(back.arch.walls.len() <= 1);
+}
+
+#[test]
+fn arch_xrecord_handles_huge_values() {
+    let mut d = Drawing::new_metric();
+    d.arch.push_wall(Wall { start: Vec2::new(1e308, 0.0), end: Vec2::new(0.0, 1e308), thickness: 1e308, ..Default::default() });
+
+    let text = write_dxf(&d);
+    let back = read_dxf(text.as_bytes()).unwrap();
+
+    // Should not panic. Values might be clamped or preserved.
+    assert!(back.arch.walls.len() <= 1);
+}
+
+#[test]
+fn arch_xrecord_handles_zero_length_wall() {
+    let mut d = Drawing::new_metric();
+    d.arch.push_wall(Wall { start: Vec2::new(5.0, 5.0), end: Vec2::new(5.0, 5.0), thickness: 0.2, ..Default::default() });
+
+    let text = write_dxf(&d);
+    let back = read_dxf(text.as_bytes()).unwrap();
+
+    // Zero-length walls are often invalid or skipped by validation, but round-trip should not panic.
+    assert!(back.arch.walls.len() <= 1);
 }
 
 #[test]
