@@ -2023,22 +2023,24 @@ fn layer_states_roundtrip_next_to_constraints() {
         description: "walls \\ hidden".into(),
         ..Layer::default()
     });
-    d.layer_states.push(LayerState { name: "Plot".into(), layers: d.layers.clone(), ..Default::default() });
+    d.layer_states.push(LayerState::new("Plot", d.layers.clone(), "Wände"));
     let mut off = d.layers.clone();
     for l in &mut off {
         (l.on, l.frozen, l.locked, l.plot) = (false, true, true, false);
     }
-    d.layer_states.push(LayerState { name: "All off".into(), layers: off, ..Default::default() });
+    d.layer_states.push(LayerState::new("All off", off, ""));
     let text = write_dxf(&d);
-    assert!(text.contains("CADCRAFT_LAYERSTATES"));
+    // AutoCAD's dictionary holds both states; CADCraft's record isn't needed.
+    assert!(text.contains("ACAD_LAYERSTATES") && !text.contains("CADCRAFT_LAYERSTATES"));
     let back = read_dxf(text.as_bytes()).unwrap();
     assert_eq!(back.layer_states, d.layer_states);
     assert_eq!(back.constraints, constraints);
     assert_eq!(roundtrip(&back).layer_states, d.layer_states);
     #[cfg(not(target_arch = "wasm32"))]
     assert_eq!(read(&write(&d, "x.dwg").unwrap(), "x.dwg").unwrap().layer_states, d.layer_states);
-    // Drawings without saved layer states carry no record.
-    assert!(!write_dxf(&Drawing::new_imperial()).contains("CADCRAFT_LAYERSTATES"));
+    // Drawings without saved layer states carry neither.
+    let none = write_dxf(&Drawing::new_imperial());
+    assert!(!none.contains("CADCRAFT_LAYERSTATES") && !none.contains("ACAD_LAYERSTATES"));
 }
 
 fn table_sample() -> Table {
@@ -4054,7 +4056,7 @@ fn reading_a_drawing_with_only_an_opening_reports_metres() {
 #[test]
 fn layer_state_without_rules_serializes_as_before() {
     let mut d = Drawing::new_imperial();
-    d.layer_states.push(LayerState { name: "Test".into(), layers: d.layers.clone(), ..Default::default() });
+    d.layer_states.push(LayerState::new("Test", d.layers.clone(), ""));
     let text = write_dxf(&d);
     // A rule-less state must not emit a "rules" key, so older readers see the same payload.
     assert!(!text.contains("\"rules\""));
@@ -4064,7 +4066,7 @@ fn layer_state_without_rules_serializes_as_before() {
 fn layer_state_with_rules_roundtrips() {
     use cadcraft_doc::LayerRule;
     let mut d = Drawing::new_imperial();
-    let mut state = LayerState { name: "Test".into(), layers: d.layers.clone(), ..Default::default() };
+    let mut state = LayerState::new("Test", d.layers.clone(), "");
     state.rules.push(LayerRule { pattern: "E-*".into(), on: Some(false), transparency: None });
     state.rules.push(LayerRule { pattern: "*".into(), on: None, transparency: Some(70) });
     d.layer_states.push(state);
@@ -4078,4 +4080,14 @@ fn layer_state_with_rules_roundtrips() {
     assert_eq!(back.layer_states[0].rules[1].pattern, "*");
     assert_eq!(back.layer_states[0].rules[1].on, None);
     assert_eq!(back.layer_states[0].rules[1].transparency, Some(70));
+}
+
+/// A layer state of CADCraft's own record from before states had a mask, a current layer and a
+/// description (its JSON holds only the name and the layers) restores every property and names no
+/// current layer.
+#[test]
+fn a_layer_state_saved_before_masks_restores_everything() {
+    let states = crate::dxf_ext::parse_layer_states(r#"{"version":1,"states":[{"name":"S","layers":[]}]}"#).unwrap();
+    let got: Vec<(&str, u32, &str, &str)> = states.iter().map(|s| (s.name.as_str(), s.mask, s.current.as_str(), s.description.as_str())).collect();
+    assert_eq!(got, [("S", LayerState::ALL, "", "")]);
 }
