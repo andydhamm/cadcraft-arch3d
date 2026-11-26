@@ -5797,4 +5797,81 @@ mod tests {
             assert_eq!(back, k, "{k:?}");
         }
     }
+
+    /// A wall whose endpoints are non-finite reports *only* "non-finite endpoints" and skips
+    /// the remaining checks (thickness, length, wall type, level), exactly as the spec's
+    /// "skip the remaining geometric checks for that wall" rule requires.
+    #[test]
+    fn non_finite_endpoints_skip_the_remaining_checks() {
+        let mut m = ArchModel::default();
+        let id = m.push_wall(Wall {
+            start: Vec2::new(f64::NAN, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.0,            // would be flagged if not skipped
+            wall_type: "Bogus".into(), // would be flagged if not skipped
+            base_level: 99,            // would be flagged if not skipped
+            ..Wall::default()
+        });
+        let msgs = m.validate();
+        assert_eq!(msgs.len(), 1, "expected only the endpoints message: {msgs:?}");
+        assert_eq!(msgs[0], format!("{}: non-finite endpoints", id));
+    }
+
+    /// Every per-wall message is keyed by the wall id via `ArchId`'s `Display`
+    /// (`w{n}`) and is emitted in `walls` order, one per violating property.
+    #[test]
+    fn per_wall_messages_are_keyed_by_arch_id_display() {
+        let mut m = ArchModel::default();
+        let i0 = m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
+        let i1 = m.push_wall(Wall { base_level: 99, ..Wall::default() });
+        let i2 = m.push_wall(Wall { start: Vec2::new(f64::INFINITY, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
+        let msgs = m.validate();
+        assert_eq!(msgs.len(), 3);
+        assert_eq!(msgs[0], format!("{}: zero or near-zero length", i0));
+        assert_eq!(msgs[1], format!("{}: unknown level 99", i1));
+        assert_eq!(msgs[2], format!("{}: non-finite endpoints", i2));
+    }
+
+    /// The "model has … max" message is emitted exactly once, *before* any per-wall
+    /// message, per the spec's "checked once, before the per-wall loop" rule.
+    #[test]
+    fn too_many_walls_message_precedes_per_wall_messages() {
+        let mut m = ArchModel::default();
+        // Wall 0 is zero-length (one per-wall message); the rest are clean.
+        m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
+        for i in 1..=MAX_WALLS {
+            m.push_wall(Wall::new(Vec2::new(f64::from(i), 0.0), Vec2::new(f64::from(i) + 1.0, 0.0), 0.2));
+        }
+        let msgs = m.validate();
+        assert_eq!(msgs.len(), 2, "max message plus the one per-wall message: {msgs:?}");
+        assert_eq!(msgs[0], format!("model has {} walls, max {MAX_WALLS}", MAX_WALLS + 1));
+        assert_eq!(msgs[1], "w0: zero or near-zero length");
+    }
+
+    /// Hostile huge-but-finite coordinates whose `dist` overflows to `inf` must NOT
+    /// produce a spurious "zero or near-zero length" (`inf > MIN_WALL_LENGTH` is true).
+    #[test]
+    fn huge_finite_coordinates_do_not_false_zero_length() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall { start: Vec2::new(1e200, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
+        // dx*dx overflows f64 to inf, so start.dist(end) is inf, not NaN/0.
+        let msgs = m.validate();
+        assert!(msgs.is_empty(), "huge finite wall wrongly flagged: {msgs:?}");
+    }
+
+    /// A degenerate (zero-length) wall survives a JSON round-trip, keeps its id, and is still
+    /// flagged by `validate` after the round trip.
+    #[test]
+    fn zero_length_wall_survives_round_trip_and_still_flags() {
+        let mut m = ArchModel::default();
+        let id = m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
+        let json = serde_json::to_string(&m).unwrap();
+        let back: ArchModel = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.walls.len(), 1);
+        assert_eq!(back.walls[0].id, id);
+        assert_eq!(back.walls[0].start, Vec2::new(0.0, 0.0));
+        assert_eq!(back.walls[0].end, Vec2::new(0.0, 0.0));
+        assert!(m.validate().iter().any(|s| s.contains("zero or near-zero length")), "in-memory zero-length wall not flagged");
+        assert!(back.validate().iter().any(|s| s.contains("zero or near-zero length")), "zero-length wall not flagged after round trip");
+    }
 }
