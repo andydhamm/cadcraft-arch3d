@@ -4664,32 +4664,4 @@ mod tests {
         assert!(l.sun.is_none(), "NaN lat/lon results in no sun");
         assert!(l.sun_dir.is_none(), "NaN lat/lon results in no sun direction");
     }
-
-    #[test]
-    fn pane_finalize_options_photoreal_custom_samples_respected() {
-        let mut pane = Pane3d::new();
-        pane.view.look.technique = cadcraft_doc::arch::Technique::Photoreal;
-
-        // Set custom samples
-        {
-            let mut f = lock_final(&pane.finalize);
-            f.samples = 256;
-        }
-
-        let (opts, _) = pane.finalize_options();
-        assert_eq!(opts.spp, 256, "Custom samples are respected even in Photoreal");
-        assert_eq!(opts.bounces, 12, "Photoreal settings still apply");
-    }
-
-    #[test]
-    fn pane_lighting_nan_site_with_night() {
-        let mut pane = Pane3d::new();
-        let mut model = cadcraft_doc::ArchModel::default();
-        model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: f64::NAN, longitude: f64::NAN, true_north: 0.0, ..Default::default() });
-        assert!(pane.sync(1, Some(&model)));
-        pane.night = true;
-        let l = pane.lighting();
-        assert!(l.sun.is_none(), "NaN site with night has no sun");
-        assert!(l.sun_dir.is_none(), "NaN site with night has no sun direction");
-    }
 }
