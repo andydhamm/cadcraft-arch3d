@@ -656,7 +656,7 @@ fn step_parser_rejects_malformed_parameter_lists() {
 // parse to exactly those tokens.
 #[test]
 fn step_parser_accepts_the_full_token_set_in_order() {
-    let mut p = StepParser::new("('name','.ENUM.',7,3.5,(1,2),#2,$,*,IFCNAME(1.5))");
+    let mut p = StepParser::new("('name',.ENUM.,7,3.5,(1,2),#2,$,*,IFCNAME(1.5))");
     match p.parse_params() {
         Ok(v) => {
             assert_eq!(v.len(), 9, "{v:?}");
@@ -671,6 +671,47 @@ fn step_parser_accepts_the_full_token_set_in_order() {
             assert_eq!(v[8], Token::Typed("IFCNAME".to_string(), Box::new(Token::Real(1.5))));
         }
         Err(e) => panic!("parser rejected a valid token list: {e}"),
+    }
+}
+
+// Spec: an empty list `()` with no tokens must parse to an empty vec, not an error.
+#[test]
+fn step_parser_empty_list_is_empty() {
+    let mut p = StepParser::new("()");
+    match p.parse_params() {
+        Ok(v) => assert_eq!(v, vec![], "{v:?}"),
+        Err(e) => panic!("parser rejected an empty list: {e}"),
+    }
+}
+
+// Spec: `''` is an escaped quote that stays inside the string. A string whose body is
+// x'y' (two `''` escapes) must land in one String token.
+#[test]
+fn step_parser_string_of_escaped_quotes() {
+    // ' x '' y '' '  ->  body is x'y'.
+    let mut p = StepParser::new("('x''y''')");
+    match p.parse_params() {
+        Ok(v) => {
+            assert_eq!(v.len(), 1, "{v:?}");
+            assert_eq!(v[0], Token::String("x'y'".into()), "{v:?}");
+        }
+        Err(e) => panic!("parser rejected a valid escaped-quote string: {e}"),
+    }
+}
+
+// Spec: signs and exponents in reals, and bare integers, are distinct token kinds.
+#[test]
+fn step_parser_exponent_and_signs() {
+    let mut p = StepParser::new("(-1.5e3, 2.0, -7, +4)");
+    match p.parse_params() {
+        Ok(v) => {
+            assert_eq!(v.len(), 4, "{v:?}");
+            assert_eq!(v[0], Token::Real(-1500.0), "{v:?}");
+            assert_eq!(v[1], Token::Real(2.0), "{v:?}");
+            assert_eq!(v[2], Token::Int(-7), "{v:?}");
+            assert_eq!(v[3], Token::Int(4), "{v:?}");
+        }
+        Err(e) => panic!("parser rejected a valid signed/exponent list: {e}"),
     }
 }
 
