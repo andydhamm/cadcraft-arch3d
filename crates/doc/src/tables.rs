@@ -968,7 +968,14 @@ pub struct LayerState {
 
 impl Default for LayerState {
     fn default() -> Self {
-        LayerState { name: String::new(), layers: Vec::new(), mask: LayerState::ALL, current: String::new(), description: String::new(), rules: Vec::new() }
+        LayerState {
+            name: String::new(),
+            layers: Vec::new(),
+            mask: LayerState::ALL,
+            current: String::new(),
+            description: String::new(),
+            rules: Vec::new(),
+        }
     }
 }
 
@@ -1174,7 +1181,12 @@ mod rule_tests {
     #[test]
     fn layer_state_apply_on_true_thaws_and_false_keeps_frozen() {
         let mut layers = vec![layer("A", false, true, 0), layer("B", true, true, 0)];
-        let st = LayerState { name: "s".into(), layers: Vec::new(), rules: vec![rule("A", Some(true), None), rule("B", Some(false), None)], ..Default::default() };
+        let st = LayerState {
+            name: "s".into(),
+            layers: Vec::new(),
+            rules: vec![rule("A", Some(true), None), rule("B", Some(false), None)],
+            ..Default::default()
+        };
         st.apply(&mut layers);
         assert!(layers[0].on && !layers[0].frozen);
         assert!(!layers[1].on && layers[1].frozen);

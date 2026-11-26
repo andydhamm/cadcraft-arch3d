@@ -2512,10 +2512,10 @@ mod tests {
         assert!(pts.iter().all(|p| p.is_finite()), "non-finite vertex in T-junction outline");
         let max_y = pts.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
         assert!(
-            max_y >= t / 2.0 - 1e-6,
-            "T-junction: short wall solved ring max_y {} should reach the long wall's face (t/2 = {}); raw end is only y = 0.05",
+            (-t / 2.0 - max_y).abs() < 1e-6,
+            "T-junction: short wall solved ring max_y {} should be at the long wall's near face (y = {}); raw end is only y = 0",
             max_y,
-            t / 2.0
+            -t / 2.0
         );
 
         // The long wall also draws its solved outline, finite.
@@ -2608,9 +2608,9 @@ mod tests {
         let max_x = pts.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
         let dx = max_x - min_x;
         assert!(dx > 5e-4 && dx < 3e-3, "thin wall x-extent {} should be ≈ its thickness 0.001", dx);
-        // It butts into the thick wall's face (y = thick/2).
+        // It butts into the thick wall's near face (y = -thick/2, the face facing the thin wall).
         let max_y = pts.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
-        assert!(max_y >= thick / 2.0 - 1e-6, "thin wall should extend to the thick wall's face (y = {}); max_y {}", thick / 2.0, max_y);
+        assert!((-thick / 2.0 - max_y).abs() < 1e-6, "thin wall should extend to the thick wall's near face (y = {}); max_y {}", -thick / 2.0, max_y);
         // Solid (not glass): it gets a filled poché.
         let tris_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == arch_handle(id_thin) && p.kind == Kind::Tris).collect();
         assert!(!tris_prims.is_empty(), "thin solid wall in a joined group should get a filled poché (Tris prim)");
