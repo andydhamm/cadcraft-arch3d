@@ -212,7 +212,7 @@ fn run_material(s: &mut Session, p: &Value) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
-    use cadcraft_doc::arch::{Finish, Roof, wall_label};
+    use cadcraft_doc::arch::{Finish, Roof, Room, wall_label};
     use serde_json::{Value, json};
 
     use crate::Session;
@@ -310,5 +310,88 @@ mod tests {
             let mut s = Session::new();
             assert!(s.execute("material", &p).is_err(), "{p}");
         }
+    }
+
+    /// The wall prefix is case-insensitive and a plain integer without the prefix is accepted.
+    #[test]
+    fn material_accepts_case_insensitive_prefix() {
+        let mut s = house();
+        let r = s.execute("material", &json!({"walls": ["W1", "2"], "finish": "siding"})).unwrap();
+        assert_eq!(r["ids"], json!(["w1", "w2"]));
+        // A prefix with no digits is malformed.
+        let e = s.execute("material", &json!({"walls": ["W"], "finish": "siding"})).unwrap_err();
+        assert!(e.to_string().contains("malformed"), "{e}");
+    }
+
+    /// Duplicate ids are deduped and the reply lists ids in ascending order.
+    #[test]
+    fn material_dedupes_and_sorts_ids() {
+        let mut s = house();
+        let r = s.execute("material", &json!({"walls": ["w3", "w1", "w1", "w2"], "finish": "siding"})).unwrap();
+        assert_eq!(r["ids"], json!(["w1", "w2", "w3"]));
+    }
+
+    /// The roofs target sets `covering` on each roof.
+    #[test]
+    fn material_sets_roof_covering() {
+        let mut s = Session::new();
+        s.doc_mut().unwrap().arch.push_roof(Roof::default());
+        s.doc_mut().unwrap().arch.push_roof(Roof::default());
+        let r = s.execute("material", &json!({"roofs": "all", "finish": "shingles"})).unwrap();
+        assert_eq!(r["target"], "roofs");
+        assert_eq!(r["finish"], "shingles");
+        assert_eq!(r["ids"], json!(["r0", "r1"]));
+        for roof in &s.doc().unwrap().arch.roofs {
+            assert_eq!(roof.covering, Some(Finish::Shingles));
+        }
+    }
+
+    /// The rooms target sets `floor_finish` on each room.
+    #[test]
+    fn material_sets_room_floor_finish() {
+        let mut s = Session::new();
+        s.doc_mut().unwrap().arch.push_room(Room::default());
+        let r = s.execute("material", &json!({"rooms": "all", "finish": "wood"})).unwrap();
+        assert_eq!(r["target"], "rooms");
+        assert_eq!(r["finish"], "wood");
+        assert_eq!(r["ids"], json!(["r0"]));
+        assert_eq!(s.doc().unwrap().arch.rooms[0].floor_finish, Some(Finish::Wood));
+    }
+
+    /// The `exterior` selector is only valid for walls.
+    #[test]
+    fn material_exterior_only_for_walls() {
+        let mut s = Session::new();
+        s.doc_mut().unwrap().arch.push_roof(Roof::default());
+        let e = s.execute("material", &json!({"roofs": "exterior", "finish": "shingles"})).unwrap_err();
+        assert!(e.to_string().contains("unknown selector"), "{e}");
+    }
+
+    /// An unknown selector string is refused with a hint about the valid selectors.
+    #[test]
+    fn material_unknown_selector() {
+        let mut s = house();
+        let e = s.execute("material", &json!({"walls": "interior", "finish": "brick"})).unwrap_err();
+        let msg = e.to_string();
+        assert!(msg.contains("unknown selector"), "{msg}");
+        assert!(msg.contains("exterior"), "{msg}");
+    }
+
+    /// Malformed ids are refused with a message naming the element.
+    #[test]
+    fn material_refuses_malformed_ids() {
+        let mut s = house();
+        for id in [json!("w-1"), json!("w1.5"), json!("w"), json!(""), json!("w ")] {
+            let e = s.execute("material", &json!({"walls": [id], "finish": "siding"})).unwrap_err();
+            assert!(e.to_string().contains("malformed"), "{e}");
+        }
+    }
+
+    /// An id larger than u32::MAX is refused.
+    #[test]
+    fn material_huge_id_is_refused() {
+        let mut s = house();
+        let e = s.execute("material", &json!({"walls": ["w4294967296"], "finish": "siding"})).unwrap_err();
+        assert!(e.to_string().contains("malformed"), "{e}");
     }
 }
