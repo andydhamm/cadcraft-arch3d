@@ -1280,7 +1280,7 @@ mod tests {
         assert_eq!(luminance_rgb([0.0; 3]), [1.0; 3]);
     }
 
-    use crate::types::ArchId;
+    use crate::types::{ArchId, ImageRgba, MaterialDef};
     use cadcraft_geom::Vec3;
     use std::sync::Arc;
 

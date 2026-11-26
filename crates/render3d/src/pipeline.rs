@@ -1564,7 +1564,7 @@ mod tests {
         // A draw with a layer past MAX_LAYERS is clamped in the PbrUniform.
         let draw = Draw { layer: crate::textures::MAX_LAYERS + 10, ..Default::default() };
         let p = PbrUniform::new(&crate::light::Light::DEFAULT, 1.0, &draw, STYLE_SHADED, [0.0; 3]);
-        assert_eq!(p._p2[1], crate::textures::MAX_LAYERS - 1);
+        assert_eq!(p._p2[1], (crate::textures::MAX_LAYERS - 1) as f32);
     }
 
     #[test]
