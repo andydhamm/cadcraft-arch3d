@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-26 07:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-26 08:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23**
 
-12,401 workspace tests passing at the last merge · 1437 segments merged in all · 0 of 15 seats working
+12,423 workspace tests passing at the last merge · 1438 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -33,7 +33,7 @@ Updated 2026-11-26 07:45 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — |  · expected done Nov 26 13:14–Dec 11 09:49 UTC |
+| 23 | Phase 23 | pending | — |  · expected done Nov 26 13:29–Dec 11 10:04 UTC |
 
 ## Phase 23 segments
 
@@ -44,6 +44,7 @@ none yet
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 26 07:58 | `harden-p19-seeing-in-render-1` | merged | 12,423 pass | darwin-ws3 |
 | Nov 26 07:45 | `harden-p14-io-glb-furnishing` | merged | 12,401 pass | tturbo-mac |
 | Nov 26 07:21 | `harden-p21t-showcase-house-c` | merged | 12,390 pass | darwin-ws3 |
 | Nov 26 06:45 | `harden-p14-r3d-symbol-materials` | merged | 12,381 pass | tturbo-mac |
@@ -55,24 +56,23 @@ none yet
 | Nov 26 00:01 | `harden-p15-render3d-clay` | merged | 12,339 pass | tturbo-mac |
 | Nov 25 23:35 | `harden-p15-doc-electrical` | merged | 12,334 pass | tturbo-mac |
 | Nov 25 22:50 | `harden-p15-render3d-technical` | merged | 12,327 pass | tturbo-mac |
-| Nov 25 22:28 | `harden-p15-arch3d-spanning-walls` | merged | 12,319 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1457 |
-| bonsai-b | bonsai2-27b | agent | 1388 |
+| bonsai-a | bonsai2-27b | agent | 1458 |
+| bonsai-b | bonsai2-27b | agent | 1389 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 177 |
 | claude-sonnet-b | sonnet | idle | 189 |
 | claude-sonnet-c | sonnet | idle | 122 |
 | claude-sonnet-d | sonnet | idle | 119 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1350 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1350 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1307 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1308 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 756 |
