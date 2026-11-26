@@ -3876,6 +3876,74 @@ mod tests {
         assert_eq!(upper, base.saturating_add(ROOM_HANDLE_OFFSET), "opening upper bound must equal room lower bound");
     }
 
+    /// The first opening handle sits at `ARCH_HANDLE_BASE + OPENING_HANDLE_OFFSET` and is
+    /// routable by picking (`is_arch_handle`) while being disambiguated from walls: for any
+    /// id, `arch_handle` and `opening_handle` are distinct, both are arch handles, and the
+    /// exact offset math holds (the invariant the spec states).
+    #[test]
+    fn opening_handle_offset_and_disambiguation() {
+        for id in [0u32, 3, 7000, u32::MAX - 1] {
+            let wh = arch_handle(ArchId(id));
+            let oh = opening_handle(ArchId(id));
+            assert_ne!(wh, oh, "wall and opening handles must differ for {id}");
+            assert!(is_arch_handle(wh), "wall handle must be an arch handle");
+            assert!(is_arch_handle(oh), "opening handle must be an arch handle");
+            assert!(is_opening_handle(oh), "opening handle must be recognised as an opening");
+            assert!(!is_room_handle(oh), "opening handle must not be a room handle");
+            assert_eq!(wh.0 - ARCH_HANDLE_BASE, u64::from(id), "wall offset wrong for {id}");
+            assert_eq!(oh.0 - ARCH_HANDLE_BASE, OPENING_HANDLE_OFFSET + u64::from(id), "opening offset wrong for {id}");
+        }
+    }
+
+    /// Degenerate ids at the extremes of the opening counter: `32768` lands in the room
+    /// band (not the opening band), and the largest id is still routable by picking.
+    #[test]
+    fn opening_handle_degenerate_and_huge_ids() {
+        // Boundary: id 32767 is the last in-range opening; 32768 falls in the room band.
+        assert!(is_opening_handle(opening_handle(ArchId(32767))), "id 32767 must be in-range");
+        assert!(!is_opening_handle(opening_handle(ArchId(32768))), "id 32768 must NOT be in-range");
+        assert!(is_room_handle(opening_handle(ArchId(32768))), "id 32768 must land in the room band");
+
+        // A hostile maximal id is still routable by picking, and labels in `o{n}` form.
+        assert!(is_arch_handle(opening_handle(ArchId(u32::MAX))), "max id must remain an arch handle");
+        assert_eq!(opening_label(ArchId(u32::MAX)), "o4294967295");
+    }
+
+    /// An opening whose host wall is a dangling reference (deleted wall, or a file naming a
+    /// missing wall) survives a JSON round trip and is still flagged by validate().
+    #[test]
+    fn orphaned_opening_with_missing_host_survives_round_trip_and_is_flagged() {
+        let mut m = ArchModel::default();
+        let mut o = Opening { host: ArchId(7), ..Opening::default() };
+        m.push_opening(o);
+        assert_eq!(m.openings[0].id, ArchId(0), "first opening must be o0");
+
+        // Round trip preserves the opening, its id and its (dangling) host.
+        let json = serde_json::to_string(&m).unwrap();
+        let back: ArchModel = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.openings.len(), 1);
+        assert_eq!(back.openings[0].id, ArchId(0));
+        assert_eq!(back.openings[0].host, ArchId(7));
+
+        // validate() still reports the dangling host after the round trip (and on the
+        // in-memory copy), and the opening id stays o0 throughout.
+        assert!(back.validate().iter().any(|s| s.contains("unknown host wall")), "dangling opening host not flagged after round trip");
+        assert!(m.validate().iter().any(|s| s.contains("unknown host wall")), "dangling opening host not flagged in-memory");
+    }
+
+    /// validate() refuses a stale `next_opening_id` that is not above the largest opening
+    /// id already in use, matching the `stale_next_id` policy for the separate counter.
+    #[test]
+    fn stale_next_opening_id_is_reported_by_validate() {
+        let mut m = ArchModel::default();
+        m.push_opening(Opening::new(ArchId(0), 0.0, 0.9, 2.1, OpeningKind::Door));
+        m.next_opening_id = 0; // below the in-use id 0
+        assert!(m.validate().iter().any(|s| s.contains("next id") && s.contains("next_opening_id")), "stale next_opening_id not reported");
+        // A healthy counter is not reported.
+        m.next_opening_id = 1;
+        assert!(!m.validate().iter().any(|s| s.contains("next_opening_id")), "healthy next_opening_id must not be reported");
+    }
+
     #[test]
     fn opening_counter_independent_of_wall_and_room_counters() {
         // Create a heavy workload of walls and rooms first.
@@ -3961,9 +4029,12 @@ mod tests {
         let mut m = ArchModel::default();
         let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
 
-        // `push_opening` does not clamp (only `Opening::new` does), so a NaN/Inf numeric
-        // carries straight into the model; validation must reject it.
-        let mut bad = Opening::new(wid, 1.0, f64::NAN, 2.1, OpeningKind::Door);
+        // `push_opening` stores exactly what it is handed; `Opening::new` clamps its
+        // args, so a NaN passed to it would not carry through. Inject the non-finite
+        // field directly (as a hostile file or partial edit would) so validate() must
+        // reject it.
+        let mut bad = Opening::new(wid, 1.0, 0.9, 2.1, OpeningKind::Door);
+        bad.width = f64::NAN;
         m.push_opening(bad);
         let msgs = m.validate();
         assert!(msgs.iter().any(|s| s.contains("non-finite")), "non-finite opening width not reported: {msgs:?}");
