@@ -786,6 +786,9 @@ mod tests {
     fn level_choices_with_no_levels_shows_only_all() {
         let mut s = Session::empty();
         s.new_drawing(false);
+        if let Ok(doc) = s.doc_mut() {
+            doc.arch.levels.clear();
+        }
         let model = s.doc().expect("doc").arch.clone();
         let rows = level_choices(&model);
         assert_eq!(rows.len(), 1);
@@ -893,17 +896,17 @@ mod tests {
         let mut s = session_with_wall();
         if let Ok(doc) = s.doc_mut() {
             doc.arch.levels.clear();
-            doc.arch.levels.push(Level { index: 10, name: "Ten".into(), ..Default::default() });
-            doc.arch.levels.push(Level { index: 5, name: "Five".into(), elevation: 2.7, ..Default::default() });
+            doc.arch.levels.push(Level { index: 2, name: "Two".into(), elevation: 2.7, ..Default::default() });
+            doc.arch.levels.push(Level { index: 0, name: "Zero".into(), ..Default::default() });
             doc.arch.levels.push(Level { index: 1, name: "One".into(), elevation: 5.4, ..Default::default() });
         }
         let model = s.doc().expect("doc").arch.clone();
         let rows = level_choices(&model);
         let labels: Vec<_> = rows.iter().map(|r| r.0.as_str()).collect();
-        assert_eq!(labels, ["All levels", "One", "Five", "Ten"]);
+        assert_eq!(labels, ["All levels", "Zero", "One", "Two"]);
         assert_eq!(level_selected(&model), 0);
 
-        // Select "Five" (index 2 in rows)
+        // Select "One" (index 2 in rows, level index 1)
         show_level(&mut s, &rows[2].1).expect("level.show");
         let model = s.doc().expect("doc").arch.clone();
         assert_eq!(level_selected(&model), 2);
