@@ -763,6 +763,27 @@ mod tests {
         assert_eq!(software_spp(&given(32), true), 32);
     }
 
+    /// An explicitly-named `spp` survives the CPU lowering even when it also carries snapshots:
+    /// the CPU condition and the snapshots condition are both false here, so the explicit-spp rule
+    /// wins — the intersection the existing five cases never combine.
+    #[test]
+    fn software_spp_keeps_explicit_spp_with_snapshots_on_cpu() {
+        let given = |spp, snaps: Vec<u32>| PathParams { spp, snapshots: snaps, spp_given: true, ..PathParams::default() };
+        assert_eq!(software_spp(&given(256, vec![4, 16]), true), 256);
+        assert_eq!(software_spp(&given(1, vec![1]), true), 1);
+        assert_eq!(software_spp(&given(65536, vec![64]), true), 65536);
+    }
+
+    /// The parser's two extremes (1 and 65536) are kept on a CPU adapter whenever named; only the
+    /// truly-unchanged default (256, unnamed, empty snapshots) is lowered to `SOFTWARE_SPP`.
+    #[test]
+    fn software_spp_keeps_boundary_spp_on_cpu() {
+        let given = |spp| PathParams { spp, spp_given: true, ..PathParams::default() };
+        assert_eq!(software_spp(&given(1), true), 1);
+        assert_eq!(software_spp(&given(65536), true), 65536);
+        assert_eq!(software_spp(&PathParams::default(), true), SOFTWARE_SPP);
+    }
+
     /// Four pot lights in a closed 4 m room.
     fn room() -> Drawing {
         let mut d = Drawing::new_metric();

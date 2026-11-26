@@ -723,6 +723,32 @@ mod tests {
         assert_eq!(p(json!({"spp": 64})), Some((64, true)));
     }
 
+    /// `spp_given` is true exactly at the parser's two extremes (1 and 65536), not just the
+    /// mid-range values already pinned. An explicit extreme is a real "the user asked for this"
+    /// signal that must survive any software-adapter lowering.
+    #[test]
+    fn parse_path_params_spp_given_at_boundaries() {
+        for v in [json!({"spp": 1}), json!({"spp": 65536})] {
+            let p = match parse_path_params(&v) {
+                Ok(p) => p,
+                Err(e) => panic!("boundary spp {v} must parse: {e}"),
+            };
+            assert!(p.spp_given, "explicit spp {v} must set spp_given");
+        }
+        assert!(!parse_path_params(&json!({})).unwrap().spp_given);
+    }
+
+    /// A malformed `spp` (null, bool, string, array) is a hard error, never a silent fall-back to
+    /// the default 256 with `spp_given` left set. Only a valid named `spp` sets the flag, and an
+    /// absent one leaves it unset — the invariant the software lowering depends on.
+    #[test]
+    fn parse_path_params_malformed_spp_is_refused_not_silenced() {
+        for bad in [json!({"spp": null}), json!({"spp": true}), json!({"spp": "256"}), json!({"spp": [256]}), json!({"spp": "auto"})] {
+            let err = parse_path_params(&bad).map_err(|e| e.to_string()).unwrap_err();
+            assert!(err.contains("spp"), "malformed spp {bad} must be named in the error");
+        }
+    }
+
     #[test]
     fn parse_path_params_reads_exposure() {
         let empty = parse_path_params(&json!({})).unwrap();
