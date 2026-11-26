@@ -368,20 +368,38 @@ fn run_dimauto(s: &mut Session, p: &Value) -> Result<Value> {
     let pos = work.arch.auto_dims.iter().position(|r| r.level == level);
     let old = pos.and_then(|i| work.arch.auto_dims.get(i)).map(|r| r.generated.clone()).unwrap_or_default();
     let (generated, entities_changed) = reconcile(&mut work, level, &kinds, &old);
-    changed |= entities_changed || generated != old || pos.is_none();
-    match pos.and_then(|i| work.arch.auto_dims.get_mut(i)) {
-        Some(rec) => {
-            changed |= rec.rows != kinds;
-            rec.rows = kinds;
-            rec.generated = generated;
+
+    // If nothing changed in entities and the generated rows are the same as before (or both empty),
+    // and the record already exists with the correct kinds, we don't need to commit.
+    // Specifically, if generated is empty and old is empty, and pos is None, we don't want to push an empty record.
+    let record_exists = pos.is_some();
+    let rows_match = pos.and_then(|i| work.arch.auto_dims.get(i)).map(|r| r.rows == kinds).unwrap_or(false);
+
+    // We only commit if:
+    // 1. Entities changed (dimensions added/removed/updated)
+    // 2. The generated list differs from the old list
+    // 3. The record didn't exist before (but we generated something) OR the rows (kinds) changed
+
+    let needs_commit = entities_changed || generated != old || (pos.is_none() && !generated.is_empty()) || (pos.is_some() && !rows_match);
+
+    if needs_commit {
+        match pos.and_then(|i| work.arch.auto_dims.get_mut(i)) {
+            Some(rec) => {
+                rec.rows = kinds;
+                rec.generated = generated;
+            }
+            None => {
+                // Only push if we actually have generated rows, otherwise leave auto_dims empty
+                if !generated.is_empty() {
+                    work.arch.auto_dims.push(AutoDims { level, rows: kinds, generated, ..Default::default() });
+                }
+            }
         }
-        None => work.arch.auto_dims.push(AutoDims { level, rows: kinds, generated, ..Default::default() }),
-    }
-    let out = reply(&work, level);
-    if changed {
         work.touch_arch();
         *s.doc_mut()? = work;
     }
+
+    let out = reply(&work, level);
     Ok(out)
 }
 
