@@ -284,12 +284,13 @@ pub fn toggle_view(session: &mut Session, tools: &mut ElectricalTools) -> Result
 }
 
 /// The rows of the level picker: the label and the `level.show` parameter, "All levels" first.
+/// Unnamed levels (typically the default ground level) are omitted from the picker.
 pub fn level_choices(model: &ArchModel) -> Vec<(String, Value)> {
     let mut rows = vec![("All levels".to_string(), json!("all"))];
-    let mut levels: Vec<_> = model.levels.iter().collect();
+    let mut levels: Vec<_> = model.levels.iter().filter(|l| !l.name.is_empty()).collect();
     levels.sort_by_key(|l| l.index);
     for l in levels {
-        let label = if l.name.is_empty() { format!("Level {}", l.index) } else { l.name.clone() };
+        let label = l.name.clone();
         rows.push((label, json!(l.index)));
     }
     rows
@@ -829,5 +830,82 @@ mod tests {
         assert!(tools.saved_clayer.is_some());
         toggle_view(&mut s, &mut tools).expect("off");
         assert_eq!(s.doc().expect("doc").header.str("CLAYER", "0"), "Custom");
+    }
+
+    #[test]
+    fn level_choices_with_empty_names_are_filtered() {
+        let mut s = session_with_wall();
+        if let Ok(doc) = s.doc_mut() {
+            doc.arch.levels.clear();
+            doc.arch.levels.push(Level { index: 0, name: "".into(), ..Default::default() });
+            doc.arch.levels.push(Level { index: 1, name: "Ground".into(), elevation: 2.7, ..Default::default() });
+            doc.arch.levels.push(Level { index: 2, name: "".into(), elevation: 5.4, ..Default::default() });
+            doc.arch.levels.push(Level { index: 3, name: "Upper".into(), elevation: 8.1, ..Default::default() });
+        }
+        let model = s.doc().expect("doc").arch.clone();
+        let rows = level_choices(&model);
+        let labels: Vec<_> = rows.iter().map(|r| r.0.as_str()).collect();
+        assert_eq!(labels, ["All levels", "Ground", "Upper"]);
+        assert_eq!(level_selected(&model), 0);
+
+        // Select "Ground" (index 1 in rows)
+        show_level(&mut s, &rows[1].1).expect("level.show");
+        let model = s.doc().expect("doc").arch.clone();
+        assert_eq!(level_selected(&model), 1);
+
+        // Select "Upper" (index 2 in rows)
+        show_level(&mut s, &rows[2].1).expect("level.show");
+        let model = s.doc().expect("doc").arch.clone();
+        assert_eq!(level_selected(&model), 2);
+
+        // Select "All levels" (index 0 in rows)
+        show_level(&mut s, &rows[0].1).expect("level.show");
+        assert_eq!(s.doc().expect("doc").arch.plan_level, None);
+    }
+
+    #[test]
+    fn level_choices_with_duplicate_names_are_kept() {
+        let mut s = session_with_wall();
+        if let Ok(doc) = s.doc_mut() {
+            doc.arch.levels.clear();
+            doc.arch.levels.push(Level { index: 0, name: "Dup".into(), ..Default::default() });
+            doc.arch.levels.push(Level { index: 1, name: "Dup".into(), elevation: 2.7, ..Default::default() });
+        }
+        let model = s.doc().expect("doc").arch.clone();
+        let rows = level_choices(&model);
+        let labels: Vec<_> = rows.iter().map(|r| r.0.as_str()).collect();
+        assert_eq!(labels, ["All levels", "Dup", "Dup"]);
+        assert_eq!(level_selected(&model), 0);
+
+        // Select first "Dup" (index 1 in rows)
+        show_level(&mut s, &rows[1].1).expect("level.show");
+        let model = s.doc().expect("doc").arch.clone();
+        assert_eq!(level_selected(&model), 1);
+
+        // Select second "Dup" (index 2 in rows)
+        show_level(&mut s, &rows[2].1).expect("level.show");
+        let model = s.doc().expect("doc").arch.clone();
+        assert_eq!(level_selected(&model), 2);
+    }
+
+    #[test]
+    fn level_choices_with_non_sequential_indices_are_sorted() {
+        let mut s = session_with_wall();
+        if let Ok(doc) = s.doc_mut() {
+            doc.arch.levels.clear();
+            doc.arch.levels.push(Level { index: 10, name: "Ten".into(), ..Default::default() });
+            doc.arch.levels.push(Level { index: 5, name: "Five".into(), elevation: 2.7, ..Default::default() });
+            doc.arch.levels.push(Level { index: 1, name: "One".into(), elevation: 5.4, ..Default::default() });
+        }
+        let model = s.doc().expect("doc").arch.clone();
+        let rows = level_choices(&model);
+        let labels: Vec<_> = rows.iter().map(|r| r.0.as_str()).collect();
+        assert_eq!(labels, ["All levels", "One", "Five", "Ten"]);
+        assert_eq!(level_selected(&model), 0);
+
+        // Select "Five" (index 2 in rows)
+        show_level(&mut s, &rows[2].1).expect("level.show");
+        let model = s.doc().expect("doc").arch.clone();
+        assert_eq!(level_selected(&model), 2);
     }
 }
