@@ -374,4 +374,85 @@ mod tests {
         assert_eq!(back, m);
         assert!(json.contains("\"kind\":\"gap\""));
     }
+
+    #[test]
+    fn furnishing_host_serde_round_trips_all_variants() {
+        let hosts = vec![
+            FurnishingHost::None,
+            FurnishingHost::Wall { wall: ArchId(3) },
+            FurnishingHost::Cabinet { cabinet: ArchId(5) },
+            FurnishingHost::Sink { furnishing: ArchId(7) },
+            FurnishingHost::Gap { left: ArchId(1), right: ArchId(2) },
+        ];
+        for h in hosts {
+            let json = serde_json::to_string(&h).unwrap();
+            let back: FurnishingHost = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, h, "round-trip failed: {json}");
+        }
+        assert_eq!(serde_json::to_string(&FurnishingHost::None).unwrap(), r#"{"kind":"none"}"#);
+        assert_eq!(serde_json::to_string(&FurnishingHost::Wall { wall: ArchId(3) }).unwrap(), r#"{"kind":"wall","wall":3}"#);
+        assert_eq!(serde_json::to_string(&FurnishingHost::Cabinet { cabinet: ArchId(5) }).unwrap(), r#"{"kind":"cabinet","cabinet":5}"#);
+        assert_eq!(serde_json::to_string(&FurnishingHost::Sink { furnishing: ArchId(7) }).unwrap(), r#"{"kind":"sink","furnishing":7}"#);
+        assert_eq!(
+            serde_json::to_string(&FurnishingHost::Gap { left: ArchId(1), right: ArchId(2) }).unwrap(),
+            r#"{"kind":"gap","left":1,"right":2}"#
+        );
+    }
+
+    #[test]
+    fn local_to_plan_full_rotation_and_negative() {
+        let f = Furnishing { size: [2.0, 2.0, 1.0], at: [0.0, 0.0], elevation: 0.0, rotation: 360.0, ..Default::default() };
+        let ext = [1.0, 1.0, 0.5];
+        let p = f.local_to_plan([0.5, 0.0, 0.0], ext);
+        let near = |a: [f64; 3], b: [f64; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-9);
+        assert!(near(p, [1.0, 0.0, 0.0]), "360° rotation should be identity");
+
+        let f_neg = Furnishing { size: [2.0, 2.0, 1.0], at: [0.0, 0.0], elevation: 0.0, rotation: -90.0, ..Default::default() };
+        let p_neg = f_neg.local_to_plan([0.5, 0.0, 0.0], ext);
+        assert!(near(p_neg, [0.0, -1.0, 0.0]), "-90° rotation: {p_neg:?}");
+    }
+
+    #[test]
+    fn image_rgba_mean_srgb_single_pixel_and_bounds() {
+        let single = ImageRgba { width: 1, height: 1, rgba: vec![10, 20, 30, 255] };
+        assert_eq!(single.mean_srgb(), [10, 20, 30]);
+        let white = ImageRgba { width: 2, height: 2, rgba: vec![255, 255, 255, 255; 4] };
+        assert_eq!(white.mean_srgb(), [255, 255, 255]);
+        let empty = ImageRgba::default();
+        assert_eq!(empty.mean_srgb(), [0, 0, 0]);
+    }
+
+    #[test]
+    fn image_rgba_is_valid_height_bound() {
+        assert!(!ImageRgba { width: 1, height: 4097, rgba: vec![0; 4097 * 4] }.is_valid());
+        assert!(ImageRgba { width: 1, height: 4096, rgba: vec![0; 4096 * 4] }.is_valid());
+    }
+
+    #[test]
+    fn symbol_extents_single_point_and_negative() {
+        let single =
+            SymbolMesh { key: "k".into(), parts: vec![SymbolPart { positions: vec![[1.0, 2.0, 3.0]], ..Default::default() }], textures: vec![] };
+        assert_eq!(single.extents(), [0.0, 0.0, 0.0]);
+
+        let neg = SymbolMesh {
+            key: "k".into(),
+            parts: vec![SymbolPart { positions: vec![[-1.0, -2.0, 0.0], [1.0, 2.0, 3.0]], ..Default::default() }],
+            textures: vec![],
+        };
+        assert_eq!(neg.extents(), [2.0, 4.0, 3.0]);
+    }
+
+    #[test]
+    fn symbol_triangles_non_multiple_of_three() {
+        let m = SymbolMesh {
+            key: "k".into(),
+            parts: vec![SymbolPart {
+                positions: vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]],
+                indices: vec![0, 1, 2, 2, 3],
+                ..Default::default()
+            }],
+            textures: vec![],
+        };
+        assert_eq!(m.triangles(), 1);
+    }
 }
