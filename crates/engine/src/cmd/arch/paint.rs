@@ -966,4 +966,59 @@ mod tests {
         let r = run(&mut s, "paint.pick", json!({"target": "room/r0/floor"}));
         assert_eq!(r["material"], "finish:wood");
     }
+
+    /// Picking a cabinet front reads its door style and the Object Painter can use it.
+    #[test]
+    fn pick_reads_a_cabinet_front_style() {
+        let dir = TempDir::new("paint-pick-front");
+        let mut s = setup(&dir);
+        // Set a specific door style on cb0.
+        s.doc_mut().unwrap().arch.cabinets[0].door_style = FrontStyle::Shaker;
+        // Pick the front.
+        s.start("paint.pick").unwrap();
+        s.input(Input::Text("cabinet/cb0/front".into())).unwrap();
+        assert!(s.running.is_none());
+        // The Object Painter should start with the front style.
+        s.start("paint.object").unwrap();
+        let prompt = s.current_prompt().unwrap().message;
+        assert!(prompt.contains("frontstyle:door-shaker"), "{prompt}");
+        // Paint cb2's front with the picked style.
+        s.input(Input::Text("cabinet/cb2/front".into())).unwrap();
+        s.input(Input::Enter).unwrap();
+        assert!(s.running.is_none());
+        assert_eq!(s.doc().unwrap().arch.cabinets[2].door_style, FrontStyle::Shaker);
+    }
+
+    /// The Object Painter with room scope replaces like fronts in the room only.
+    #[test]
+    fn paint_object_replaces_like_fronts_in_the_room() {
+        let dir = TempDir::new("paint-object-fronts");
+        let mut s = setup(&dir);
+        // cb0 and cb1 are in room 0, cb2 is in room 1.
+        // Set cb0 and cb1 to slab, cb2 to shaker.
+        s.doc_mut().unwrap().arch.cabinets[0].door_style = FrontStyle::Slab;
+        s.doc_mut().unwrap().arch.cabinets[1].door_style = FrontStyle::Slab;
+        s.doc_mut().unwrap().arch.cabinets[2].door_style = FrontStyle::Shaker;
+        // Paint cb0's front with shaker, room scope.
+        let r = run(&mut s, "paint.object", json!({"item": "frontstyle:door-shaker", "target": "cabinet/cb0/front", "scope": "room"}));
+        assert_eq!(r["replaced"], json!(["cabinet/cb0/front", "cabinet/cb1/front"]));
+        // cb0 and cb1 should now be shaker; cb2 was already shaker and is in a different room.
+        assert_eq!(s.doc().unwrap().arch.cabinets[0].door_style, FrontStyle::Shaker);
+        assert_eq!(s.doc().unwrap().arch.cabinets[1].door_style, FrontStyle::Shaker);
+        assert_eq!(s.doc().unwrap().arch.cabinets[2].door_style, FrontStyle::Shaker);
+    }
+
+    /// Blend mode with a finish item keeps the existing material and tints with the finish's mean.
+    #[test]
+    fn paint_blend_with_finish_item() {
+        let dir = TempDir::new("paint-blend-finish-item");
+        let mut s = setup(&dir);
+        // Paint a wall with brick, then blend with a finish item.
+        paint(&mut s, "brick", "wall/w0/right", "component");
+        run(&mut s, "paint.material", json!({"material": "finish:wood", "target": "wall/w0/right", "scope": "component", "mode": "blend"}));
+        let p = s.doc().unwrap().arch.paints.get("wall/w0/right").cloned().unwrap();
+        // The material should still be brick, and the tint should be wood's mean color.
+        assert_eq!(p.material, Some(MaterialRef::Finish(Finish::Brick)));
+        assert_eq!(p.tint, Some(finish_mean(Finish::Wood)));
+    }
 }
