@@ -2877,6 +2877,109 @@ mod tests {
     }
 
     #[test]
+    fn build_dirty_with_unknown_id_is_noop() {
+        let model = two_wall_model();
+        let full = Scene3d::build(&model);
+        let dirty: BTreeSet<ArchId> = BTreeSet::from([ArchId(999)]);
+        let partial = Scene3d::build_dirty(&model, &dirty, &full);
+        assert_eq!(partial.mesh_count(), full.mesh_count());
+        assert_eq!(partial.bounds, full.bounds);
+    }
+
+    #[test]
+    fn build_dirty_with_empty_set_reuses_all() {
+        let model = two_wall_model();
+        let full = Scene3d::build(&model);
+        let dirty: BTreeSet<ArchId> = BTreeSet::new();
+        let partial = Scene3d::build_dirty(&model, &dirty, &full);
+        assert_eq!(partial.mesh_count(), full.mesh_count());
+        assert_eq!(partial.bounds, full.bounds);
+    }
+
+    #[test]
+    fn build_dirty_removes_deleted_wall() {
+        let model = two_wall_model();
+        let full = Scene3d::build(&model);
+        assert_eq!(full.mesh_count(), 2);
+
+        let mut edited = model.clone();
+        edited.walls.retain(|w| w.id != ArchId(2));
+
+        let dirty: BTreeSet<ArchId> = BTreeSet::from([ArchId(2)]);
+        let partial = Scene3d::build_dirty(&edited, &dirty, &full);
+        assert_eq!(partial.mesh_count(), 1, "deleted wall should be removed");
+        assert!(partial.mesh_for(&ArchId(1)).is_some());
+        assert!(partial.mesh_for(&ArchId(2)).is_none());
+    }
+
+    #[test]
+    fn build_dirty_removes_deleted_opening() {
+        use cadcraft_doc::arch::Opening;
+
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.3,
+            height: 2.5,
+            ..Default::default()
+        });
+        let mut opening = Opening::default();
+        opening.id = ArchId(10);
+        opening.host = ArchId(1);
+        opening.offset = 5.0;
+        opening.width = 1.0;
+        opening.height = 1.5;
+        model.openings.push(opening);
+
+        let full = Scene3d::build(&model);
+        assert!(full.mesh_for(&ArchId(10)).is_some(), "opening mesh should exist in full build");
+
+        let mut edited = model.clone();
+        edited.openings.clear();
+
+        let dirty: BTreeSet<ArchId> = BTreeSet::from([ArchId(10)]);
+        let partial = Scene3d::build_dirty(&edited, &dirty, &full);
+        assert!(partial.mesh_for(&ArchId(10)).is_none(), "deleted opening mesh should be removed");
+        assert!(partial.mesh_for(&ArchId(1)).is_some(), "host wall should remain");
+    }
+
+    #[test]
+    fn build_dirty_rebuilds_neighbours_of_new_wall() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.3,
+            height: 2.5,
+            ..Default::default()
+        });
+
+        let prev = Scene3d::build(&model);
+
+        let mut extended = model.clone();
+        extended.walls.push(Wall {
+            id: ArchId(2),
+            start: Vec2::new(5.0, 0.0),
+            end: Vec2::new(5.0, 5.0),
+            thickness: 0.3,
+            height: 2.5,
+            ..Default::default()
+        });
+
+        let dirty: BTreeSet<ArchId> = BTreeSet::from([ArchId(2)]);
+        let partial = Scene3d::build_dirty(&extended, &dirty, &prev);
+        let full = Scene3d::build(&extended);
+
+        assert_eq!(partial.mesh_count(), full.mesh_count());
+        // Wall 1 should be rebuilt because it intersects Wall 2's bounds
+        assert!(partial.mesh_for(&ArchId(1)).is_some());
+        assert!(partial.mesh_for(&ArchId(2)).is_some());
+    }
+
+    #[test]
     fn build_dirty_rebuilds_collinear_wall_when_neighbour_moves() {
         // Two collinear walls: (0,0)-(5,0) and (5,0)-(10,0).
         // Move the first wall down; the second wall's join should change.
