@@ -3124,7 +3124,7 @@ mod tests {
         // legal, storable, hostile input.
         m.push_wall(Wall::new(Vec2::new(1.7e308, 0.0), Vec2::new(-1.7e308, 0.0), 0.2));
         // A sane wall on the same model must still produce its ring.
-        m.push_wall(Wall::new(Vec2::new(0.0, 5.0), Vec2::new(10.0, 5.0), 0.2)));
+        m.push_wall(Wall::new(Vec2::new(0.0, 5.0), Vec2::new(10.0, 5.0), 0.2));
         let polys = proxy_polylines(&m);
         assert_eq!(polys.len(), 1, "only the finite wall should yield a ring");
         for tags in &polys {
@@ -3163,39 +3163,21 @@ mod tests {
     #[test]
     fn is_arch_proxy_recognises_markers_and_rejects_others() {
         assert!(
-            is_arch_proxy(&[
-                Tag::s(1001, crate::dxf_ext::APP),
-                Tag::s(1000, ARCH_PROXY_MARKER),
-                Tag::s(1000, "w1"),
-            ]),
+            is_arch_proxy(&[Tag::s(1001, crate::dxf_ext::APP), Tag::s(1000, ARCH_PROXY_MARKER), Tag::s(1000, "w1"),]),
             "the wall proxy marker must be recognised",
         );
         assert!(
-            is_arch_proxy(&[
-                Tag::s(1001, crate::dxf_ext::APP),
-                Tag::s(1000, ARCH_OPENING_MARKER),
-                Tag::s(1000, "o1"),
-            ]),
+            is_arch_proxy(&[Tag::s(1001, crate::dxf_ext::APP), Tag::s(1000, ARCH_OPENING_MARKER), Tag::s(1000, "o1"),]),
             "the opening proxy marker must be recognised",
         );
         assert!(
-            is_arch_proxy(&[
-                Tag::s(1001, crate::dxf_ext::APP),
-                Tag::s(1000, ARCH_VIEW_MARKER),
-                Tag::s(1000, "v1"),
-            ]),
+            is_arch_proxy(&[Tag::s(1001, crate::dxf_ext::APP), Tag::s(1000, ARCH_VIEW_MARKER), Tag::s(1000, "v1"),]),
             "the view proxy marker must be recognised",
         );
         assert!(!is_arch_proxy(&[]), "an empty tag list is not an arch proxy");
+        assert!(!is_arch_proxy(&[Tag::s(1001, "ARCHWALL")]), "a marker string under the wrong group code (no APP header) is not an arch proxy",);
         assert!(
-            !is_arch_proxy(&[Tag::s(1001, "ARCHWALL")]),
-            "a marker string under the wrong group code (no APP header) is not an arch proxy",
-        );
-        assert!(
-            !is_arch_proxy(&[
-                Tag::s(1001, crate::dxf_ext::APP),
-                Tag::s(1000, "OTHERMARKER"),
-            ]),
+            !is_arch_proxy(&[Tag::s(1001, crate::dxf_ext::APP), Tag::s(1000, "OTHERMARKER"),]),
             "foreign xdata without an arch proxy marker is not an arch proxy",
         );
     }
@@ -3203,9 +3185,6 @@ mod tests {
     /// Pins the spec contract: an empty model writes no wall proxies.
     #[test]
     fn proxy_polylines_is_empty_for_an_empty_model() {
-        assert!(
-            proxy_polylines(&ArchModel::default()).is_empty(),
-            "an empty model must write no wall proxies",
-        );
+        assert!(proxy_polylines(&ArchModel::default()).is_empty(), "an empty model must write no wall proxies",);
     }
 }
