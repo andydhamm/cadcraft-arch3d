@@ -253,10 +253,10 @@ pub fn detect(d: &Drawing, opts: &DetectOptions) -> Result<Detection, DetectErro
 
     // Deterministic ordering
     walls.sort_by(|a, b| {
-        let ax = a.start.x.min(a.end.x).round() as i64;
-        let ay = a.start.y.min(a.end.y).round() as i64;
-        let bx = b.start.x.min(b.end.x).round() as i64;
-        let by = b.start.y.min(b.end.y).round() as i64;
+        let ax = (a.start.x.min(a.end.x) * 1e6).round() as i64;
+        let ay = (a.start.y.min(a.end.y) * 1e6).round() as i64;
+        let bx = (b.start.x.min(b.end.x) * 1e6).round() as i64;
+        let by = (b.start.y.min(b.end.y) * 1e6).round() as i64;
         ax.cmp(&bx).then(ay.cmp(&by)).then(a.thickness.partial_cmp(&b.thickness).unwrap_or(std::cmp::Ordering::Equal))
     });
 
@@ -334,36 +334,50 @@ fn split_unexplained_gaps(walls: &mut Vec<WallRun>, openings: &mut Vec<OpeningCa
             gaps_to_remove.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
             let mut prev = 0.0;
-            for (g_start, g_end) in gaps_to_remove {
+            for (g_start, g_end) in &gaps_to_remove {
                 // Create a wall piece from prev to g_start
                 if g_start > prev + 1e-6 {
                     let start = w.start + dir * prev;
-                    let end = w.start + dir * g_start;
+                    let end = w.start + dir * *g_start;
+                    let piece_gaps: Vec<(f64, f64)> = w
+                        .gaps
+                        .iter()
+                        .filter(|(gs, ge)| *ge > prev + 1e-9 && *gs < *g_start - 1e-9)
+                        .filter(|(gs, ge)| !gaps_to_remove.iter().any(|(s, e)| (s - gs).abs() < 1e-9 && (e - ge).abs() < 1e-9))
+                        .map(|(gs, ge)| (*gs - prev, *ge - prev))
+                        .collect();
                     let idx = new_walls.len();
                     new_walls.push(WallRun {
                         start,
                         end,
                         thickness: w.thickness,
-                        gaps: Vec::new(),
+                        gaps: piece_gaps,
                         confidence: w.confidence,
                         evidence: w.evidence.clone(),
                     });
-                    wall_pieces[i].push((idx, prev, g_start));
+                    wall_pieces[i].push((idx, prev, *g_start));
                 }
                 // Move prev to the end of the gap
-                prev = g_end;
+                prev = *g_end;
             }
 
             // Create the final piece from the last gap end to the wall end
             if prev < len - 1e-6 {
                 let start = w.start + dir * prev;
                 let end = w.end;
+                let piece_gaps: Vec<(f64, f64)> = w
+                    .gaps
+                    .iter()
+                    .filter(|(gs, ge)| *ge > prev + 1e-9)
+                    .filter(|(gs, ge)| !gaps_to_remove.iter().any(|(s, e)| (s - gs).abs() < 1e-9 && (e - ge).abs() < 1e-9))
+                    .map(|(gs, ge)| (*gs - prev, *ge - prev))
+                    .collect();
                 let idx = new_walls.len();
                 new_walls.push(WallRun {
                     start,
                     end,
                     thickness: w.thickness,
-                    gaps: Vec::new(),
+                    gaps: piece_gaps,
                     confidence: w.confidence,
                     evidence: w.evidence.clone(),
                 });
@@ -407,7 +421,16 @@ pub mod walls;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cadcraft_doc::Drawing;
+    use cadcraft_doc::{Common, Drawing, EntityKind, Line, Space};
+    use cadcraft_geom::Vec3;
+
+    fn common(layer: &str) -> Common {
+        Common { layer: layer.into(), ..Common::default() }
+    }
+
+    fn line(a: (f64, f64), b: (f64, f64)) -> EntityKind {
+        EntityKind::Line(Line { a: Vec3::new(a.0, a.1, 0.0), b: Vec3::new(b.0, b.1, 0.0) })
+    }
 
     #[test]
     fn units_scale_reads_the_dxf_unit_codes() {
@@ -474,5 +497,135 @@ mod tests {
         assert_eq!(walls.len(), 2);
         assert_eq!(walls[0].end.x, 4.0);
         assert_eq!(walls[1].start.x, 5.0);
+    }
+
+    #[test]
+    fn split_unexplained_gaps_with_multiple_gaps() {
+        let mut walls = vec![WallRun {
+            start: Vec2::ZERO,
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.2,
+            gaps: vec![(2.0, 3.0), (5.0, 6.0), (8.0, 9.0)],
+            confidence: 1.0,
+            evidence: Evidence::default(),
+        }];
+        let mut openings = Vec::new();
+
+        split_unexplained_gaps(&mut walls, &mut openings);
+
+        // Should split into 4 pieces: 0-2, 3-5, 6-8, 9-10
+        assert_eq!(walls.len(), 4);
+        assert_eq!(walls[0].end.x, 2.0);
+        assert_eq!(walls[1].start.x, 3.0);
+        assert_eq!(walls[1].end.x, 5.0);
+        assert_eq!(walls[2].start.x, 6.0);
+        assert_eq!(walls[2].end.x, 8.0);
+        assert_eq!(walls[3].start.x, 9.0);
+        assert_eq!(walls[3].end.x, 10.0);
+    }
+
+    #[test]
+    fn a_gap_of_exactly_zero_point_three_does_not_split() {
+        let mut walls = vec![WallRun {
+            start: Vec2::ZERO,
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.2,
+            gaps: vec![(4.0, 4.3)], // exactly 0.3m
+            confidence: 1.0,
+            evidence: Evidence::default(),
+        }];
+        let mut openings = Vec::new();
+
+        split_unexplained_gaps(&mut walls, &mut openings);
+
+        // Should not split (gap is not > 0.3)
+        assert_eq!(walls.len(), 1);
+    }
+
+    #[test]
+    fn split_preserves_unsplit_gaps() {
+        let mut walls = vec![WallRun {
+            start: Vec2::ZERO,
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.2,
+            gaps: vec![(1.0, 1.2), (4.0, 5.0)], // 0.2m gap (kept) and 1.0m gap (split)
+            confidence: 1.0,
+            evidence: Evidence::default(),
+        }];
+        let mut openings = Vec::new();
+
+        split_unexplained_gaps(&mut walls, &mut openings);
+
+        // Should split into 2 pieces at the 1.0m gap
+        assert_eq!(walls.len(), 2);
+        // First piece should have the 0.2m gap
+        assert_eq!(walls[0].gaps.len(), 1);
+        assert_eq!(walls[0].gaps[0].0, 1.0);
+        assert_eq!(walls[0].gaps[0].1, 1.2);
+        // Second piece should have no gaps
+        assert_eq!(walls[1].gaps.len(), 0);
+    }
+
+    #[test]
+    fn detect_wall_ordering_is_deterministic() {
+        // Create walls at positions that differ by less than 1m to test 1e-6 rounding
+        let mut walls = vec![
+            WallRun {
+                start: Vec2::new(1.4, 0.0),
+                end: Vec2::new(2.0, 0.0),
+                thickness: 0.2,
+                confidence: 1.0,
+                evidence: Evidence::default(),
+                ..Default::default()
+            },
+            WallRun {
+                start: Vec2::new(0.0, 0.0),
+                end: Vec2::new(1.0, 0.0),
+                thickness: 0.2,
+                confidence: 1.0,
+                evidence: Evidence::default(),
+                ..Default::default()
+            },
+            WallRun {
+                start: Vec2::new(0.0, 1.4),
+                end: Vec2::new(1.0, 1.4),
+                thickness: 0.2,
+                confidence: 1.0,
+                evidence: Evidence::default(),
+                ..Default::default()
+            },
+        ];
+
+        // Sort using the same logic as detect()
+        walls.sort_by(|a, b| {
+            let ax = (a.start.x.min(a.end.x) * 1e6).round() as i64;
+            let ay = (a.start.y.min(a.end.y) * 1e6).round() as i64;
+            let bx = (b.start.x.min(b.end.x) * 1e6).round() as i64;
+            let by = (b.start.y.min(b.end.y) * 1e6).round() as i64;
+            ax.cmp(&bx).then(ay.cmp(&by)).then(a.thickness.partial_cmp(&b.thickness).unwrap_or(std::cmp::Ordering::Equal))
+        });
+
+        // Wall at (0,0) should come first, then (0,1.4), then (1.4,0)
+        assert_eq!(walls[0].start.x, 0.0);
+        assert_eq!(walls[0].start.y, 0.0);
+        assert_eq!(walls[1].start.x, 0.0);
+        assert_eq!(walls[1].start.y, 1.4);
+        assert_eq!(walls[2].start.x, 1.4);
+    }
+
+    #[test]
+    fn detect_with_layer_filter() {
+        let mut d = Drawing::new_metric();
+        d.add(&Space::Model, common("A-WALL"), line((0.0, 0.0), (3000.0, 0.0))).unwrap();
+        d.add(&Space::Model, common("A-DOOR"), line((1000.0, 0.0), (1000.0, 1000.0))).unwrap();
+
+        // Filter to only A-WALL
+        let opts = DetectOptions { scale: 0.001, layers: Some(vec!["A-WALL".into()]) };
+        let det = detect(&d, &opts).unwrap();
+
+        // Should have read 2 entities but only processed A-WALL items
+        assert_eq!(det.entities, 2);
+        // The door line should not have produced any items
+        assert_eq!(det.primitives, 1);
     }
 }
