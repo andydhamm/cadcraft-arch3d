@@ -93,4 +93,53 @@ mod tests {
             assert_eq!(list.prims.iter().filter(|p| p.handle == furnishing_handle(f.id)).count(), 1);
         }
     }
+
+    #[test]
+    fn furnishings_with_nan_position_are_not_drawn() {
+        let mut d = drawing();
+        d.arch.furnishings.push(Furnishing {
+            id: ArchId(99),
+            category: "Furniture".into(),
+            symbol_type: "chair".into(),
+            size: [1.0, 1.0, 1.0],
+            at: [f64::NAN, 0.0],
+            ..Default::default()
+        });
+        let mut list = DisplayList::default();
+        push_furnishings(&d, &mut list, false);
+        assert_eq!(list.prims.len(), 5, "furnishing with NaN position should not draw");
+    }
+
+    #[test]
+    fn furnishings_on_other_levels_are_not_drawn() {
+        let mut d = drawing();
+        d.arch.furnishings.push(Furnishing {
+            id: ArchId(99),
+            category: "Furniture".into(),
+            symbol_type: "chair".into(),
+            size: [1.0, 1.0, 1.0],
+            level: 1,
+            ..Default::default()
+        });
+        d.arch.plan_level = Some(0);
+        let mut list = DisplayList::default();
+        push_furnishings(&d, &mut list, false);
+        assert_eq!(list.prims.len(), 5, "furnishing on level 1 should not draw when plan_level is 0");
+    }
+
+    #[test]
+    fn all_furnishings_draw_when_no_plan_level() {
+        let mut d = drawing();
+        d.arch.furnishings.push(Furnishing {
+            id: ArchId(99),
+            category: "Furniture".into(),
+            symbol_type: "chair".into(),
+            size: [1.0, 1.0, 1.0],
+            level: 1,
+            ..Default::default()
+        });
+        let mut list = DisplayList::default();
+        push_furnishings(&d, &mut list, false);
+        assert_eq!(list.prims.len(), 6, "all furnishings should draw when no plan_level is set");
+    }
 }

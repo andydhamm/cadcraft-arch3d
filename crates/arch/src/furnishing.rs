@@ -17,6 +17,9 @@ pub fn furnishing_layer(f: &Furnishing) -> &'static str {
 /// The convex hull (counter-clockwise, no repeated or collinear points) of the furnishing's
 /// placed symbol seen from above; a missing symbol gives the rotated size rectangle.
 pub fn plan_outline(model: &ArchModel, f: &Furnishing) -> Vec<Vec2> {
+    if !f.elevation.is_finite() {
+        return Vec::new();
+    }
     let mut pts: Vec<Vec2> = Vec::new();
     match model.symbols.get(&f.symbol) {
         Some(sym) if sym.parts.iter().any(|p| !p.positions.is_empty()) => {
@@ -171,5 +174,125 @@ mod tests {
     fn layers_follow_the_category() {
         let f = Furnishing { category: "Furniture".into(), ..Default::default() };
         assert_eq!(furnishing_layer(&f), "I-FURN");
+    }
+
+    #[test]
+    fn nan_in_furnishing_fields_gives_empty_outline() {
+        let m = cube_model();
+        let f = cube(|f| f.at = [f64::NAN, 5.0]);
+        assert!(plan_outline(&m, &f).is_empty(), "NaN in at");
+        let f = cube(|f| f.size = [f64::NAN, 1.0, 1.0]);
+        assert!(plan_outline(&m, &f).is_empty(), "NaN in size");
+        let f = cube(|f| f.rotation = f64::NAN);
+        assert!(plan_outline(&m, &f).is_empty(), "NaN in rotation");
+        let f = cube(|f| f.elevation = f64::NAN);
+        assert!(plan_outline(&m, &f).is_empty(), "NaN in elevation");
+    }
+
+    #[test]
+    fn zero_size_furnishing_gives_empty_outline() {
+        let m = cube_model();
+        let f = cube(|f| f.size = [0.0, 0.0, 0.0]);
+        let h = plan_outline(&m, &f);
+        assert!(h.len() < 3, "zero-size furnishing should not produce a closed outline, got {} points", h.len());
+    }
+
+    #[test]
+    fn collinear_vertices_produce_a_two_point_hull() {
+        let mut positions = Vec::new();
+        for x in [-0.5f32, -0.25, 0.0, 0.25, 0.5] {
+            positions.push([x, 0.0, 0.0]);
+        }
+        let part = SymbolPart { name: "line".into(), positions, ..Default::default() };
+        let mesh = SymbolMesh { key: "line".into(), parts: vec![part], ..Default::default() };
+        let mut m = ArchModel::default();
+        m.symbols.insert("line".into(), mesh);
+        let f = Furnishing { symbol: "line".into(), size: [1.0, 1.0, 1.0], ..Default::default() };
+        let h = plan_outline(&m, &f);
+        assert_eq!(h.len(), 2, "collinear vertices should produce a 2-point hull, got {}", h.len());
+    }
+
+    #[test]
+    fn multiple_symbol_parts_are_merged() {
+        let mut positions1 = Vec::new();
+        for (x, y) in [(-0.5f32, -0.5f32), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)] {
+            positions1.push([x, y, 0.0]);
+        }
+        let mut positions2 = Vec::new();
+        for (x, y) in [(-0.3f32, -0.3f32), (0.3, -0.3), (0.3, 0.3), (-0.3, 0.3)] {
+            positions2.push([x, y, 1.0]);
+        }
+        let part1 = SymbolPart { name: "bottom".into(), positions: positions1, ..Default::default() };
+        let part2 = SymbolPart { name: "top".into(), positions: positions2, ..Default::default() };
+        let mesh = SymbolMesh { key: "two".into(), parts: vec![part1, part2], ..Default::default() };
+        let mut m = ArchModel::default();
+        m.symbols.insert("two".into(), mesh);
+        let f = Furnishing { symbol: "two".into(), size: [2.0, 2.0, 2.0], ..Default::default() };
+        let h = plan_outline(&m, &f);
+        assert!((area(&h) - 4.0).abs() < 1e-9, "hull should be the outer 2x2 square, got area {}", area(&h));
+    }
+
+    #[test]
+    fn huge_coordinates_do_not_overflow() {
+        let m = cube_model();
+        let f = cube(|f| {
+            f.at = [1e15, 1e15];
+            f.size = [1e6, 1e6, 1e6];
+        });
+        let h = plan_outline(&m, &f);
+        assert!(!h.is_empty(), "huge coordinates should still produce an outline");
+        assert!(h.iter().all(|p| p.x.is_finite() && p.y.is_finite()), "all points should be finite");
+    }
+
+    #[test]
+    fn empty_symbol_falls_back_to_size_rectangle() {
+        let mesh = SymbolMesh { key: "empty".into(), parts: vec![], ..Default::default() };
+        let mut m = ArchModel::default();
+        m.symbols.insert("empty".into(), mesh);
+        let f = Furnishing { symbol: "empty".into(), size: [2.0, 1.0, 1.0], ..Default::default() };
+        let h = plan_outline(&m, &f);
+        assert_eq!(h.len(), 4, "empty symbol should fall back to size rectangle");
+        assert!((area(&h) - 2.0).abs() < 1e-9, "fallback rectangle should be 2x1");
+    }
+
+    #[test]
+    fn negative_rotation_works() {
+        let m = cube_model();
+        let f = cube(|f| {
+            f.size = [2.0, 1.0, 1.0];
+            f.rotation = -90.0;
+        });
+        let h = plan_outline(&m, &f);
+        assert!((span(&h, true) - 1.0).abs() < 1e-9 && (span(&h, false) - 2.0).abs() < 1e-9, "-90 should swap spans");
+    }
+
+    #[test]
+    fn rotation_by_360_equals_zero() {
+        let m = cube_model();
+        let h0 = plan_outline(&m, &cube(|f| f.size = [2.0, 1.0, 1.0]));
+        let h360 = plan_outline(
+            &m,
+            &cube(|f| {
+                f.size = [2.0, 1.0, 1.0];
+                f.rotation = 360.0;
+            }),
+        );
+        assert_eq!(h0.len(), h360.len(), "360-degree rotation should produce the same point count");
+        for (a, b) in h0.iter().zip(h360.iter()) {
+            assert!((a.x - b.x).abs() < 1e-9 && (a.y - b.y).abs() < 1e-9, "360-degree rotation should equal 0");
+        }
+    }
+
+    #[test]
+    fn mirrored_with_rotation() {
+        let m = cube_model();
+        let f = cube(|f| {
+            f.size = [2.0, 1.0, 1.0];
+            f.rotation = 45.0;
+            f.mirrored = true;
+        });
+        let h = plan_outline(&m, &f);
+        assert_eq!(h.len(), 4, "mirrored + rotated should still produce a quadrilateral");
+        assert!(area(&h) > 0.99, "outline should be counter-clockwise with positive area");
     }
 }
