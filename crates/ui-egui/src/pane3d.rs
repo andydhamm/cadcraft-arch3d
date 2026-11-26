@@ -4437,4 +4437,120 @@ mod tests {
         let l = pane.lighting();
         assert!(l.sun_dir.is_none(), "night has no sun direction");
     }
+
+    #[test]
+    fn pane_lighting_nan_site_does_not_panic() {
+        let mut pane = Pane3d::new();
+        let mut model = cadcraft_doc::ArchModel::default();
+        model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: f64::NAN, longitude: 0.0, true_north: 0.0, ..Default::default() });
+        // Syncing with a NaN site should not panic and should result in default lighting (no sun).
+        assert!(pane.sync(1, Some(&model)));
+        let l = pane.lighting();
+        assert!(l.sun.is_none(), "NaN site results in no sun");
+        assert!(l.sun_dir.is_none(), "NaN site results in no sun direction");
+    }
+
+    #[test]
+    fn pane_lighting_invalid_date_time_keeps_last_good_sun() {
+        let mut pane = site_pane();
+        // Establish a valid sun.
+        let l1 = pane.lighting();
+        assert!(l1.sun.is_some(), "valid date/time has a sun");
+        assert!(pane.sun_valid);
+
+        // Change to an invalid time.
+        pane.sun_time = "25:00".into();
+        let l2 = pane.lighting();
+        assert!(l2.sun.is_some(), "invalid time keeps the last good sun");
+        assert_eq!(l2.sun.map(|s| s.dir), l1.sun.map(|s| s.dir), "sun direction unchanged");
+        assert!(!pane.sun_valid, "invalid time flags sun_valid as false");
+
+        // Change to an invalid date.
+        pane.sun_date = "2026-13-01".into();
+        pane.sun_time = "12:00".into();
+        let l3 = pane.lighting();
+        assert!(l3.sun.is_some(), "invalid date keeps the last good sun");
+        assert_eq!(l3.sun.map(|s| s.dir), l1.sun.map(|s| s.dir), "sun direction unchanged");
+        assert!(!pane.sun_valid, "invalid date flags sun_valid as false");
+
+        // Restore valid date/time.
+        pane.sun_date = "2026-06-21".into();
+        pane.sun_time = "15:00".into();
+        let l4 = pane.lighting();
+        assert!(l4.sun.is_some(), "valid date/time restores sun");
+        assert!(pane.sun_valid, "valid date/time clears sun_valid flag");
+    }
+
+    #[test]
+    fn pane_scene_key_stable_on_camera_move_lighting_change_changes_key() {
+        let mut pane = site_pane();
+        let key1 = pane.scene_key();
+
+        // Camera move should not change scene key.
+        orbit_by_drag(&mut pane, 10.0, 10.0, 0.01);
+        let key2 = pane.scene_key();
+        assert_eq!(key1, key2, "camera move does not change scene key");
+
+        // Night toggle changes lighting, which should change the scene key (via lighting inputs).
+        pane.night = true;
+        let _ = pane.lighting(); // Trigger lighting update
+        let key3 = pane.scene_key();
+        assert_ne!(key1, key3, "night toggle changes scene key");
+
+        // Day toggle back should restore the key (or match the original).
+        pane.night = false;
+        let _ = pane.lighting();
+        let key4 = pane.scene_key();
+        assert_eq!(key1, key4, "day toggle restores scene key");
+    }
+
+    #[test]
+    fn pane_finalize_options_photoreal_overrides() {
+        use cadcraft_doc::arch::Technique;
+        let mut pane = Pane3d::new();
+        pane.view.look.technique = Technique::Photoreal;
+
+        // Default samples
+        let (opts, _) = pane.finalize_options();
+        assert_eq!(opts.bounces, 12, "Photoreal sets bounces to 12");
+        assert!(opts.adaptive, "Photoreal enables adaptive sampling");
+        assert_eq!(opts.denoise_mode, cadcraft_doc::arch::DenoiseMode::Learned, "Photoreal uses learned denoiser");
+        assert!(opts.clamp.is_some(), "Photoreal sets a clamp");
+
+        // Check that film is applied
+        let (_, lighting) = pane.finalize_options();
+        assert!(!lighting.film.is_neutral(), "Photoreal applies film");
+    }
+
+    #[test]
+    fn pane_finalize_options_custom_samples_respected() {
+        let mut pane = Pane3d::new();
+        pane.view.look.technique = cadcraft_doc::arch::Technique::Standard;
+
+        // Set custom samples
+        {
+            let mut f = lock_final(&pane.finalize);
+            f.samples = 128;
+        }
+
+        let (opts, _) = pane.finalize_options();
+        assert_eq!(opts.spp, 128, "Custom samples are respected for standard technique");
+        assert_eq!(opts.bounces, cadcraft_render3d::pathtrace::PathOptions::default().bounces, "Standard technique uses default bounces");
+    }
+
+    #[test]
+    fn pane_finalize_options_photoreal_custom_samples_respected() {
+        let mut pane = Pane3d::new();
+        pane.view.look.technique = cadcraft_doc::arch::Technique::Photoreal;
+
+        // Set custom samples
+        {
+            let mut f = lock_final(&pane.finalize);
+            f.samples = 256;
+        }
+
+        let (opts, _) = pane.finalize_options();
+        assert_eq!(opts.spp, 256, "Custom samples are respected even in Photoreal");
+        assert_eq!(opts.bounces, 12, "Photoreal settings still apply");
+    }
 }
