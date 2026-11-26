@@ -1487,4 +1487,51 @@ mod tests {
             }
         }
     }
+
+    /// Spec point 2: a `window-sill` mesh is emitted only when `sill_depth > 0`.
+    #[test]
+    fn a_window_with_zero_sill_depth_produces_no_sill() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.sill_depth = 0.0;
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let has_sill = meshes.iter().any(|m| m.material.contains("sill"));
+        assert!(!has_sill, "window with zero sill_depth should not produce a sill mesh");
+    }
+
+    /// Spec point 2: sills are emitted only for windows, never for doors.
+    #[test]
+    fn a_door_produces_no_sill() {
+        let model = wall_model();
+        let mut o = door_opening();
+        o.sill_depth = 0.05;
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let has_sill = meshes.iter().any(|m| m.material.contains("sill"));
+        assert!(!has_sill, "door should not produce a sill mesh even with sill_depth set");
+    }
+
+    /// Spec point 3: a `CasedOpening` produces no leaf.
+    #[test]
+    fn a_cased_opening_produces_no_leaf() {
+        let model = wall_model();
+        let o = Opening { kind: OpeningKind::CasedOpening, style: "cased".into(), ..window_opening() };
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let has_leaf = meshes.iter().any(|m| m.material.contains("leaf"));
+        assert!(!has_leaf, "cased opening should not produce a leaf mesh");
+    }
+
+    /// Spec point 4: an opening taller than its host wall is clamped to the wall height.
+    #[test]
+    fn a_window_taller_than_its_wall_is_clamped() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.sill = 1.5;
+        o.height = 2.0;
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        for m in &meshes {
+            for p in &m.positions {
+                assert!(p[2] as f64 <= 2.5 + 1e-6, "vertex above wall height: z={}", p[2] as f64);
+            }
+        }
+    }
 }
