@@ -484,6 +484,7 @@ impl Pane3d {
         let Some(site) = self.site.as_ref() else { return (look, Ok(None)) };
         // A NaN latitude or longitude means the site is invalid; treat as no sun.
         if !site.latitude.is_finite() || !site.longitude.is_finite() {
+            look.sun.on = false;
             return (look, Ok(None));
         }
         let dir = cadcraft_arch::sun::sun_position(site.latitude, self.sun_date.trim(), self.sun_time.trim())
@@ -4568,5 +4569,44 @@ mod tests {
         let (opts, _) = pane.finalize_options();
         assert_eq!(opts.spp, 256, "Custom samples are respected even in Photoreal");
         assert_eq!(opts.bounces, 12, "Photoreal settings still apply");
+    }
+
+    #[test]
+    fn pane_lighting_nan_longitude_does_not_panic() {
+        let mut pane = Pane3d::new();
+        let mut model = cadcraft_doc::ArchModel::default();
+        model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: 0.0, longitude: f64::NAN, true_north: 0.0, ..Default::default() });
+        // Syncing with a NaN longitude should not panic and should result in default lighting (no sun).
+        assert!(pane.sync(1, Some(&model)));
+        let l = pane.lighting();
+        assert!(l.sun.is_none(), "NaN longitude results in no sun");
+        assert!(l.sun_dir.is_none(), "NaN longitude results in no sun direction");
+    }
+
+    #[test]
+    fn pane_lighting_nan_site_with_night() {
+        let mut pane = Pane3d::new();
+        let mut model = cadcraft_doc::ArchModel::default();
+        model.site = Some(cadcraft_doc::arch::SiteLocation { latitude: f64::NAN, longitude: f64::NAN, true_north: 0.0, ..Default::default() });
+        assert!(pane.sync(1, Some(&model)));
+        pane.night = true;
+        let l = pane.lighting();
+        assert!(l.sun.is_none(), "NaN site with night has no sun");
+        assert!(l.sun_dir.is_none(), "NaN site with night has no sun direction");
+    }
+
+    #[test]
+    fn pane_finalize_options_photoreal_with_lens_shift() {
+        let mut pane = Pane3d::new();
+        pane.view.look.technique = cadcraft_doc::arch::Technique::Photoreal;
+        pane.view.look.lens.shift = 0.5;
+        pane.view.look.lens.projection = cadcraft_doc::arch::LensProjection::Panini;
+
+        let (opts, lighting) = pane.finalize_options();
+        assert_eq!(opts.bounces, 12, "Photoreal settings still apply with lens shift");
+        assert!(opts.adaptive, "Photoreal enables adaptive sampling with lens shift");
+        assert_eq!(opts.denoise_mode, cadcraft_doc::arch::DenoiseMode::Learned, "Photoreal uses learned denoiser with lens shift");
+        assert!(opts.clamp.is_some(), "Photoreal sets a clamp with lens shift");
+        assert!(!lighting.film.is_neutral(), "Photoreal applies film with lens shift");
     }
 }
