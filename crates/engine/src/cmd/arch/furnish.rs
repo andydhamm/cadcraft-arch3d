@@ -623,17 +623,15 @@ fn room_centre(a: &ArchModel, f: &Furnishing) -> Result<[f64; 2]> {
         return Err(bad(CENTRE, "the furnishing has no finite position"));
     }
     let p = Vec2::new(f.at[0], f.at[1]);
-    let mut rooms: Vec<_> = a.rooms.iter().filter(|r| r.level == f.level && r.polygon.len() >= 3).collect();
+    let mut rooms: Vec<_> =
+        a.rooms.iter().filter(|r| r.level == f.level && r.polygon.len() >= 3 && r.polygon.iter().all(|v| v.is_finite())).collect();
     rooms.sort_by_key(|r| r.id);
     let room = rooms
         .into_iter()
-        .find(|r| point_in_polygon(&r.polygon, p) && !r.holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, p)))
+        .find(|r| {
+            point_in_polygon(&r.polygon, p) && !r.holes.iter().any(|h| h.len() >= 3 && h.iter().all(|v| v.is_finite()) && point_in_polygon(h, p))
+        })
         .ok_or_else(|| bad(CENTRE, format!("{} is not in a room", furnishing_label(f.id))))?;
-
-    // Check if the room's polygon has finite vertices before calculating bounds
-    if !room.polygon.iter().all(|v| v.is_finite()) {
-        return Err(bad(CENTRE, "the room has no finite extent"));
-    }
 
     let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
     for v in &room.polygon {
