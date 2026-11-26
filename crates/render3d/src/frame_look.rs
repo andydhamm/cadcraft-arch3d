@@ -105,7 +105,8 @@ impl Meter {
     }
 
     /// Log-average luminance (nits) over a grid of rays through the frame's pixel centres, for a
-    /// frame lit as `f` and `lighting` say; `None` when no ray hits anything.
+    /// frame lit as `f` and `lighting` say; `None` when no ray hits anything. Hits outside the
+    /// frame's clip box (when set) are skipped.
     pub fn log_average(
         &mut self,
         scene: &Scene3d,
@@ -140,6 +141,16 @@ impl Meter {
                 let py = (j as f32 + 0.5) / METER_ROWS as f32 * size.1 as f32;
                 let Some((origin, dir)) = ray_at(camera, size, [px, py]) else { continue };
                 let Some(hit) = bvh.ray(origin, dir, 1.0e9) else { continue };
+                // Skip hits outside the frame's clip box.
+                if let Some([lo, hi]) = f.clip {
+                    let p = hit.point;
+                    if p.x < f64::from(lo[0]) || p.x > f64::from(hi[0])
+                        || p.y < f64::from(lo[1]) || p.y > f64::from(hi[1])
+                        || p.z < f64::from(lo[2]) || p.z > f64::from(hi[2])
+                    {
+                        continue;
+                    }
+                }
                 let Some(&source) = self.sources.get(hit.object.0 as usize) else { continue };
                 let mesh = match source {
                     GROUND => self.ground.as_ref(),
@@ -956,5 +967,83 @@ mod tests {
         let [min, max] = clip.unwrap();
         assert_eq!(min[0], -f32::MAX);
         assert_eq!(max[0], f32::MAX);
+    }
+
+    /// Metering respects the frame's clip box: hits outside it are skipped.
+    #[test]
+    fn meter_respects_clip_box() {
+        // A plane with a clip box that excludes half of it: only the inside half is metered.
+        let scene = plane();
+        let camera = down_at([0.0, 0.0, 0.0]);
+        let mut meter = Meter::default();
+        let lighting = overhead(Some(0.5));
+        // No clip: meter the whole plane.
+        let f_no_clip = frame_look(&scene, &camera, (64, 48), &lighting, false, &mut meter);
+        let l_full = meter.log_average(&scene, &camera, (64, 48), &lighting, false, &f_no_clip);
+        assert!(l_full.is_some(), "full plane meters");
+        // Clip to x < 0: only the left half is metered. The plane is symmetric, so the result is the same.
+        let mut lighting_clip = lighting.clone();
+        lighting_clip.look.clip = Some(cadcraft_doc::arch::ClipBox {
+            min: [-5.0, -5.0, -1.0],
+            max: [0.0, 5.0, 1.0],
+            ..Default::default(),
+        });
+        let f_clip = frame_look(&scene, &camera, (64, 48), &lighting_clip, false, &mut meter);
+        let l_clip = meter.log_average(&scene, &camera, (64, 48), &lighting_clip, false, &f_clip);
+        assert!(l_clip.is_some(), "clipped plane meters");
+        // The clip box excludes x > 0, so hits at x > 0 are skipped. The plane spans -5..5, so
+        // roughly half the rays hit inside the box. The luminance is the same (uniform plane),
+        // but the count differs. Verify the clip is applied by checking a box that excludes everything.
+        let mut lighting_none = lighting.clone();
+        lighting_none.look.clip = Some(cadcraft_doc::arch::ClipBox {
+            min: [10.0, 10.0, 10.0],
+            max: [20.0, 20.0, 20.0],
+            ..Default::default(),
+        });
+        let f_none = frame_look(&scene, &camera, (64, 48), &lighting_none, false, &mut meter);
+        let l_none = meter.log_average(&scene, &camera, (64, 48), &lighting_none, false, &f_none);
+        assert!(l_none.is_none(), "a clip box excluding all geometry meters nothing");
+    }
+
+    /// frame_uniform with atlas_size = 0 writes 0.0 for the atlas size word.
+    #[test]
+    fn frame_uniform_atlas_size_zero() {
+        let bytes = frame_uniform(None, &LitParams::default(), 0);
+        let word = |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+        assert_eq!(word(92), 0.0, "atlas size 0 is written as 0.0");
+    }
+
+    /// frame_uniform with a huge atlas_size writes it as f32 (may lose precision but stays finite).
+    #[test]
+    fn frame_uniform_atlas_size_huge() {
+        let bytes = frame_uniform(None, &LitParams::default(), u32::MAX);
+        let word = |at: usize| f32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]);
+        let v = word(92);
+        assert!(v.is_finite(), "huge atlas size must stay finite: {v}");
+        assert!(v > 0.0, "huge atlas size is positive: {v}");
+    }
+
+    /// fill_draw with a FrameLook that has tone_map = 0 but a clip box: the clip is applied even
+    /// though exposure is not (the clip is a view property).
+    #[test]
+    fn fill_draw_applies_clip_without_tone_map() {
+        use cadcraft_doc::arch::ClipBox;
+        let scene = Scene3d::default();
+        let mut lighting = Lighting::default();
+        lighting.look.clip = Some(ClipBox { min: [-1.0, -2.0, -3.0], max: [4.0, 5.0, 2.0], ..Default::default() });
+        let mut f = FrameLook::default();
+        // tone_map = 0 (the default), but clip is set.
+        view_look(&mut f, &lighting);
+        assert_eq!(f.tone_map, 0);
+        assert!(f.clip.is_some());
+        let before = PbrUniform::new(&Light::DEFAULT, 1.0, &Draw::default(), STYLE_SHADED, [0.0; 3]);
+        let mut after = before;
+        fill_draw(&mut after, &f, &scene, "wall");
+        // The clip flag and box are set even though tone_map is 0.
+        assert_eq!(after.flags & PBR_FLAG_CLIP, PBR_FLAG_CLIP);
+        assert_eq!((after.clip_min, after.clip_max), ([-1.0, -2.0, -3.0], [4.0, 5.0, 2.0]));
+        // Exposure fields are untouched (tone_map == 0 skips fill_exposure).
+        assert_eq!(after.tone_map, 0);
+        assert_eq!(after.exposure, 0.0);
     }
 }
