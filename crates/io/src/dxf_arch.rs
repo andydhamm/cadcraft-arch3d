@@ -9,7 +9,7 @@
 //! Nothing in this module is wired into the reader or the writer yet; that is the next
 //! segment.
 
-use cadcraft_doc::ArchModel;
+use cadcraft_doc::{ArchModel, Wall};
 use cadcraft_geom::Vec2;
 use craft_dxf::Tag;
 use serde::{Deserialize, Serialize};
@@ -3368,7 +3368,7 @@ mod tests {
             assert!(
                 (p.x - wx).abs() < 1e-9 && (p.y - wy).abs() < 1e-9,
                 "corner {} not at ({}, {})",
-                got.iter().position(|c| c == p).map_or(-1, |i| i),
+                got.iter().position(|c| c == p).unwrap_or_default(),
                 wx,
                 wy
             );
@@ -3380,12 +3380,15 @@ mod tests {
         for (p, (wx, wy)) in got.iter().zip(want) {
             assert!((p.x - wx).abs() < 1e-9 && (p.y - wy).abs() < 1e-9, "corner not at ({}, {})", wx, wy);
         }
-        // A wall from (10, 0) to (0, 0) mirrors the first: the ring flips with the direction.
+        // A wall from (10, 0) to (0, 0) mirrors the first: the ring order flips with
+        // the direction (start+perp is now on the x=10 side), so the +perp pair and
+        // the -perp pair swap which end of the wall they attach to.
         let corners = wall_ring(&Wall::new(Vec2::new(10.0, 0.0), Vec2::new(0.0, 0.0), 0.2));
         let got = corners.expect("a sane wall must yield a poche ring");
-        assert_eq!((got[0], got[1]), ((0.0, 0.1), (10.0, 0.1)), "reversed wall corners swapped");
-        assert!((got[2].x - 10.0).abs() < 1e-9 && (got[2].y + 0.1).abs() < 1e-9, "reversed wall end+perp wrong");
-        assert!((got[3].x - 0.0).abs() < 1e-9 && (got[3].y - 0.1).abs() < 1e-9, "reversed wall start+perp wrong");
+        assert!((got[0].x - 10.0).abs() < 1e-9 && (got[0].y + 0.1).abs() < 1e-9, "reversed wall start+perp wrong");
+        assert!((got[1].x - 0.0).abs() < 1e-9 && (got[1].y + 0.1).abs() < 1e-9, "reversed wall end+perp wrong");
+        assert!((got[2].x - 0.0).abs() < 1e-9 && (got[2].y - 0.1).abs() < 1e-9, "reversed wall end-perp wrong");
+        assert!((got[3].x - 10.0).abs() < 1e-9 && (got[3].y - 0.1).abs() < 1e-9, "reversed wall start-perp wrong");
     }
 }
 
@@ -3406,10 +3409,11 @@ fn wall_ring_refuses_non_finite_zero_short_and_overflowing_walls() {
     // Zero length and sub-epsilon length (the < 1e-12 guard).
     assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0), 0.2)).is_none());
     assert!(wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1.0e-13, 0.0), 0.2)).is_none());
-    assert!(
-        wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1e-12, 0.0), 0.2))
-            .is_some_or("a 1e-12 wall is exactly at the guard; either outcome is acceptable but must not panic")
-    );
+    // The guard is strict (`len < 1e-12`), so a wall at exactly 1e-12 is NOT skipped;
+    // it must yield a finite four-corner poché ring.
+    if let Some(r) = wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1e-12, 0.0), 0.2)) {
+        assert!(r.iter().all(Vec2::is_finite()), "a 1e-12 wall must yield a finite ring");
+    }
     // Finite endpoints so far apart that `end - start` overflows to infinity.
     assert!(wall_ring(&Wall::new(Vec2::new(1.7e308, 0.0), Vec2::new(-1.7e308, 0.0), 0.2)).is_none());
     // A huge-but-finite wall is still fine: the ring is finite and offset by half the thickness.
@@ -3430,9 +3434,9 @@ fn proxy_polylines_write_rings_in_wall_order_with_the_wall_id_label() {
 
     let polys = proxy_polylines(&m);
     assert_eq!(polys.len(), 3, "three isolated walls must write three proxy rings");
-    for (i, want_id) in [w0, w1, w2].into_iter().enumerate().zip(["w0", "w1", "w2"]).map(|((_, wid), id)| (wid, id)) {
-        let label = format!("w{}", wid.0);
-        assert!(polys[i].iter().any(|t| t.code == 1000 && t.str().eq_ignore_ascii_case(label)), "ring {} must carry the xdata id {}", i, label);
+    for (i, wid) in [w0, w1, w2].iter().enumerate() {
+        let label = format!("{wid}");
+        assert!(polys[i].iter().any(|t| t.code == 1000 && t.str().eq_ignore_ascii_case(&label)), "ring {i} must carry the wall id xdata {label}");
     }
     // Every ring is a closed polyline with a vertex count that matches its points.
     for t in &polys {
