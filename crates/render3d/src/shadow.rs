@@ -1001,8 +1001,8 @@ mod tests {
         let bytes = pass_bytes(&m, Some(clip));
         assert_eq!(bytes.len(), 96);
         // The clip_min starts at byte 64; read it back.
-        let clip_min: [f32; 3] = bytemuck::from_bytes(&bytes[64..76]);
-        let clip_max: [f32; 3] = bytemuck::from_bytes(&bytes[80..92]);
+        let clip_min: [f32; 3] = *bytemuck::from_bytes(&bytes[64..76]);
+        let clip_max: [f32; 3] = *bytemuck::from_bytes(&bytes[80..92]);
         assert_eq!(clip_min, [-f32::MAX, -f32::MAX, -f32::MAX]);
         assert_eq!(clip_max, [f32::MAX, f32::MAX, f32::MAX]);
     }
@@ -1014,8 +1014,8 @@ mod tests {
         let clip = [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]];
         let bytes = pass_bytes(&m, Some(clip));
         assert_eq!(bytes.len(), 96);
-        let clip_min: [f32; 3] = bytemuck::from_bytes(&bytes[64..76]);
-        let clip_max: [f32; 3] = bytemuck::from_bytes(&bytes[80..92]);
+        let clip_min: [f32; 3] = *bytemuck::from_bytes(&bytes[64..76]);
+        let clip_max: [f32; 3] = *bytemuck::from_bytes(&bytes[80..92]);
         assert_eq!(clip_min, [1.0, 2.0, 3.0]);
         assert_eq!(clip_max, [1.0, 2.0, 3.0]);
     }
