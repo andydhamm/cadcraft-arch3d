@@ -246,7 +246,7 @@ fn opening_ring(w: &cadcraft_doc::Wall, o: &cadcraft_doc::arch::Opening) -> Opti
     if !w.start.is_finite() || !w.end.is_finite() {
         return None;
     }
-    if w.thickness <= 0.0 {
+    if !w.thickness.is_finite() || w.thickness <= 0.0 {
         return None;
     }
     let dir = w.end - w.start;
@@ -329,11 +329,15 @@ pub(crate) fn proxy_polylines(m: &ArchModel) -> Vec<Vec<Tag>> {
 pub(crate) fn proxy_opening_polylines(m: &ArchModel) -> Vec<(String, Vec<Tag>)> {
     let mut out: Vec<(String, Vec<Tag>)> = Vec::new();
     for o in m.openings.iter().take(cadcraft_doc::arch::MAX_OPENINGS) {
+        // Openings without an existing host wall can not be placed; skip them so the
+        // symbol is never built against a dangling reference (spec: "for each opening
+        // with an existing host").
+        let Some(wall) = m.wall(o.host) else { continue };
         // Every polyline of the plan symbol is its own LWPOLYLINE; when the symbol
         // yields no usable geometry, fall back to the rough opening ring.
         let polys: Option<Vec<Vec<Vec2>>> = match cadcraft_arch::symbol::opening_symbol(m, o) {
             Some(s) if s.polylines.iter().any(|c| !c.is_empty()) => Some(s.polylines),
-            _ => m.wall(o.host).and_then(|w| opening_ring(w, o)).map(|r| vec![r]),
+            _ => opening_ring(wall, o).map(|r| vec![r]),
         };
         let Some(polys) = polys else { continue };
         let label = format!("o{}", o.id);
@@ -2437,6 +2441,59 @@ mod tests {
             polys.len(),
             cadcraft_doc::arch::MAX_OPENINGS * 16
         );
+    }
+
+    /// An opening whose host wall has been removed is skipped: no proxy is written and
+    /// no panic, enforcing the spec's "for each opening with an existing host" invariant.
+    #[test]
+    fn opening_with_removed_host_is_skipped() {
+        let mut m = ArchModel::default();
+        let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        m.push_opening(Opening::new(wid, 1.0, 0.9, 2.1, OpeningKind::Door));
+        // Remove the wall so the opening's host is dangling; the proxy must not be built.
+        m.walls.clear();
+        let polys = proxy_opening_polylines(&m);
+        assert_eq!(polys.len(), 0, "an opening whose host was removed must write no proxy");
+    }
+
+    /// An opening on a wall whose thickness is NaN must not write NaN into a proxy.
+    /// This covers the rough-ring path (built only when the symbol yields nothing);
+    /// `opening_ring` now rejects a non-finite thickness rather than emitting NaN corners.
+    #[test]
+    fn opening_on_a_nan_thickness_wall_writes_no_nan() {
+        let mut m = ArchModel::default();
+        let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), f64::NAN));
+        m.push_opening(Opening::new(wid, 5.0, 0.9, 2.1, OpeningKind::Door));
+        let polys = proxy_opening_polylines(&m);
+        for (layer, tags) in &polys {
+            for t in tags {
+                if t.code == 10 || t.code == 20 {
+                    assert!(t.f64().is_finite(), "non-finite coordinate in opening proxy on layer {}", layer);
+                }
+            }
+        }
+    }
+
+    /// Degenerate openings (zero or negative width, zero height) must not panic and must
+    /// never write non-finite geometry. The valid opening on the same wall still writes
+    /// finite proxies, so the guard filters only the bad ones.
+    #[test]
+    fn degenerate_openings_do_not_write_non_finite_geometry() {
+        let mut m = ArchModel::default();
+        let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        m.push_opening(Opening::new(wid, 1.0, 0.0, 2.1, OpeningKind::Door)); // zero width
+        m.push_opening(Opening::new(wid, 3.0, -2.0, 2.1, OpeningKind::Door)); // negative width
+        m.push_opening(Opening::new(wid, 5.0, 0.9, 0.0, OpeningKind::Door)); // zero height
+        m.push_opening(Opening::new(wid, 7.0, 0.9, 2.1, OpeningKind::Door)); // valid
+        let polys = proxy_opening_polylines(&m);
+        assert!(!polys.is_empty(), "a valid opening on the same wall must still write proxies");
+        for (layer, tags) in &polys {
+            for t in tags {
+                if t.code == 10 || t.code == 20 {
+                    assert!(t.f64().is_finite(), "non-finite coordinate in opening proxy on layer {}", layer);
+                }
+            }
+        }
     }
 
     /// An opening at huge coordinates produces finite proxy polylines.
