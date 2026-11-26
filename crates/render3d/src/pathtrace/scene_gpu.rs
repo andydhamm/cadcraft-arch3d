@@ -2234,6 +2234,46 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn material_for_scene_missing_texture_uses_base() {
+        // A MaterialDef with a texture key not in the scene uses just the base colour.
+        let mut scene = Scene3d::default();
+        let def = MaterialDef {
+            base_color: [0.5, 0.3, 0.1, 1.0],
+            metallic: 0.2,
+            roughness: 0.6,
+            texture: Some("sym:missing:t0".into()),
+            ..Default::default()
+        };
+        scene.materials.insert("sym:k:0".into(), def);
+        let m = material_for_scene(&scene, "sym:k:0");
+        assert_eq!(m.albedo, [0.5, 0.3, 0.1]);
+        assert_eq!(m.metallic, 0.2);
+        assert_eq!(m.roughness, 0.6);
+    }
+
+    #[test]
+    fn material_for_scene_invalid_texture_uses_base() {
+        // A MaterialDef with a texture key in the scene but an invalid image uses just the base colour.
+        let mut scene = Scene3d::default();
+        let invalid = ImageRgba { width: 0, height: 0, rgba: vec![] };
+        scene.textures.insert("sym:k:t0".into(), invalid);
+        let def = MaterialDef { base_color: [0.4, 0.5, 0.6, 1.0], texture: Some("sym:k:t0".into()), ..Default::default() };
+        scene.materials.insert("sym:k:0".into(), def);
+        let m = material_for_scene(&scene, "sym:k:0");
+        assert_eq!(m.albedo, [0.4, 0.5, 0.6]);
+    }
+
+    #[test]
+    fn material_for_prefix_only_names() {
+        // "window-" and "door-" (prefix only, no part) are treated as full names.
+        let m1 = material_for("window-");
+        let m2 = material_for("door-");
+        // They should not crash and should fall back to the neutral material.
+        assert_eq!(m1.albedo, [0.75, 0.75, 0.75]);
+        assert_eq!(m2.albedo, [0.75, 0.75, 0.75]);
+    }
 }
 
 #[cfg(test)]
