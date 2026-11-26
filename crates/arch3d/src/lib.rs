@@ -147,6 +147,9 @@ pub fn wall_span(model: &ArchModel, w: &Wall) -> Option<(f64, f64)> {
     if w.retaining
         && let Some(span) = site::retaining_span(model, w)
     {
+        if !span.0.is_finite() || !span.1.is_finite() || span.1 <= span.0 {
+            return None;
+        }
         return Some(span);
     }
     let level = model.levels.iter().rev().find(|l| l.index == w.base_level).or(model.levels.last());
@@ -1614,6 +1617,97 @@ mod tests {
         let z_max = mesh.positions.iter().map(|p| p[2]).fold(f32::NEG_INFINITY, f32::max);
         assert!((z_min - 0.0f32).abs() < 1e-3f32, "z_min = {z_min}");
         assert!((z_max - 2.4f32).abs() < 1e-3f32, "z_max = {z_max}, expected 2.4 (ceiling_height fallback)");
+    }
+
+    /// A spanning wall whose top_level carries a NaN elevation must be skipped.
+    #[test]
+    fn wall_span_spanning_top_level_nan_elevation_is_none() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 5, elevation: f64::NAN, ceiling_height: 2.4, ..Default::default() });
+        let wall = Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(5),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        };
+        assert!(wall_span(&model, &wall).is_none(), "NaN top-level elevation must yield None");
+    }
+
+    /// A spanning wall whose top_level carries a NaN ceiling height must be skipped.
+    #[test]
+    fn wall_span_spanning_top_level_nan_ceiling_height_is_none() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 5, elevation: 3.0, ceiling_height: f64::NAN, ..Default::default() });
+        let wall = Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(5),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        };
+        assert!(wall_span(&model, &wall).is_none(), "NaN top-level ceiling height must yield None");
+    }
+
+    /// A `to_ceiling` wall on a level with zero ceiling height must be skipped.
+    #[test]
+    fn wall_span_to_ceiling_zero_ceiling_height_is_none() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 0.0, ceiling_height: 0.0, ..Default::default() });
+        let wall = Wall {
+            id: ArchId(1),
+            base_level: 0,
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            to_ceiling: true,
+            ..Default::default()
+        };
+        assert!(wall_span(&model, &wall).is_none(), "to_ceiling with zero ceiling height must yield None");
+    }
+
+    /// A `to_ceiling` wall must span exactly `elevation .. elevation + ceiling_height`.
+    #[test]
+    fn wall_span_to_ceiling_span_is_exactly_elevation_plus_ceiling_height() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 1.5, ceiling_height: 2.5, ..Default::default() });
+        let wall = Wall {
+            id: ArchId(1),
+            base_level: 0,
+            to_ceiling: true,
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        };
+        assert_eq!(wall_span(&model, &wall), Some((1.5, 4.0)));
+    }
+
+    /// A non-`to_ceiling` wall must span exactly `elevation .. elevation + height`.
+    #[test]
+    fn wall_span_non_to_ceiling_span_is_exactly_elevation_plus_height() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 1.5, ceiling_height: 2.5, ..Default::default() });
+        let wall = Wall {
+            id: ArchId(1),
+            base_level: 0,
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.0,
+            ..Default::default()
+        };
+        assert_eq!(wall_span(&model, &wall), Some((1.5, 3.5)));
     }
 
     #[test]

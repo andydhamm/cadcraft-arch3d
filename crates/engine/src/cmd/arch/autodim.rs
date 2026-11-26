@@ -118,6 +118,32 @@ fn kind_rank(kind: AutoRowKind) -> usize {
 
 /// The dimension between two consecutive points of a row.
 fn build_dimension(doc: &Drawing, row: &AutoRow, a: &AutoPoint, b: &AutoPoint) -> Dimension {
+    // Guard against non-finite geometry which could arise from degenerate input or bugs upstream.
+    if !a.at.is_finite() || !b.at.is_finite() || !row.dir.is_finite() || !row.normal.is_finite() || !row.line_offset.is_finite() {
+        return Dimension {
+            kind: DimKind::Linear { rotation: 0.0 },
+            defpt: cadcraft_geom::Vec3::ZERO,
+            text_mid: cadcraft_geom::Vec3::ZERO,
+            p13: cadcraft_geom::Vec3::ZERO,
+            p14: cadcraft_geom::Vec3::ZERO,
+            p15: cadcraft_geom::Vec3::ZERO,
+            p16: cadcraft_geom::Vec3::ZERO,
+            text: String::new(),
+            style: DIMS_STYLE.to_string(),
+            measurement: 0.0,
+            text_rotation: 0.0,
+            user_text_pos: false,
+            block: None,
+            overrides: Default::default(),
+            assoc: vec![
+                DimAssoc { point: "p13".to_string(), handle: a.handle, snap: AssocSnap::Arch { feature: a.feature, along: a.along } },
+                DimAssoc { point: "p14".to_string(), handle: b.handle, snap: AssocSnap::Arch { feature: b.feature, along: b.along } },
+            ],
+            marks: Default::default(),
+            insertion_point: cadcraft_geom::Vec3::ZERO,
+        };
+    }
+
     let rotation = if row.dir.x.abs() >= row.dir.y.abs() { 0.0 } else { std::f64::consts::FRAC_PI_2 };
     let defpt = row.dir * b.at.dot(row.dir) + row.normal * row.line_offset;
     let mut dm = Dimension {
@@ -342,20 +368,38 @@ fn run_dimauto(s: &mut Session, p: &Value) -> Result<Value> {
     let pos = work.arch.auto_dims.iter().position(|r| r.level == level);
     let old = pos.and_then(|i| work.arch.auto_dims.get(i)).map(|r| r.generated.clone()).unwrap_or_default();
     let (generated, entities_changed) = reconcile(&mut work, level, &kinds, &old);
-    changed |= entities_changed || generated != old || pos.is_none();
-    match pos.and_then(|i| work.arch.auto_dims.get_mut(i)) {
-        Some(rec) => {
-            changed |= rec.rows != kinds;
-            rec.rows = kinds;
-            rec.generated = generated;
+
+    // If nothing changed in entities and the generated rows are the same as before (or both empty),
+    // and the record already exists with the correct kinds, we don't need to commit.
+    // Specifically, if generated is empty and old is empty, and pos is None, we don't want to push an empty record.
+    let record_exists = pos.is_some();
+    let rows_match = pos.and_then(|i| work.arch.auto_dims.get(i)).map(|r| r.rows == kinds).unwrap_or(false);
+
+    // We only commit if:
+    // 1. Entities changed (dimensions added/removed/updated)
+    // 2. The generated list differs from the old list
+    // 3. The record didn't exist before (but we generated something) OR the rows (kinds) changed
+
+    let needs_commit = entities_changed || generated != old || (pos.is_none() && !generated.is_empty()) || (pos.is_some() && !rows_match);
+
+    if needs_commit {
+        match pos.and_then(|i| work.arch.auto_dims.get_mut(i)) {
+            Some(rec) => {
+                rec.rows = kinds;
+                rec.generated = generated;
+            }
+            None => {
+                // Only push if we actually have generated rows, otherwise leave auto_dims empty
+                if !generated.is_empty() {
+                    work.arch.auto_dims.push(AutoDims { level, rows: kinds, generated, ..Default::default() });
+                }
+            }
         }
-        None => work.arch.auto_dims.push(AutoDims { level, rows: kinds, generated, ..Default::default() }),
-    }
-    let out = reply(&work, level);
-    if changed {
         work.touch_arch();
-        *s.doc_mut()? = work;
+        *s.doc_mut()? = work.clone();
     }
+
+    let out = reply(&work, level);
     Ok(out)
 }
 
@@ -421,12 +465,19 @@ pub(crate) fn regenerate(s: &mut Session, before: Option<&Arc<Drawing>>, uid: Op
         return;
     }
     let current = &st.doc;
-    if current.arch.auto_dims.is_empty() || before.arch_revision == current.arch_revision {
+    // Optimization: if there are no auto dims records, do nothing.
+    if current.arch.auto_dims.is_empty() {
         return;
     }
+    // Optimization: if the model hasn't changed, do nothing.
+    if before.arch_revision == current.arch_revision {
+        return;
+    }
+
     // Work on a copy so an unchanged model keeps the same Arc and no undo step of its own.
     let mut work: Drawing = (**current).clone();
     let mut changed = ensure_layer_and_style(&mut work);
+
     for idx in 0..work.arch.auto_dims.len() {
         let Some(rec) = work.arch.auto_dims.get(idx) else {
             break;
@@ -438,8 +489,11 @@ pub(crate) fn regenerate(s: &mut Session, before: Option<&Arc<Drawing>>, uid: Op
             rec.generated = generated;
         }
     }
-    if changed && let Ok(live) = s.doc_mut() {
-        *live = work;
+
+    if changed {
+        if let Ok(live) = s.doc_mut() {
+            *live = work;
+        }
     }
 }
 
@@ -899,5 +953,160 @@ mod tests {
         // w2: (10,8)-(0,8); offset 2 -> x=8, offset 6 -> x=4; w5 splits at x=6
         // points at x = -0.1, 4, 6, 8, 10.1
         assert!(close(&vals, &[4.1, 2.0, 2.0, 2.1]), "{vals:?}");
+    }
+
+    #[test]
+    fn regenerate_empty_model_is_noop() {
+        let mut s = Session::new();
+        // Execute a command that changes the drawing (e.g. line)
+        s.execute("line", &json!({"points": [[0,0],[1,1]]})).unwrap();
+
+        // The regenerate hook should run but do nothing because auto_dims is empty.
+        // We verify this by checking that the Arc pointer hasn't changed if we could,
+        // but primarily that no extra undo step was pushed by the hook itself.
+        let undo_count = s.state().unwrap().undo.len();
+
+        // Another command
+        s.execute("line", &json!({"points": [[1,1],[2,2]]})).unwrap();
+
+        // Should have 2 undo steps (one for each line), not more.
+        assert_eq!(s.state().unwrap().undo.len(), undo_count + 1);
+    }
+
+    #[test]
+    fn regenerate_unchanged_model_keeps_arc() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+
+        let undo_count = s.state().unwrap().undo.len();
+
+        // Run a command that doesn't change the arch model significantly or triggers regenerate with no changes.
+        // A simple line command changes the drawing but not the arch model's revision in a way that
+        // forces auto_dims regeneration if the model structure is identical?
+        // Actually, any command triggers after_command.
+        // If the arch_revision doesn't change, regenerate returns early.
+        s.execute("line", &json!({"points": [[0, 20], [1, 20]]})).unwrap();
+
+        // The Arc should be different because the drawing changed (line added).
+        // But the key is that regenerate didn't push an *extra* undo step.
+        assert_eq!(s.state().unwrap().undo.len(), undo_count + 1);
+
+        // If we run a command that *doesn't* change the drawing (e.g. a read-only command),
+        // the Arc should be identical.
+        let before_arc = s.state().unwrap().doc.clone();
+        s.execute("arch.inspect", &json!({})).unwrap();
+        let after_arc = s.state().unwrap().doc.clone();
+
+        assert!(Arc::ptr_eq(&before_arc, &after_arc), "Arc should be identical for read-only command");
+    }
+
+    #[test]
+    fn dimauto_empty_model_is_noop() {
+        let mut s = Session::new();
+        // dimauto on an empty model should succeed but do nothing (no rows, no dimensions)
+        let r = s.execute("dimauto", &json!({}));
+        assert!(r.is_ok(), "dimauto on empty model should succeed");
+        let v = r.unwrap();
+        assert_eq!(v["dimensions"], 0);
+        assert!(v["rows"].as_array().unwrap().is_empty());
+        assert!(s.doc().unwrap().arch.auto_dims.is_empty());
+    }
+
+    #[test]
+    fn dimauto_non_finite_wall_is_safe() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            let w = cadcraft_doc::Wall {
+                start: cadcraft_geom::Vec2::new(f64::NAN, 0.0),
+                end: cadcraft_geom::Vec2::new(10.0, 0.0),
+                thickness: 0.2,
+                height: 2.4,
+                exterior: true,
+                ..Default::default()
+            };
+            d.arch.push_wall(w);
+            d.touch_arch();
+        }
+        // dimauto should not crash
+        let r = s.execute("dimauto", &json!({}));
+        assert!(r.is_ok(), "dimauto should handle non-finite geometry without crashing");
+
+        // The dimensions might be invalid, but the command shouldn't panic.
+        // We just check that we can still inspect.
+        let v = s.execute("arch.inspect", &json!({ "autoDims": true })).unwrap();
+        assert!(v["autoDims"].is_array());
+    }
+
+    #[test]
+    fn dimauto_zero_thickness_wall_is_safe() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            let w = cadcraft_doc::Wall {
+                start: cadcraft_geom::Vec2::new(0.0, 0.0),
+                end: cadcraft_geom::Vec2::new(10.0, 0.0),
+                thickness: 0.0,
+                height: 2.4,
+                exterior: true,
+                ..Default::default()
+            };
+            d.arch.push_wall(w);
+            d.touch_arch();
+        }
+        // dimauto should not crash
+        let r = s.execute("dimauto", &json!({}));
+        assert!(r.is_ok(), "dimauto should handle zero-thickness wall without crashing");
+
+        let v = s.execute("arch.inspect", &json!({ "autoDims": true })).unwrap();
+        assert!(v["autoDims"].is_array());
+    }
+
+    #[test]
+    fn regenerate_non_finite_geometry_is_safe() {
+        let mut s = Session::new();
+        // Create a wall with NaN coordinates
+        if let Ok(d) = s.doc_mut() {
+            let w = cadcraft_doc::Wall {
+                start: cadcraft_geom::Vec2::new(f64::NAN, 0.0),
+                end: cadcraft_geom::Vec2::new(10.0, 0.0),
+                thickness: 0.2,
+                height: 2.4,
+                exterior: true,
+                ..Default::default()
+            };
+            d.arch.push_wall(w);
+            d.touch_arch();
+        }
+
+        // dimauto should not crash
+        let r = s.execute("dimauto", &json!({}));
+        assert!(r.is_ok(), "dimauto should handle non-finite geometry without crashing");
+
+        // The dimensions might be invalid, but the command shouldn't panic.
+        // We just check that we can still inspect.
+        let v = s.execute("arch.inspect", &json!({ "autoDims": true })).unwrap();
+        assert!(v["autoDims"].is_array());
+    }
+
+    #[test]
+    fn regenerate_edited_rows_are_preserved() {
+        let mut s = house();
+        s.execute("dimauto", &json!({})).unwrap();
+
+        // Edit a dimension
+        let north = row(&s, 0, "north", AutoRowKind::Walls).unwrap();
+        let h = north.handles[0];
+        s.execute("dimedit", &json!({"handles": [h.hex()], "mode": "new", "text": "EDITED"})).unwrap();
+
+        // Verify it's marked edited
+        assert!(row(&s, 0, "north", AutoRowKind::Walls).unwrap().edited);
+
+        // Change the model (move w5)
+        s.execute("dimdrive", &json!({"dimension": north.handles[1].hex(), "value": 5.6, "object": "w5"})).unwrap();
+
+        // The edited row should still be edited and have the same handles
+        let after = row(&s, 0, "north", AutoRowKind::Walls).unwrap();
+        assert!(after.edited);
+        assert_eq!(after.handles, north.handles);
+        assert_eq!(dim(&s, h).text, "EDITED");
     }
 }
