@@ -1517,6 +1517,41 @@ mod tests {
         assert!(mesh.triangle_count() > no_holes.triangle_count(), "two holes should add triangles");
     }
 
+    /// A wall with NaN coordinates must return None from profile_prism.
+    #[test]
+    fn profile_prism_returns_none_for_nan_wall_coords() {
+        let outer = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, 2.4), Vec2::new(0.0, 2.4)];
+        let wall = Wall { start: Vec2::new(f64::NAN, 0.0), end: Vec2::new(4.0, 0.0), thickness: 0.2, height: 2.4, ..Default::default() };
+        let mesh = profile_prism(&outer, &[], &wall, 0.0, "wall", ArchId(1));
+        assert!(mesh.is_none(), "NaN wall start should return None");
+
+        let wall2 = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.0, f64::NAN), thickness: 0.2, height: 2.4, ..Default::default() };
+        let mesh2 = profile_prism(&outer, &[], &wall2, 0.0, "wall", ArchId(1));
+        assert!(mesh2.is_none(), "NaN wall end should return None");
+    }
+
+    /// A profile with NaN vertices must return None from profile_prism.
+    #[test]
+    fn profile_prism_returns_none_for_nan_profile() {
+        let outer = vec![Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), Vec2::new(4.0, f64::NAN), Vec2::new(0.0, 2.4)];
+        let wall = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.0, 0.0), thickness: 0.2, height: 2.4, ..Default::default() };
+        let mesh = profile_prism(&outer, &[], &wall, 0.0, "wall", ArchId(1));
+        assert!(mesh.is_none(), "NaN profile vertex should return None");
+    }
+
+    /// A hole with NaN vertices must be dropped by profile_prism.
+    #[test]
+    fn profile_prism_drops_holes_with_nan_vertices_2() {
+        let outer = vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 2.4), Vec2::new(0.0, 2.4)];
+        let hole = vec![Vec2::new(4.0, 0.5), Vec2::new(6.0, 0.5), Vec2::new(6.0, 1.5), Vec2::new(f64::NAN, 1.5)];
+        let wall = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.4, ..Default::default() };
+        let mesh = profile_prism(&outer, &[hole], &wall, 0.0, "wall", ArchId(1));
+        assert!(mesh.is_some(), "should produce a mesh");
+        let mesh = mesh.unwrap();
+        let no_holes = profile_prism(&outer, &[], &wall, 0.0, "wall", ArchId(2)).unwrap();
+        assert_eq!(mesh.triangle_count(), no_holes.triangle_count(), "NaN hole should be dropped");
+    }
+
     /// An opening with NaN in any dimension field must be skipped entirely.
     #[test]
     fn opening_with_nan_dimensions_is_skipped() {

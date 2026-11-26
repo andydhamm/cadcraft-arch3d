@@ -160,3 +160,76 @@ fn scene_cache_matches_full_for_a_raised_window() {
     cache.update(&next);
     assert_eq!(cache.scene().digest(), Scene3d::build(&next).digest());
 }
+
+#[test]
+fn door_on_raised_level_is_clipped_correctly() {
+    // A door on a raised level should have its notch start at the level elevation, not 0.
+    let (mut model, w0) = house(2.0);
+    let h = 2.1;
+    model.push_opening(door(w0, 6.0, h));
+    let scene = Scene3d::build(&model);
+
+    // The wall bottom is at 2.0. The door sill is 0.0 relative to the wall bottom.
+    // So the door notch goes from z=2.0 to z=2.0+2.1=4.1.
+
+    // Inside the door opening (z between 2.0 and 4.1)
+    assert!(!in_wall(&scene, w0, 6.0, 2.5), "Door opening at z=2.5");
+    assert!(!in_wall(&scene, w0, 6.0, 4.0), "Door opening at z=4.0");
+
+    // Above the door (z > 4.1)
+    assert!(in_wall(&scene, w0, 6.0, 4.5), "Wall above door at z=4.5");
+
+    // Below the wall (z < 2.0)
+    assert!(!in_wall(&scene, w0, 6.0, 1.0), "No wall below level elevation");
+}
+
+#[test]
+fn window_on_raised_level_is_clipped_correctly() {
+    // A window on a raised level should have its hole start at level + sill.
+    let (mut model, w0) = house(3.0);
+    let sill = 1.0;
+    let height = 1.2;
+    model.push_opening(window(w0, 6.0, sill));
+    let scene = Scene3d::build(&model);
+
+    // Wall bottom is 3.0.
+    // Window hole is from z = 3.0 + 1.0 = 4.0 to z = 4.0 + 1.2 = 5.2.
+
+    // Inside the window hole
+    assert!(!in_wall(&scene, w0, 6.0, 4.5), "Window hole at z=4.5");
+
+    // Below the window (between floor and sill)
+    assert!(in_wall(&scene, w0, 6.0, 3.5), "Wall below window at z=3.5");
+
+    // Above the window
+    assert!(in_wall(&scene, w0, 6.0, 5.5), "Wall above window at z=5.5");
+}
+
+#[test]
+fn raised_wall_with_nan_elevation_is_handled() {
+    // Ensure that if a level elevation is NaN, the wall mesh is not generated or is empty.
+    let mut model = ArchModel::default();
+    model.levels.push(Level { index: 0, elevation: f64::NAN, ceiling_height: 2.4, ..Default::default() });
+    let pts = [(0.0, 0.0), (10.0, 0.0), (10.0, 8.0), (0.0, 8.0), (0.0, 0.0)];
+    let mut first = None;
+    for pair in pts.windows(2) {
+        let id = model.push_wall(Wall {
+            start: Vec2::new(pair[0].0, pair[0].1),
+            end: Vec2::new(pair[1].0, pair[1].1),
+            thickness: 0.2,
+            height: 2.7,
+            exterior: true,
+            ..Default::default()
+        });
+        first.get_or_insert(id);
+    }
+    let w0 = first.unwrap();
+    let scene = Scene3d::build(&model);
+    // Should not panic and should likely produce no mesh or an empty mesh for this wall
+    let mesh = scene.mesh_for(&w0);
+    // Depending on implementation, it might be None or Some(empty).
+    // The key is it doesn't crash and doesn't produce garbage geometry.
+    if let Some(m) = mesh {
+        assert_eq!(m.triangle_count(), 0, "NaN elevation should produce no triangles");
+    }
+}
