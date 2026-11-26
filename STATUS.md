@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-26 21:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-26 21:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 3 of 4 segments merged**
 
@@ -33,7 +33,7 @@ Updated 2026-11-26 21:00 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 5.9 h so far · expected done Nov 26 22:18–Nov 29 03:49 UTC |
+| 23 | Phase 23 | pending | — | 6.1 h so far · expected done Nov 26 22:37–Nov 29 06:27 UTC |
 
 ## Phase 23 segments
 
@@ -64,8 +64,8 @@ Updated 2026-11-26 21:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1505 |
-| bonsai-b | bonsai2-27b | agent | 1431 |
+| bonsai-a | bonsai2-27b | idle | 1506 |
+| bonsai-b | bonsai2-27b | agent | 1433 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 179 |
