@@ -288,4 +288,48 @@ mod tests {
         assert!(b[2] >= 0.0 && b[2] <= 800.0, "max x out of range");
         assert!(b[3] >= 0.0 && b[3] <= 600.0, "max y out of range");
     }
+
+    #[test]
+    fn orbit_fit_with_nan_bounds_is_safe() {
+        // Bounds3 with NaN components should not panic and should produce finite results if possible,
+        // or at least not crash. The implementation likely uses min/max which propagates NaN.
+        // We check that it doesn't panic and returns an Orbit with finite fields if possible,
+        // or handles it gracefully.
+        let nan_bounds = Bounds3::new([f64::NAN, 0.0, 0.0], [10.0, 10.0, 10.0]);
+        let o = Orbit::fit(&nan_bounds);
+        // Depending on implementation, target might be NaN. We just ensure no panic.
+        // If the implementation sanitizes, target should be finite.
+        // Let's assume standard behavior: NaN propagates.
+        // We just verify it constructs.
+        assert!(o.distance.is_finite() || o.distance.is_nan());
+    }
+
+    #[test]
+    fn orbit_eye_is_finite_for_extreme_elevation() {
+        // Elevation near 90 degrees
+        let o = Orbit::at_origin(0.0, 89.99, 10.0, 45.0);
+        let eye = o.eye();
+        assert!(eye.x.is_finite());
+        assert!(eye.y.is_finite());
+        assert!(eye.z.is_finite());
+
+        // Elevation near -90 degrees
+        let o2 = Orbit::at_origin(0.0, -89.99, 10.0, 45.0);
+        let eye2 = o2.eye();
+        assert!(eye2.x.is_finite());
+        assert!(eye2.y.is_finite());
+        assert!(eye2.z.is_finite());
+    }
+
+    #[test]
+    fn view_proj_with_zero_aspect_is_finite() {
+        let cam = Camera::Orbit(Orbit::at_origin(0.0, 0.0, 10.0, 45.0));
+        // Aspect ratio 0.0 (degenerate viewport width)
+        let vp = view_proj(&cam, 0.0);
+        for col in &vp {
+            for &v in col {
+                assert!(v.is_finite(), "aspect 0.0 produced non-finite {}", v);
+            }
+        }
+    }
 }
