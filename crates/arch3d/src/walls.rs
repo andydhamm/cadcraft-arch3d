@@ -1541,7 +1541,7 @@ mod tests {
 
     /// A hole with NaN vertices must be dropped by profile_prism.
     #[test]
-    fn profile_prism_drops_holes_with_nan_vertices() {
+    fn profile_prism_drops_holes_with_nan_vertices_2() {
         let outer = vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 2.4), Vec2::new(0.0, 2.4)];
         let hole = vec![Vec2::new(4.0, 0.5), Vec2::new(6.0, 0.5), Vec2::new(6.0, 1.5), Vec2::new(f64::NAN, 1.5)];
         let wall = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.4, ..Default::default() };
