@@ -4046,4 +4046,34 @@ mod tests {
         let partial = Scene3d::build_dirty(&edited, &dirty, &full);
         assert!(partial.mesh_for(&ArchId(1)).is_none(), "Wall with NaN thickness should be skipped in dirty rebuild");
     }
+
+    /// Spec point 5: `Scene3d::build` must not contain meshes with empty positions.
+    #[test]
+    fn scene_has_no_empty_opening_meshes() {
+        use cadcraft_doc::arch::Opening;
+
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.3,
+            height: 2.5,
+            ..Default::default()
+        });
+        let mut opening = Opening::default();
+        opening.id = ArchId(100);
+        opening.host = ArchId(1);
+        opening.offset = 5.0;
+        opening.width = 1.0;
+        opening.height = 1.5;
+        opening.sill = 0.9;
+        opening.style = "window".to_string();
+        model.openings.push(opening);
+
+        let scene = Scene3d::build(&model);
+        for m in &scene.meshes {
+            assert!(!m.positions.is_empty(), "mesh {} has no positions", m.material);
+        }
+    }
 }
