@@ -169,13 +169,16 @@ impl Mesh {
     /// Append a closed prism (ring extruded from z0 to z1) to this mesh.
     ///
     /// The ring must be a polygon of at least 3 finite vertices with non-zero
-    /// area. A clockwise ring is automatically flipped to counter-clockwise so
-    /// that normals point outward. Both end caps and all four side faces per
-    /// edge are included. Side faces share vertices with the caps, so the
-    /// resulting mesh is a closed 2-manifold.
+    /// area, and `z0`/`z1` must be finite. A clockwise ring is automatically
+    /// flipped to counter-clockwise so that normals point outward. Both end
+    /// caps and all four side faces per edge are included. Side faces share
+    /// vertices with the caps, so the resulting mesh is a closed 2-manifold.
     ///
     /// World-box UVs: u = x (world), v = z (world).
     pub fn push_prism(&mut self, ring: &[Vec2], z0: f64, z1: f64) {
+        if !z0.is_finite() || !z1.is_finite() {
+            return;
+        }
         let n = ring.len() as u32;
         if n < 3 {
             return;
@@ -902,6 +905,24 @@ mod tests {
         let m = crate::walls::extrude_wall(&degenerate, 2.5, 0.0, "wall");
         assert!(m.is_none(), "degenerate (2-vertex) wall must produce no mesh");
     }
+
+    /// A non-finite `z0` or `z1` must be rejected before any vertex is emitted,
+    /// consistent with `push_prism_with_holes`. Previously the NaN/Inf height
+    /// leaked into the vertex positions and was only caught later by the scene's
+    /// finite filter; a direct caller could observe non-manifold NaN geometry.
+    #[test]
+    fn push_prism_rejects_non_finite_heights() {
+        let mut nan_z0 = Mesh::new("wall", ArchId(1));
+        nan_z0.push_prism(&square_ring(), f64::NAN, 2.5);
+        assert!(nan_z0.positions.is_empty(), "NaN z0 must emit no positions");
+        assert!(nan_z0.normals.is_empty(), "NaN z0 must emit no normals");
+        assert!(nan_z0.indices.is_empty(), "NaN z0 must emit no indices");
+
+        let mut inf_z1 = Mesh::new("wall", ArchId(1));
+        inf_z1.push_prism(&square_ring(), 0.0, f64::INFINITY);
+        assert!(inf_z1.positions.is_empty(), "Inf z1 must emit no positions");
+        assert!(inf_z1.normals.is_empty(), "Inf z1 must emit no normals");
+        assert!(inf_z1.indices.is_empty(), "Inf z1 must emit no indices");
 
     /// Properly-crossing segments return true; touching, collinear, or parallel
     /// segments return false.

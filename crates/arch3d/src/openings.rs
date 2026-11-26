@@ -809,6 +809,65 @@ mod tests {
         assert_eq!(leaf_count, 1, "expected 1 leaf, got {}", leaf_count);
     }
 
+    /// A `fixed` glazed door (the `is_fixed_door` branch) must build glass
+    /// (`has_glass("fixed")` is true), a stiled `door-leaf` mesh (four stiles/rails
+    /// merged into one material, 4 × 12 = 48 triangles), and a frame, instead of
+    /// a plain single-leaf slab. This branch is otherwise untested.
+    #[test]
+    fn a_fixed_glazed_door_produces_frame_glass_and_stiles() {
+        let model = wall_model();
+        let mut o = door_opening();
+        o.style = "fixed".to_string();
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let has_frame = meshes.iter().any(|m| m.material == "door-frame");
+        let has_glass = meshes.iter().any(|m| m.material == "door-glass");
+        let leaf = meshes.iter().find(|m| m.material == "door-leaf").expect("fixed door must have a stiled leaf");
+        assert!(has_frame, "missing door-frame mesh");
+        assert!(has_glass, "fixed glazed door must have a door-glass mesh");
+        // Four stiles/rails, each a 4-vertex prism = 12 triangles; merged into one mesh.
+        assert_eq!(leaf.triangle_count(), 48, "fixed door stiled leaf should have 48 triangles (4 members), got {}", leaf.triangle_count());
+    }
+
+    /// A shaped-top window whose `frame_width` shrinks the glass to a degenerate
+    /// polygon must fall back to the square component path (still building a
+    /// frame, glass, sill and header) rather than panicking or silently
+    /// producing an empty scene.
+    #[test]
+    fn a_shaped_window_with_over_sized_frame_falls_back_to_square_components() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.top = OpeningTop::Round;
+        // Frame wider than the opening: the finished outline shrinks to < 3 vertices.
+        o.frame_width = 0.8;
+        o.height = 1.5;
+        o.sill = 0.9;
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        assert!(!meshes.is_empty(), "fallback must still build components");
+        assert!(meshes.iter().any(|m| m.material == "window-frame"), "missing window-frame on fallback");
+        assert!(meshes.iter().any(|m| m.material == "window-glass"), "missing window-glass on fallback");
+        assert!(meshes.iter().any(|m| m.material == "window-header"), "missing window-header on fallback");
+        for m in &meshes {
+            assert!(!m.positions.is_empty(), "fallback mesh {} is empty", m.material);
+        }
+    }
+
+    /// The spec's "keep ... manifold meshes" invariant: every component mesh
+    /// returned for a window or a door must be a closed 2-manifold, not merely
+    /// index-consistent. Previously the existing `opening_meshes_are_manifold`
+    /// test only checked index count and bounds, never the real `is_manifold`
+    /// edge-sharing check (which welds vertices by position and catches two
+    /// prisms in one merged `Mesh` sharing an edge).
+    #[test]
+    fn all_window_meshes_are_closed_manifolds() {
+        let model = wall_model();
+        for o in [window_opening(), door_opening()] {
+            for m in opening_meshes(&walls_map(&model), &o, None) {
+                assert!(m.is_manifold(), "opening component {} is not a closed manifold", m.material);
+                assert!(m.triangle_count() > 0, "opening component {} has no triangles", m.material);
+            }
+        }
+    }
+
     #[test]
     fn a_sliding_door_produces_two_leaves() {
         let model = wall_model();
