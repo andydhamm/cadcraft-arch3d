@@ -2389,6 +2389,77 @@ mod tests {
         }
     }
 
+    /// Meshes with empty positions are skipped entirely, producing no nodes or accessors.
+    #[test]
+    fn glb_skips_meshes_with_empty_positions() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "door-frame".into();
+            m.object = ArchId(10);
+            m.positions.clear(); // Empty positions
+            m
+        });
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "window-glass".into();
+            m.object = ArchId(11);
+            // Valid mesh
+            m
+        });
+
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+
+        // The empty mesh should not appear in meshes or nodes
+        let mesh_names: Vec<String> = json["meshes"].as_array().unwrap().iter().filter_map(|m| m["name"].as_str()).map(String::from).collect();
+        assert!(!mesh_names.contains(&"door-frame-o10".to_string()), "empty mesh should be skipped");
+        assert!(mesh_names.contains(&"window-glass-o11".to_string()), "valid mesh should be present");
+
+        let node_names: Vec<String> = json["nodes"].as_array().unwrap().iter().skip(1).filter_map(|n| n["name"].as_str()).map(String::from).collect();
+        assert!(!node_names.contains(&"door-frame-o10".to_string()), "node for empty mesh should be skipped");
+    }
+
+    /// Glass detection works for material names containing "glass" at any position.
+    #[test]
+    fn glb_glass_detection_case_insensitive() {
+        let mut scene = scene_with(0);
+        scene.meshes.push({
+            let mut m = wall_mesh();
+            m.material = "Glass-Panel".into(); // Mixed case
+            m.object = ArchId(5);
+            m
+        });
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let materials = json["materials"].as_array().unwrap();
+        let glass_mat = materials.iter().find(|m| m["name"] == "Glass-Panel").unwrap();
+        assert_eq!(glass_mat["alphaMode"], "BLEND", "Glass-Panel should be BLEND");
+        assert!(glass_mat["pbrMetallicRoughness"]["baseColorFactor"][3].as_f64().unwrap() < 0.6, "Glass-Panel alpha should be low");
+    }
+
+    /// Non-glass materials remain opaque (no alphaMode, alpha 1.0).
+    #[test]
+    fn glb_non_glass_materials_are_opaque() {
+        let mut scene = scene_with(0);
+        for name in ["wall", "frame", "leaf", "casing", "sill", "header", "roof"] {
+            scene.meshes.push({
+                let mut m = wall_mesh();
+                m.material = name.into();
+                m.object = ArchId(0);
+                m
+            });
+        }
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let materials = json["materials"].as_array().unwrap();
+        for mat in materials {
+            assert!(mat.get("alphaMode").is_none(), "material {} should not have alphaMode", mat["name"]);
+            let alpha = mat["pbrMetallicRoughness"]["baseColorFactor"][3].as_f64().unwrap();
+            assert_eq!(alpha, 1.0, "material {} alpha should be 1.0", mat["name"]);
+        }
+    }
+
     /// Non-glass materials remain opaque (no alphaMode, alpha 1.0).
     #[test]
     fn glb_non_glass_materials_are_opaque() {
