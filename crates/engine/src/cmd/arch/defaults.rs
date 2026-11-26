@@ -226,4 +226,126 @@ mod tests {
         let back = dxf.and_then(|t| cadcraft_io::read_dxf(t.as_bytes()).ok());
         assert_eq!(back.map(|d| d.arch.defaults), Some(want));
     }
+
+    #[test]
+    fn merged_with_null_params_returns_defaults() {
+        let mut s = session();
+        if let Ok(d) = s.doc_mut() {
+            d.arch.defaults.insert("door".into(), json!({ "width": 1.0, "style": "slider" }));
+        }
+        let out = merged(&s, "door", &Value::Null);
+        assert_eq!(out, json!({ "width": 1.0, "style": "slider" }));
+    }
+
+    #[test]
+    fn merged_with_non_object_params_returns_params() {
+        let mut s = session();
+        if let Ok(d) = s.doc_mut() {
+            d.arch.defaults.insert("door".into(), json!({ "width": 1.0 }));
+        }
+        let p = json!(42);
+        assert_eq!(merged(&s, "door", &p), p);
+        let p2 = json!("hello");
+        assert_eq!(merged(&s, "door", &p2), p2);
+        let p3 = json!([1, 2, 3]);
+        assert_eq!(merged(&s, "door", &p3), p3);
+    }
+
+    #[test]
+    fn merged_with_null_value_in_default_applies_null() {
+        let mut s = session();
+        if let Ok(d) = s.doc_mut() {
+            d.arch.defaults.insert("door".into(), json!({ "width": null, "style": "slider" }));
+        }
+        let out = merged(&s, "door", &json!({}));
+        assert_eq!(out, json!({ "width": null, "style": "slider" }));
+    }
+
+    #[test]
+    fn merged_with_non_object_default_returns_params() {
+        let mut s = session();
+        if let Ok(d) = s.doc_mut() {
+            d.arch.defaults.insert("door".into(), json!(42));
+        }
+        let p = json!({ "wall": "w0" });
+        assert_eq!(merged(&s, "door", &p), p);
+    }
+
+    #[test]
+    fn arch_default_on_window_includes_sill() {
+        let mut s = session();
+        let _ = s.execute("wall", json!({ "points": [[0.0, 0.0], [6.0, 0.0]] }));
+        let _ = s.execute("window", json!({ "wall": "w0", "offset": 1.0, "width": 1.5, "sill": 1.2 }));
+        let r = s.execute("arch.default", json!({ "id": "o0" })).unwrap_or_default();
+        assert_eq!(r["kind"], "window");
+        assert_eq!(r["default"]["width"], 1.5);
+        assert_eq!(r["default"]["sill"], 1.2);
+    }
+
+    #[test]
+    fn arch_default_with_uppercase_id() {
+        let mut s = session();
+        let _ = s.execute("cabinet", json!({ "kind": "base", "at": [0.0, 0.0] }));
+        let r = s.execute("arch.default", json!({ "id": "CB0" })).unwrap_or_default();
+        assert_eq!(r["kind"], "cabinet.base");
+    }
+
+    #[test]
+    fn arch_default_with_whitespace_in_id() {
+        let mut s = session();
+        let _ = s.execute("cabinet", json!({ "kind": "base", "at": [0.0, 0.0] }));
+        let r = s.execute("arch.default", json!({ "id": "  cb0  " })).unwrap_or_default();
+        assert_eq!(r["kind"], "cabinet.base");
+    }
+
+    #[test]
+    fn arch_default_on_door_with_fit_stores_actual_width() {
+        let mut s = session();
+        let _ = s.execute("wall", json!({ "points": [[0.0, 0.0], [6.0, 0.0]] }));
+        let _ = s.execute("door", json!({ "wall": "w0", "offset": 3.0, "width": 10.0, "fit": true }));
+        let r = s.execute("arch.default", json!({ "id": "o0" })).unwrap_or_default();
+        assert_eq!(r["kind"], "door");
+        assert!(r["default"]["width"].as_f64().unwrap() < 10.0);
+    }
+
+    #[test]
+    fn cabinet_uses_defaults_when_kind_is_provided() {
+        let mut s = session();
+        if let Ok(d) = s.doc_mut() {
+            d.arch.defaults.insert("cabinet.base".into(), json!({ "depth": 0.5, "height": 0.9 }));
+        }
+        let _ = s.execute("cabinet", json!({ "kind": "base", "at": [0.0, 0.0] }));
+        let doc = s.doc().map(|d| d.arch.cabinets.clone()).unwrap_or_default();
+        let first = doc.first();
+        assert_eq!(first.map(|c| c.depth), Some(0.5));
+        assert_eq!(first.map(|c| c.height), Some(0.9));
+    }
+
+    #[test]
+    fn door_uses_defaults() {
+        let mut s = session();
+        let _ = s.execute("wall", json!({ "points": [[0.0, 0.0], [6.0, 0.0]] }));
+        if let Ok(d) = s.doc_mut() {
+            d.arch.defaults.insert("door".into(), json!({ "width": 1.1, "height": 2.2 }));
+        }
+        let _ = s.execute("door", json!({ "wall": "w0", "offset": 1.0 }));
+        let doc = s.doc().map(|d| d.arch.openings.clone()).unwrap_or_default();
+        let first = doc.first();
+        assert_eq!(first.map(|o| o.width), Some(1.1));
+        assert_eq!(first.map(|o| o.height), Some(2.2));
+    }
+
+    #[test]
+    fn window_uses_defaults() {
+        let mut s = session();
+        let _ = s.execute("wall", json!({ "points": [[0.0, 0.0], [6.0, 0.0]] }));
+        if let Ok(d) = s.doc_mut() {
+            d.arch.defaults.insert("window".into(), json!({ "width": 1.5, "sill": 1.0 }));
+        }
+        let _ = s.execute("window", json!({ "wall": "w0", "offset": 1.0 }));
+        let doc = s.doc().map(|d| d.arch.openings.clone()).unwrap_or_default();
+        let first = doc.first();
+        assert_eq!(first.map(|o| o.width), Some(1.5));
+        assert_eq!(first.map(|o| o.sill), Some(1.0));
+    }
 }
