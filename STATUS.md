@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-26 13:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-26 13:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23**
 
@@ -33,7 +33,7 @@ Updated 2026-11-26 13:00 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — |  · expected done Nov 26 18:29–Dec 11 15:04 UTC |
+| 23 | Phase 23 | pending | — |  · expected done Nov 26 18:44–Dec 11 15:19 UTC |
 
 ## Phase 23 segments
 
@@ -61,15 +61,15 @@ none yet
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1473 |
-| bonsai-b | bonsai2-27b | agent | 1402 |
+| bonsai-a | bonsai2-27b | agent | 1474 |
+| bonsai-b | bonsai2-27b | gate | 1402 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 177 |
 | claude-sonnet-b | sonnet | idle | 189 |
 | claude-sonnet-c | sonnet | idle | 122 |
 | claude-sonnet-d | sonnet | idle | 119 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1380 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1382 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
