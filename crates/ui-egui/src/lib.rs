@@ -126,7 +126,6 @@ pub struct UiState {
     pub show_status_bar: bool,
     pub show_command_line: bool,
     pub show_viewcube: bool,
-    pub show_ucs_icon: bool,
     pub show_layer_list: bool,
     /// Whether the 3D architectural pane is shown in the dockable area.
     pub show_three_d: bool,
@@ -232,7 +231,6 @@ impl Default for UiState {
             show_status_bar: true,
             show_command_line: true,
             show_viewcube: true,
-            show_ucs_icon: true,
             show_layer_list: false,
             show_three_d: false,
             system_cursor: false,
