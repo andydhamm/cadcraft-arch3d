@@ -3412,7 +3412,7 @@ fn wall_ring_refuses_non_finite_zero_short_and_overflowing_walls() {
     // The guard is strict (`len < 1e-12`), so a wall at exactly 1e-12 is NOT skipped;
     // it must yield a finite four-corner poché ring.
     if let Some(r) = wall_ring(&Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1e-12, 0.0), 0.2)) {
-        assert!(r.iter().all(Vec2::is_finite()), "a 1e-12 wall must yield a finite ring");
+        assert!(r.iter().all(|c| c.is_finite()), "a 1e-12 wall must yield a finite ring");
     }
     // Finite endpoints so far apart that `end - start` overflows to infinity.
     assert!(wall_ring(&Wall::new(Vec2::new(1.7e308, 0.0), Vec2::new(-1.7e308, 0.0), 0.2)).is_none());
