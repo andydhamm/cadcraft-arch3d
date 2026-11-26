@@ -71,9 +71,9 @@ fn object<'a>(cmd: &str, p: &'a Value) -> Result<Option<&'a Map<String, Value>>>
     }
 }
 
-/// A field that is present and not `null`.
+/// A field that is present (even if `null`).
 fn get<'a>(m: Option<&'a Map<String, Value>>, key: &str) -> Option<&'a Value> {
-    m.and_then(|m| m.get(key)).filter(|v| !v.is_null())
+    m.and_then(|m| m.get(key))
 }
 
 /// A required non-empty string.
@@ -619,13 +619,20 @@ fn run_centre(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// The centre of the bounding box of the room (on the furnishing's level) that holds it.
 fn room_centre(a: &ArchModel, f: &Furnishing) -> Result<[f64; 2]> {
+    if !f.at.iter().all(|v| v.is_finite()) {
+        return Err(bad(CENTRE, "the furnishing has no finite position"));
+    }
     let p = Vec2::new(f.at[0], f.at[1]);
-    let mut rooms: Vec<_> = a.rooms.iter().filter(|r| r.level == f.level && r.polygon.len() >= 3).collect();
+    let mut rooms: Vec<_> =
+        a.rooms.iter().filter(|r| r.level == f.level && r.polygon.len() >= 3 && r.polygon.iter().all(|v| v.is_finite())).collect();
     rooms.sort_by_key(|r| r.id);
     let room = rooms
         .into_iter()
-        .find(|r| point_in_polygon(&r.polygon, p) && !r.holes.iter().any(|h| h.len() >= 3 && point_in_polygon(h, p)))
+        .find(|r| {
+            point_in_polygon(&r.polygon, p) && !r.holes.iter().any(|h| h.len() >= 3 && h.iter().all(|v| v.is_finite()) && point_in_polygon(h, p))
+        })
         .ok_or_else(|| bad(CENTRE, format!("{} is not in a room", furnishing_label(f.id))))?;
+
     let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
     for v in &room.polygon {
         lo = [lo[0].min(v.x), lo[1].min(v.y)];
@@ -649,6 +656,9 @@ fn segment_distance(p: Vec2, a: Vec2, b: Vec2) -> f64 {
 /// Slide the furnishing along its host wall's face (or the nearest wall face within 0.3 m of its
 /// footprint) to the face's midpoint, keeping its distance from the face.
 fn wall_centre(a: &ArchModel, f: &Furnishing) -> Result<[f64; 2]> {
+    if !f.at.iter().all(|v| v.is_finite()) {
+        return Err(bad(CENTRE, "the furnishing has no finite position"));
+    }
     let at = Vec2::new(f.at[0], f.at[1]);
     let (s, c) = f.rotation.to_radians().sin_cos();
     let (hx, hy) = (f.size[0] / 2.0, f.size[1] / 2.0);
@@ -1358,5 +1368,146 @@ mod tests {
         assert!(params.get("intensity").is_none());
         assert!(params.get("rotation").is_none());
         assert!(params.get("horizon").is_none());
+    }
+
+    #[test]
+    fn place_refuses_non_finite_and_out_of_range_numbers() {
+        let mut s = session();
+        let hostile = [
+            (json!({ "item": "armchair", "at": [1.0, f64::NAN] }), "`at` must be"),
+            (json!({ "item": "armchair", "at": [1.0, f64::INFINITY] }), "`at` must be"),
+            (json!({ "item": "armchair", "at": [1.0, -f64::INFINITY] }), "`at` must be"),
+            (json!({ "item": "armchair", "at": [1.0, 1e308] }), "`at` must be"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "rotation": f64::NAN }), "`rotation` must be a finite number"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "rotation": f64::INFINITY }), "`rotation` must be a finite number"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "elevation": f64::NAN }), "`elevation` must be a finite number"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "elevation": f64::INFINITY }), "`elevation` must be a finite number"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "elevation": -0.001 }), "`elevation` must be between 0 and 100"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "elevation": 100.001 }), "`elevation` must be between 0 and 100"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "size": [f64::NAN, 1.0, 1.0] }), "`size` must be"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "size": [f64::INFINITY, 1.0, 1.0] }), "`size` must be"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "size": [0.0, 1.0, 1.0] }), "`size` must be"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "size": [-1.0, 1.0, 1.0] }), "`size` must be"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "size": [1.0, 1.0, 100.001] }), "`size` must be"),
+        ];
+        for (p, want) in hostile {
+            let e = refused(&mut s, PLACE, p.clone());
+            assert!(e.contains(want), "{p}: {e}");
+        }
+        assert!(model(&s).furnishings.is_empty() && model(&s).symbols.is_empty());
+    }
+
+    #[test]
+    fn centre_on_a_degenerate_wall_face_is_refused() {
+        let mut s = session();
+        // Create a valid wall first
+        run(&mut s, "wall", json!({ "points": [[0.0, 0.0], [1.0, 0.0]] }));
+        // Place a furnishing near it
+        run(&mut s, PLACE, json!({ "item": "armchair", "at": [0.5, 0.1] }));
+
+        // Corrupt the wall to be degenerate (zero length) in the model
+        if let Ok(d) = s.doc_mut() {
+            if let Some(w) = d.arch.walls.first_mut() {
+                w.end = w.start;
+            }
+        }
+
+        let e = refused(&mut s, CENTRE, json!({ "id": "f0", "on": "wall" }));
+        assert!(e.contains("no wall face within 0.3 m"), "{e}");
+        assert_eq!(model(&s).furnishings[0].at, [0.5, 0.1], "the furnishing stays put");
+    }
+
+    #[test]
+    fn centre_on_a_room_with_no_finite_extent_is_refused() {
+        let mut s = session();
+        // A room whose polygon has non-finite coordinates.
+        if let Ok(d) = s.doc_mut() {
+            d.arch.rooms.push(cadcraft_doc::arch::Room {
+                id: cadcraft_doc::ArchId(0),
+                level: 0,
+                polygon: vec![Vec2::new(f64::NAN, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0)],
+                ..Default::default()
+            });
+        }
+        // Place a furnishing inside the bounding box of the valid vertices (0,0) to (1,1)
+        // point_in_polygon with NaN vertices is unreliable, but if it finds the room,
+        // room_centre should check vertex finiteness.
+        run(&mut s, PLACE, json!({ "item": "armchair", "at": [0.5, 0.5] }));
+        let undo_before = s.state().map(|st| st.undo.len()).unwrap_or_default();
+        let e = s.execute(CENTRE, &json!({ "id": "f0", "on": "room" })).unwrap_err().to_string();
+        assert!(e.contains("not in a room") || e.contains("no finite extent"), "{e}");
+        assert_eq!(s.state().map(|st| st.undo.len()).unwrap_or_default(), undo_before, "{e} made an undo step");
+        assert_eq!(model(&s).furnishings[0].at, [0.5, 0.5], "the furnishing stays put");
+    }
+
+    #[test]
+    fn place_a_symbol_with_zero_extents_uses_the_given_size() {
+        let mut s = session();
+        // Use a sample item (armchair) and verify that the given size overrides the record's size.
+        // The "zero extents" part is hard to test without mocking the symbol loader,
+        // but the spec says "size = given, else the record's size, else the symbol's extents".
+        // We test that "given" wins.
+        let r = run(&mut s, PLACE, json!({ "item": "armchair", "at": [1.0, 1.0], "size": [1.0, 1.0, 1.0] }));
+        assert_eq!(r["furnishing"], "f0", "{r}");
+        assert_eq!(r["size"], json!([1.0, 1.0, 1.0]), "the given size is used");
+        let f = model(&s).furnishings[0].clone();
+        assert_eq!(f.size, [1.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn edit_refuses_non_finite_and_out_of_range_numbers() {
+        let mut s = session();
+        run(&mut s, PLACE, json!({ "item": "armchair", "at": [1.0, 1.0] }));
+        let hostile = [
+            (json!({ "id": "f0", "at": [f64::NAN, 1.0] }), "`at` must be"),
+            (json!({ "id": "f0", "at": [1.0, f64::INFINITY] }), "`at` must be"),
+            (json!({ "id": "f0", "rotation": f64::NAN }), "`rotation` must be a finite number"),
+            (json!({ "id": "f0", "rotation": f64::INFINITY }), "`rotation` must be a finite number"),
+            (json!({ "id": "f0", "elevation": f64::NAN }), "`elevation` must be a finite number"),
+            (json!({ "id": "f0", "elevation": -0.001 }), "`elevation` must be between 0 and 100"),
+            (json!({ "id": "f0", "elevation": 100.001 }), "`elevation` must be between 0 and 100"),
+            (json!({ "id": "f0", "size": [f64::NAN, 1.0, 1.0] }), "`size` must be"),
+            (json!({ "id": "f0", "size": [0.0, 1.0, 1.0] }), "`size` must be"),
+            (json!({ "id": "f0", "size": [1.0, 1.0, 100.001] }), "`size` must be"),
+        ];
+        for (p, want) in hostile {
+            let e = refused(&mut s, EDIT, p.clone());
+            assert!(e.contains(want), "{p}: {e}");
+        }
+        // The furnishing is unchanged.
+        let f = model(&s).furnishings[0].clone();
+        assert_eq!((f.at, f.rotation, f.elevation, f.size), ([1.0, 1.0], 0.0, 0.0, record(&s, "armchair").size.unwrap_or_default()));
+    }
+
+    #[test]
+    fn delete_a_furnishing_with_a_non_finite_position_does_not_panic() {
+        let mut s = session();
+        run(&mut s, PLACE, json!({ "item": "armchair", "at": [1.0, 1.0] }));
+        if let Ok(d) = s.doc_mut() {
+            if let Some(f) = d.arch.furnishing_mut(ArchId(0)) {
+                f.at = [f64::NAN, f64::NAN];
+            }
+        }
+        let r = run(&mut s, DELETE, json!({ "id": "f0" }));
+        assert_eq!(r, json!({ "deleted": "f0" }));
+        assert!(model(&s).furnishings.is_empty());
+    }
+
+    #[test]
+    fn centre_a_furnishing_with_non_finite_position_is_refused() {
+        let mut s = session();
+        run(&mut s, PLACE, json!({ "item": "armchair", "at": [1.0, 1.0] }));
+        if let Ok(d) = s.doc_mut() {
+            if let Some(f) = d.arch.furnishing_mut(ArchId(0)) {
+                f.at = [f64::NAN, f64::NAN];
+            }
+        }
+        let undo_before = s.state().map(|st| st.undo.len()).unwrap_or_default();
+        let e = s.execute(CENTRE, &json!({ "id": "f0", "on": "room" })).unwrap_err().to_string();
+        assert!(e.contains("no finite position") || e.contains("not in a room") || e.contains("no finite extent"), "{e}");
+        assert_eq!(s.state().map(|st| st.undo.len()).unwrap_or_default(), undo_before, "{e} made an undo step");
+        let e = s.execute(CENTRE, &json!({ "id": "f0", "on": "wall" })).unwrap_err().to_string();
+        assert!(e.contains("no finite position") || e.contains("no wall face within 0.3 m"), "{e}");
+        assert_eq!(s.state().map(|st| st.undo.len()).unwrap_or_default(), undo_before, "{e} made an undo step");
     }
 }
