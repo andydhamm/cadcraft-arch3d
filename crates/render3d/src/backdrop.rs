@@ -843,4 +843,98 @@ mod tests {
         let colour = Backdrop::Colour { colour: [0, 0, 0] };
         assert!(image_textures(Some(&colour), &textures).is_empty());
     }
+
+    #[test]
+    fn sample_wraps_at_boundaries() {
+        // 4x1 image: red values 0, 85, 170, 255.
+        let img = ImageRgba { width: 4, height: 1, rgba: vec![0, 0, 0, 255, 85, 0, 0, 255, 170, 0, 0, 255, 255, 0, 0, 255], ..Default::default() };
+        // With wrap_x, u=0.0 is the boundary between texel 3 (255) and texel 0 (0), so the average is 127.5.
+        let at_zero_wrap = sample(&img, 0.0, 0.5, true);
+        assert!((at_zero_wrap[0] - 127.5).abs() < 1.0, "wrap at u=0: {:?}", at_zero_wrap);
+        // With wrap_x, u=1.0 is also the boundary between texel 3 and texel 0.
+        let at_one_wrap = sample(&img, 1.0, 0.5, true);
+        assert!((at_one_wrap[0] - 127.5).abs() < 1.0, "wrap at u=1: {:?}", at_one_wrap);
+    }
+
+    #[test]
+    fn fit_downscales_large_image() {
+        // 4x4 image of alternating black and white pixels.
+        let mut rgba = Vec::new();
+        for y in 0..4u8 {
+            for x in 0..4u8 {
+                let v = if (x + y) % 2 == 0 { 255u8 } else { 0u8 };
+                rgba.extend_from_slice(&[v, v, v, 255]);
+            }
+        }
+        let img = ImageRgba { width: 4, height: 4, rgba, ..Default::default() };
+        let fitted = fit(&img, 2);
+        assert_eq!(fitted.width, 2);
+        assert_eq!(fitted.height, 2);
+        // Each 2x2 block has two black and two white pixels, so the average is 128.
+        for i in 0..4 {
+            let v = fitted.rgba[i * 4];
+            assert_eq!(v, 128, "fitted pixel {i}: {v}");
+        }
+    }
+
+    #[test]
+    fn backdrop_rgb_gradient_at_edges() {
+        let g = Backdrop::Gradient { top: [0, 0, 0], bottom: [255, 255, 255] };
+        // At y=0 of a 1-pixel-high image, t = 0.5, so the colour is 128.
+        let mid = backdrop_rgb(&g, &none(), 0, 0, 1, 1, [0.0, 0.0, 1.0]);
+        assert_eq!(mid[0], 128, "midpoint: {:?}", mid);
+        // At y=0 of a 2-pixel-high image, t = 0.25, so the colour is 64.
+        let q1 = backdrop_rgb(&g, &none(), 0, 0, 1, 2, [0.0, 0.0, 1.0]);
+        assert_eq!(q1[0], 64, "quarter: {:?}", q1);
+        // At y=1 of a 2-pixel-high image, t = 0.75, so the colour is 191.
+        let q3 = backdrop_rgb(&g, &none(), 0, 1, 1, 2, [0.0, 0.0, 1.0]);
+        assert_eq!(q3[0], 191, "three-quarter: {:?}", q3);
+    }
+
+    #[test]
+    fn sample_clamps_outside_unit_square() {
+        let img =
+            ImageRgba { width: 2, height: 2, rgba: vec![0, 0, 0, 255, 255, 0, 0, 255, 0, 255, 0, 255, 255, 255, 255, 255], ..Default::default() };
+        // u < 0 clamps to the left edge.
+        let left = sample(&img, -0.1, 0.5, false);
+        assert!((left[0] - 0.0).abs() < 1.0, "left clamp: {:?}", left);
+        // u > 1 clamps to the right edge.
+        let right = sample(&img, 1.1, 0.5, false);
+        assert!((right[0] - 255.0).abs() < 1.0, "right clamp: {:?}", right);
+        // v < 0 clamps to the top edge.
+        let top = sample(&img, 0.5, -0.1, false);
+        assert!((top[1] - 0.0).abs() < 1.0, "top clamp: {:?}", top);
+        // v > 1 clamps to the bottom edge.
+        let bottom = sample(&img, 0.5, 1.1, false);
+        assert!((bottom[1] - 255.0).abs() < 1.0, "bottom clamp: {:?}", bottom);
+    }
+
+    #[test]
+    fn fingerprint_is_deterministic() {
+        let img = ImageRgba { width: 4, height: 4, rgba: vec![128u8; 64], ..Default::default() };
+        let f1 = fingerprint(&img);
+        let f2 = fingerprint(&img);
+        assert_eq!(f1, f2, "fingerprint must be deterministic");
+    }
+
+    #[test]
+    fn fit_with_max_one() {
+        let img = ImageRgba { width: 4, height: 4, rgba: vec![128u8; 64], ..Default::default() };
+        let fitted = fit(&img, 1);
+        assert_eq!(fitted.width, 1);
+        assert_eq!(fitted.height, 1);
+        assert_eq!(fitted.rgba.len(), 4);
+        // All pixels are 128, so the average is 128.
+        assert_eq!(fitted.rgba[0], 128);
+    }
+
+    #[test]
+    fn backdrop_rgb_equirect_with_nan_ray() {
+        let img = ImageRgba { width: 4, height: 2, rgba: vec![128u8; 32], ..Default::default() };
+        let t = with("sky", img);
+        let eq = Backdrop::Image { item: "sky".into(), projection: Projection::Equirect, horizon: 0.0 };
+        // A NaN ray should not panic; sample() returns [0.0; 3] for non-finite coordinates.
+        let rgb = backdrop_rgb(&eq, &t, 0, 0, 1, 1, [f32::NAN, f32::NAN, f32::NAN]);
+        assert_eq!(rgb, [0, 0, 0], "NaN ray: {:?}", rgb);
+    }
 }
