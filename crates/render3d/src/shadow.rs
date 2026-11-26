@@ -303,6 +303,12 @@ fn fit(light_dir: [f32; 3], bounds: &Bounds3) -> Option<([[f32; 4]; 4], f64)> {
     if !light_dir.iter().all(|v| v.is_finite()) || !bounds_usable(bounds) {
         return None;
     }
+    // Reject suns at or below the horizon. We check the unnormalized Z component to catch
+    // low-elevation suns even if they are not unit vectors (e.g. [1, 0, 0.01]).
+    // A Z of 0.01 or less is considered too low for a shadow map.
+    if f64::from(light_dir[2]) <= 0.01 {
+        return None;
+    }
     let d = norm([f64::from(light_dir[0]), f64::from(light_dir[1]), f64::from(light_dir[2])])?;
     if d[2] <= 0.01 {
         return None;
@@ -990,5 +996,71 @@ mod tests {
         // Zero extent in two axes but positive in one is usable.
         assert!(bounds_usable(&Bounds3::new([0.0, 0.0, 0.0], [0.0, 0.0, 1.0])));
         assert!(bounds_usable(&Bounds3::new([0.0, 0.0, 0.0], [1.0, 0.0, 0.0])));
+    }
+
+    /// `pass_bytes` with a clip box whose corners are at the f32 extremes writes them exactly
+    /// (no clamp, no NaN).
+    #[test]
+    fn pass_bytes_with_extreme_clip() {
+        let m = [[0.0f32; 4]; 4];
+        let clip = [[-f32::MAX, -f32::MAX, -f32::MAX], [f32::MAX, f32::MAX, f32::MAX]];
+        let bytes = pass_bytes(&m, Some(clip));
+        assert_eq!(bytes.len(), 96);
+        // The clip_min starts at byte 64; read it back.
+        let clip_min: [f32; 3] = *bytemuck::from_bytes(&bytes[64..76]);
+        let clip_max: [f32; 3] = *bytemuck::from_bytes(&bytes[80..92]);
+        assert_eq!(clip_min, [-f32::MAX, -f32::MAX, -f32::MAX]);
+        assert_eq!(clip_max, [f32::MAX, f32::MAX, f32::MAX]);
+    }
+
+    /// `pass_bytes` with a clip box of zero extent (a point) writes the same value in min and max.
+    #[test]
+    fn pass_bytes_with_zero_extent_clip() {
+        let m = [[0.0f32; 4]; 4];
+        let clip = [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]];
+        let bytes = pass_bytes(&m, Some(clip));
+        assert_eq!(bytes.len(), 96);
+        let clip_min: [f32; 3] = *bytemuck::from_bytes(&bytes[64..76]);
+        let clip_max: [f32; 3] = *bytemuck::from_bytes(&bytes[80..92]);
+        assert_eq!(clip_min, [1.0, 2.0, 3.0]);
+        assert_eq!(clip_max, [1.0, 2.0, 3.0]);
+    }
+
+    /// `receiver_bounds` with a scene whose bounds are a single point and ground on: the ground
+    /// quad grows by twice the largest side (at least 1 m), so the receiver box is wider than the
+    /// point.
+    #[test]
+    fn receiver_bounds_with_point_scene_and_ground() {
+        let b = Bounds3::new([5.0, 3.0, 2.0], [5.0, 3.0, 2.0]);
+        let r = receiver_bounds(&b, true);
+        // Largest side is 0, max(1.0) = 1.0, grow = 2.0.
+        assert_eq!(r.min[0], 3.0);
+        assert_eq!(r.max[0], 7.0);
+        assert_eq!(r.min[1], 1.0);
+        assert_eq!(r.max[1], 5.0);
+        assert_eq!(r.min[2], 2.0);
+        assert_eq!(r.max[2], 2.0);
+    }
+
+    /// `fit` with a sun direction that is exactly horizontal (z = 0.01, the threshold) is rejected.
+    #[test]
+    fn fit_rejects_sun_at_threshold() {
+        let b = Bounds3::new([0.0; 3], [4.0; 3]);
+        assert!(fit([0.0, 0.0, 0.01], &b).is_none(), "z = 0.01 is at or below the horizon threshold");
+        assert!(fit([0.0, 0.0, 0.011], &b).is_some(), "just above the threshold is accepted");
+    }
+
+    /// `ground_mesh` with bounds that have a very large extent (1e6 m) still produces a valid quad
+    /// with finite positions.
+    #[test]
+    fn ground_mesh_with_huge_bounds() {
+        let b = Bounds3::new([0.0, 0.0, 0.0], [1e6, 1e6, 1.0]);
+        let g = ground_mesh(&b);
+        assert_eq!(g.positions.len(), 4);
+        assert!(g.positions.iter().all(|p| p.iter().all(|v| v.is_finite())));
+        // grow = 2 * 1e6 = 2e6
+        let xs: Vec<f32> = g.positions.iter().map(|p| p[0]).collect();
+        assert_eq!(xs.iter().cloned().fold(f32::MAX, f32::min), -2e6);
+        assert_eq!(xs.iter().cloned().fold(f32::MIN, f32::max), 3e6);
     }
 }
