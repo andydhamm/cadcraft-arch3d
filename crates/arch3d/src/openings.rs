@@ -12,6 +12,7 @@ use cadcraft_geom::{Vec2, Vec3};
 
 use crate::mesh::Mesh;
 use crate::solid::{Frame, clip_convex, clip_left, push_profile};
+use crate::wall_span;
 
 /// How far (metres) the opening header sits inside each wall face, so that
 /// hidden-line elevations hide it behind the wall above the rough opening.
@@ -809,6 +810,65 @@ mod tests {
         assert_eq!(leaf_count, 1, "expected 1 leaf, got {}", leaf_count);
     }
 
+    /// A `fixed` glazed door (the `is_fixed_door` branch) must build glass
+    /// (`has_glass("fixed")` is true), a stiled `door-leaf` mesh (four stiles/rails
+    /// merged into one material, 4 × 12 = 48 triangles), and a frame, instead of
+    /// a plain single-leaf slab. This branch is otherwise untested.
+    #[test]
+    fn a_fixed_glazed_door_produces_frame_glass_and_stiles() {
+        let model = wall_model();
+        let mut o = door_opening();
+        o.style = "fixed".to_string();
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let has_frame = meshes.iter().any(|m| m.material == "door-frame");
+        let has_glass = meshes.iter().any(|m| m.material == "door-glass");
+        let leaf = meshes.iter().find(|m| m.material == "door-leaf").expect("fixed door must have a stiled leaf");
+        assert!(has_frame, "missing door-frame mesh");
+        assert!(has_glass, "fixed glazed door must have a door-glass mesh");
+        // Four stiles/rails, each a 4-vertex prism = 12 triangles; merged into one mesh.
+        assert_eq!(leaf.triangle_count(), 48, "fixed door stiled leaf should have 48 triangles (4 members), got {}", leaf.triangle_count());
+    }
+
+    /// A shaped-top window whose `frame_width` shrinks the glass to a degenerate
+    /// polygon must fall back to the square component path (still building a
+    /// frame, glass, sill and header) rather than panicking or silently
+    /// producing an empty scene.
+    #[test]
+    fn a_shaped_window_with_over_sized_frame_falls_back_to_square_components() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.top = OpeningTop::Round;
+        // Frame wider than the opening: the finished outline shrinks to < 3 vertices.
+        o.frame_width = 0.8;
+        o.height = 1.5;
+        o.sill = 0.9;
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        assert!(!meshes.is_empty(), "fallback must still build components");
+        assert!(meshes.iter().any(|m| m.material == "window-frame"), "missing window-frame on fallback");
+        assert!(meshes.iter().any(|m| m.material == "window-glass"), "missing window-glass on fallback");
+        assert!(meshes.iter().any(|m| m.material == "window-header"), "missing window-header on fallback");
+        for m in &meshes {
+            assert!(!m.positions.is_empty(), "fallback mesh {} is empty", m.material);
+        }
+    }
+
+    /// The spec's "keep ... manifold meshes" invariant: every component mesh
+    /// returned for a window or a door must be a closed 2-manifold, not merely
+    /// index-consistent. Previously the existing `opening_meshes_are_manifold`
+    /// test only checked index count and bounds, never the real `is_manifold`
+    /// edge-sharing check (which welds vertices by position and catches two
+    /// prisms in one merged `Mesh` sharing an edge).
+    #[test]
+    fn all_window_meshes_are_closed_manifolds() {
+        let model = wall_model();
+        for o in [window_opening(), door_opening()] {
+            for m in opening_meshes(&walls_map(&model), &o, None) {
+                assert!(m.is_manifold(), "opening component {} is not a closed manifold", m.material);
+                assert!(m.triangle_count() > 0, "opening component {} has no triangles", m.material);
+            }
+        }
+    }
+
     #[test]
     fn a_sliding_door_produces_two_leaves() {
         let model = wall_model();
@@ -1367,5 +1427,64 @@ mod tests {
         let has_leaf = meshes.iter().any(|m| m.material == "garage-leaf");
         assert!(has_frame, "missing garage-frame mesh");
         assert!(has_leaf, "missing garage-leaf mesh");
+    }
+
+    /// Hostile opening dimensions (NaN/Inf in sill, width, height, recess) must
+    /// never leak into emitted vertices: any component whose input carries a
+    /// non-finite value is rejected whole (its merged mesh stays empty) or, when
+    /// the NaN is clamped away by `band_offset`, emits only finite coordinates.
+    /// The material-merge keeps `Mesh::push_prism`'s finite checks as the per-box
+    /// guard, so the merged per-material mesh is safe too.
+    #[test]
+    fn opening_meshes_hostile_dimensions_never_emit_non_finite_vertices() {
+        let model = wall_model();
+        let wm = walls_map(&model);
+        let span = wall_span(&model, &model.walls[0]);
+
+        let hostile = vec![
+            {
+                let mut o = window_opening();
+                o.sill = f64::NAN;
+                o
+            },
+            {
+                let mut o = window_opening();
+                o.width = f64::NAN;
+                o
+            },
+            {
+                let mut o = window_opening();
+                o.height = f64::INFINITY;
+                o
+            },
+            {
+                let mut o = window_opening();
+                o.recess = f64::NAN;
+                o
+            },
+            {
+                let mut o = door_opening();
+                o.sill = f64::NAN;
+                o
+            },
+            {
+                let mut o = door_opening();
+                o.width = f64::INFINITY;
+                o
+            },
+        ];
+
+        for o in &hostile {
+            for m in opening_meshes(&wm, o, span) {
+                for p in &m.positions {
+                    assert!(
+                        p[0].is_finite() && p[1].is_finite() && p[2].is_finite(),
+                        "non-finite vertex emitted for hostile opening kind={:?} style={:?}",
+                        o.kind,
+                        o.style
+                    );
+                }
+            }
+        }
     }
 }
