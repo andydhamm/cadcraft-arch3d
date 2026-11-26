@@ -580,7 +580,7 @@ mod tests {
             let count = (w * h) as usize;
             let color: Vec<[f32; 4]> = (0..count)
                 .map(|i| {
-                    let v = 0.5 + 0.01 * f32::from(i);
+                    let v = 0.5 + 0.01 * (i as f32);
                     [v, v - 0.02, v + 0.03, 0.0]
                 })
                 .collect();
@@ -795,7 +795,7 @@ mod tests {
     fn a_nan_variance_is_treated_as_zero_and_is_identity() {
         let Some(gpu) = compute() else { return };
         let color = vec![[0.3, 0.6, 0.9, f32::NAN], [0.1, 0.2, 0.4, f32::INFINITY], [0.5, 0.5, 0.5, -0.01]];
-        let aov = (0..3).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+        let aov: Vec<[f32; 4]> = (0..3).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
         let out = denoise(&gpu, &color, &aov, (3, 1)).unwrap();
         // A non-finite or negative w is read as 0 variance, so each hit pixel copies
         // through unchanged and the read-back resets w to 1.
@@ -822,7 +822,7 @@ mod tests {
         let (w, h) = (7u32, 5u32);
         let count = (w * h) as usize;
         let color = vec![[0.3, 0.5, 0.8, 4.0]; count];
-        let aov = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+        let aov: Vec<[f32; 4]> = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
         let out = denoise(&gpu, &color, &aov, (w, h)).unwrap();
         for (i, (in_px, out_px)) in color.iter().zip(out.iter()).enumerate() {
             for c in 0..3 {
