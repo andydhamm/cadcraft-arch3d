@@ -747,21 +747,33 @@ pub(crate) fn material_rgba(name: &str) -> [f64; 4] {
     [rgb.0 as f64 / 255.0, rgb.1 as f64 / 255.0, rgb.2 as f64 / 255.0, alpha]
 }
 
-/// Axis-aligned extents (min/max) of a set of `VEC3` vertices.
+/// Axis-aligned extents (min/max) of a set of `VEC3` vertices. NaN components are
+/// skipped; an axis whose components are all NaN gets min = max = 0.
 fn extents3(v: &[[f32; 3]]) -> ([f32; 3], [f32; 3]) {
     if v.is_empty() {
         return ([0.0; 3], [0.0; 3]);
     }
     let mut min = [f32::MAX; 3];
     let mut max = [f32::MIN; 3];
+    let mut any = [false; 3];
     for p in v {
         for i in 0..3 {
+            if p[i].is_nan() {
+                continue;
+            }
+            any[i] = true;
             if p[i] < min[i] {
                 min[i] = p[i];
             }
             if p[i] > max[i] {
                 max[i] = p[i];
             }
+        }
+    }
+    for i in 0..3 {
+        if !any[i] {
+            min[i] = 0.0;
+            max[i] = 0.0;
         }
     }
     (min, max)
@@ -3602,5 +3614,139 @@ mod tests {
         let f2 = nodes.iter().filter(|&&n| n == "furnishing-f2").count();
         assert_eq!(f1, 1, "{nodes:?}");
         assert_eq!(f2, 1, "{nodes:?}");
+    }
+
+    #[test]
+    fn glb_nan_positions_produce_valid_min_max() {
+        let mut m = wall_mesh();
+        m.positions[0][0] = f32::NAN;
+        m.positions[1][1] = f32::NAN;
+        m.positions[2][2] = f32::NAN;
+        let mut scene = scene_with(0);
+        scene.meshes.push(m);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let pos = &json["accessors"][0];
+        let min = pos["min"].as_array().unwrap();
+        let max = pos["max"].as_array().unwrap();
+        // x: one NaN, so min/max from the other two (0.0 and 1.0)
+        assert_eq!(min[0].as_f64().unwrap(), 0.0);
+        assert_eq!(max[0].as_f64().unwrap(), 1.0);
+        // y: one NaN, so min/max from the other two (0.0 and 0.0)
+        assert_eq!(min[1].as_f64().unwrap(), 0.0);
+        assert_eq!(max[1].as_f64().unwrap(), 0.0);
+        // z: one NaN, so min/max from the other two (0.0 and 1.0)
+        assert_eq!(min[2].as_f64().unwrap(), 0.0);
+        assert_eq!(max[2].as_f64().unwrap(), 1.0);
+        // min <= max on every axis
+        for i in 0..3 {
+            assert!(min[i].as_f64().unwrap() <= max[i].as_f64().unwrap(), "axis {i}: min > max");
+        }
+    }
+
+    #[test]
+    fn glb_all_nan_on_one_axis_gives_zero_extent() {
+        let mut m = wall_mesh();
+        m.positions[0][0] = f32::NAN;
+        m.positions[1][0] = f32::NAN;
+        m.positions[2][0] = f32::NAN;
+        let mut scene = scene_with(0);
+        scene.meshes.push(m);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let pos = &json["accessors"][0];
+        let min = pos["min"].as_array().unwrap();
+        let max = pos["max"].as_array().unwrap();
+        assert_eq!(min[0].as_f64().unwrap(), 0.0);
+        assert_eq!(max[0].as_f64().unwrap(), 0.0);
+    }
+
+    #[test]
+    fn glb_coincident_points() {
+        let mut m = wall_mesh();
+        m.positions = vec![[2.0, 3.0, 4.0], [2.0, 3.0, 4.0], [2.0, 3.0, 4.0]];
+        let mut scene = scene_with(0);
+        scene.meshes.push(m);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let pos = &json["accessors"][0];
+        let min = pos["min"].as_array().unwrap();
+        let max = pos["max"].as_array().unwrap();
+        for i in 0..3 {
+            assert_eq!(min[i].as_f64().unwrap(), max[i].as_f64().unwrap(), "axis {i}");
+        }
+        assert_eq!(min[0].as_f64().unwrap(), 2.0);
+        assert_eq!(min[1].as_f64().unwrap(), 3.0);
+        assert_eq!(min[2].as_f64().unwrap(), 4.0);
+    }
+
+    #[test]
+    fn glb_zero_indices_mesh() {
+        let mut m = wall_mesh();
+        m.indices = vec![];
+        let mut scene = scene_with(0);
+        scene.meshes.push(m);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        // The mesh is still written (positions are non-empty), but with zero indices.
+        let accs = json["accessors"].as_array().unwrap();
+        let idx_acc = accs.iter().find(|a| a["type"] == "SCALAR").unwrap();
+        assert_eq!(idx_acc["count"].as_u64().unwrap(), 0);
+    }
+
+    #[test]
+    fn glb_large_scene() {
+        let scene = scene_with(1000);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        let meshes = json["meshes"].as_array().unwrap();
+        assert_eq!(meshes.len(), 1000);
+        let nodes = json["nodes"].as_array().unwrap();
+        // One root + 1000 mesh nodes
+        assert_eq!(nodes.len(), 1001);
+        // Verify chunk structure is still valid
+        let total = le32(&bytes, 8) as usize;
+        assert_eq!(total, bytes.len());
+    }
+
+    #[test]
+    fn glb_round_trip_json_valid() {
+        let scene = scene_with(3);
+        let bytes = write(&scene);
+        let json = glb_json_chunk(&bytes);
+        // All required top-level fields per glTF 2.0
+        assert!(json.get("asset").is_some());
+        assert!(json.get("scene").is_some());
+        assert!(json.get("scenes").is_some());
+        assert!(json.get("nodes").is_some());
+        assert!(json.get("meshes").is_some());
+        assert!(json.get("materials").is_some());
+        assert!(json.get("buffers").is_some());
+        assert!(json.get("bufferViews").is_some());
+        assert!(json.get("accessors").is_some());
+        // asset.version must be "2.0"
+        assert_eq!(json["asset"]["version"], "2.0");
+        // scene must reference a valid scene index
+        let scene_idx = json["scene"].as_u64().unwrap() as usize;
+        assert!(scene_idx < json["scenes"].as_array().unwrap().len());
+        // Every node's mesh index must be valid
+        let mesh_count = json["meshes"].as_array().unwrap().len();
+        for node in json["nodes"].as_array().unwrap().iter().skip(1) {
+            if let Some(mesh_idx) = node["mesh"].as_u64() {
+                assert!(mesh_idx as usize < mesh_count, "node mesh index out of range");
+            }
+        }
+        // Every bufferView must reference a valid buffer
+        let buffer_count = json["buffers"].as_array().unwrap().len();
+        for bv in json["bufferViews"].as_array().unwrap() {
+            let buf_idx = bv["buffer"].as_u64().unwrap() as usize;
+            assert!(buf_idx < buffer_count, "bufferView buffer index out of range");
+        }
+        // Every accessor must reference a valid bufferView
+        let bv_count = json["bufferViews"].as_array().unwrap().len();
+        for acc in json["accessors"].as_array().unwrap() {
+            let bv_idx = acc["bufferView"].as_u64().unwrap() as usize;
+            assert!(bv_idx < bv_count, "accessor bufferView index out of range");
+        }
     }
 }
