@@ -4,6 +4,9 @@ use cadcraft_geom::{PolyVertex, Vec2, Vec3};
 
 use crate::*;
 
+// Ensure OpeningKind is available if not caught by wildcard, though it should be in cadcraft_doc::*
+use cadcraft_doc::OpeningKind;
+
 #[path = "../tests/support/pdf_read.rs"]
 mod pdf_read;
 
@@ -1901,6 +1904,91 @@ fn arch_xrecord_written_for_walls() {
 fn empty_arch_writes_no_xrecord() {
     assert!(!write_dxf(&sample()).contains("CADCRAFT_ARCH"));
     assert!(roundtrip(&sample()).arch.is_empty());
+}
+
+#[test]
+fn arch_xrecord_roundtrip_stability() {
+    let mut d = sample();
+    d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+    d.arch.push_wall(Wall::new(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), 0.15));
+
+    let text1 = write_dxf(&d);
+    let back1 = read_dxf(text1.as_bytes()).unwrap();
+
+    // Verify walls survived
+    assert_eq!(back1.arch.walls.len(), 2);
+    assert_eq!(back1.arch.walls[0].start, Vec2::new(0.0, 0.0));
+
+    // Write again and verify stability
+    let text2 = write_dxf(&back1);
+    let back2 = read_dxf(text2.as_bytes()).unwrap();
+
+    assert_eq!(back2.arch.walls.len(), 2);
+    assert_eq!(back2.arch.walls, back1.arch.walls);
+
+    // Ensure only one XRECORD entry exists in the second write too
+    assert_eq!(text2.matches("CADCRAFT_ARCH").count(), 1);
+}
+
+#[test]
+fn arch_xrecord_handles_empty_model_gracefully() {
+    let mut d = Drawing::new_metric();
+    // Explicitly ensure arch is empty
+    assert!(d.arch.is_empty());
+
+    let text = write_dxf(&d);
+    assert!(!text.contains("CADCRAFT_ARCH"), "Empty arch model should not write XRECORD");
+
+    let back = read_dxf(text.as_bytes()).unwrap();
+    assert!(back.arch.is_empty());
+}
+
+#[test]
+fn arch_xrecord_survives_complex_geometry_roundtrip() {
+    let mut d = Drawing::new_metric();
+
+    // Add a wall
+    let w1 = d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+
+    // Add an opening
+    let opening = Opening { id: ArchId(1), host: w1, offset: 5.0, width: 1.0, height: 2.1, sill: 0.0, kind: OpeningKind::Door, ..Default::default() };
+    d.arch.openings.push(opening);
+
+    // Add a room
+    let room = Room { id: ArchId(1), name: "Test Room".into(), area: 10.0, ..Default::default() };
+    d.arch.rooms.push(room);
+
+    let text = write_dxf(&d);
+    assert!(text.contains("CADCRAFT_ARCH"));
+
+    let back = read_dxf(text.as_bytes()).unwrap();
+
+    assert_eq!(back.arch.walls.len(), 1);
+    assert_eq!(back.arch.openings.len(), 1);
+    assert_eq!(back.arch.rooms.len(), 1);
+
+    let back_opening = &back.arch.openings[0];
+    assert_eq!(back_opening.host, w1);
+    assert_eq!(back_opening.offset, 5.0);
+    assert_eq!(back_opening.width, 1.0);
+    assert_eq!(back_opening.kind, OpeningKind::Door);
+}
+
+#[test]
+fn arch_xrecord_ignores_garbage_payload() {
+    // This test verifies that if the XRECORD payload is corrupted, it doesn't panic and returns empty/default
+    let mut d = sample();
+    d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+
+    let text = write_dxf(&d);
+
+    // Find the XRECORD section and corrupt the payload
+    // This is a simplified corruption: replacing the JSON payload with invalid JSON
+    let corrupt_text = text.replace("{\"version\":1,\"model\":", "{\"version\":1,\"model\":INVALID_JSON");
+
+    let back = read_dxf(corrupt_text.as_bytes()).unwrap();
+    // Should not panic, and should likely result in empty arch model because parsing failed
+    assert!(back.arch.is_empty() || back.arch.walls.is_empty());
 }
 
 #[test]
