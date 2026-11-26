@@ -1359,4 +1359,149 @@ mod tests {
         assert!(params.get("rotation").is_none());
         assert!(params.get("horizon").is_none());
     }
+
+    #[test]
+    fn place_refuses_non_finite_and_out_of_range_numbers() {
+        let mut s = session();
+        let hostile = [
+            (json!({ "item": "armchair", "at": [1.0, f64::NAN] }), "`at` must be"),
+            (json!({ "item": "armchair", "at": [1.0, f64::INFINITY] }), "`at` must be"),
+            (json!({ "item": "armchair", "at": [1.0, -f64::INFINITY] }), "`at` must be"),
+            (json!({ "item": "armchair", "at": [1.0, 1e308] }), "`at` must be"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "rotation": f64::NAN }), "`rotation` must be a finite number"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "rotation": f64::INFINITY }), "`rotation` must be a finite number"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "elevation": f64::NAN }), "`elevation` must be a finite number"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "elevation": f64::INFINITY }), "`elevation` must be a finite number"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "elevation": -0.001 }), "`elevation` must be between 0 and 100"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "elevation": 100.001 }), "`elevation` must be between 0 and 100"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "size": [f64::NAN, 1.0, 1.0] }), "`size` must be"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "size": [f64::INFINITY, 1.0, 1.0] }), "`size` must be"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "size": [0.0, 1.0, 1.0] }), "`size` must be"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "size": [-1.0, 1.0, 1.0] }), "`size` must be"),
+            (json!({ "item": "armchair", "at": [1.0, 1.0], "size": [1.0, 1.0, 100.001] }), "`size` must be"),
+        ];
+        for (p, want) in hostile {
+            let e = refused(&mut s, PLACE, p.clone());
+            assert!(e.contains(want), "{p}: {e}");
+        }
+        assert!(model(&s).furnishings.is_empty() && model(&s).symbols.is_empty());
+    }
+
+    #[test]
+    fn centre_on_a_degenerate_wall_face_is_refused() {
+        let mut s = session();
+        // A zero-length wall: its faces are degenerate.
+        run(&mut s, "wall", json!({ "points": [[0.0, 0.0], [0.0, 0.0]] }));
+        run(&mut s, PLACE, json!({ "item": "armchair", "at": [0.0, 0.0] }));
+        let e = refused(&mut s, CENTRE, json!({ "id": "f0", "on": "wall" }));
+        assert!(e.contains("no wall face within 0.3 m"), "{e}");
+        assert_eq!(model(&s).furnishings[0].at, [0.0, 0.0], "the furnishing stays put");
+    }
+
+    #[test]
+    fn centre_on_a_room_with_no_finite_extent_is_refused() {
+        let mut s = session();
+        // A room whose polygon has non-finite coordinates.
+        if let Ok(d) = s.doc_mut() {
+            d.arch.rooms.push(cadcraft_doc::arch::Room {
+                id: cadcraft_doc::ArchId(0),
+                level: 0,
+                polygon: vec![Vec2::new(f64::NAN, 0.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0)],
+                ..Default::default()
+            });
+        }
+        run(&mut s, PLACE, json!({ "item": "armchair", "at": [0.0, 0.0] }));
+        let e = refused(&mut s, CENTRE, json!({ "id": "f0", "on": "room" }));
+        assert!(e.contains("not in a room") || e.contains("no finite extent"), "{e}");
+        assert_eq!(model(&s).furnishings[0].at, [0.0, 0.0], "the furnishing stays put");
+    }
+
+    #[test]
+    fn place_a_symbol_with_zero_extents_uses_the_given_size() {
+        let mut s = session();
+        // A symbol with zero extents (a degenerate mesh).
+        let mesh = cadcraft_doc::arch::SymbolMesh {
+            key: "zero-extents".into(),
+            parts: vec![cadcraft_doc::arch::SymbolPart {
+                name: "p".into(),
+                positions: vec![[0.0, 0.0, 0.0]],
+                normals: vec![[0.0, 0.0, 1.0]],
+                indices: vec![],
+                base_color: [1.0, 1.0, 1.0, 1.0],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        if let Ok(d) = s.doc_mut() {
+            d.arch.symbols.insert("zero-extents".into(), mesh);
+        }
+        s.library.add_user_item(ItemRecord {
+            id: "user:zero".into(),
+            name: "Zero".into(),
+            kind: ItemKind::Symbol,
+            symbol_type: "box".into(),
+            placement: Some("floor".into()),
+            size: None,
+            licence: "CC0-1.0".into(),
+            ..Default::default()
+        });
+        // With no size given and zero extents, the place should still work (size defaults to [0,0,0] or similar).
+        let r = run(&mut s, PLACE, json!({ "item": "user:zero", "at": [1.0, 1.0], "size": [1.0, 1.0, 1.0] }));
+        assert_eq!(r["furnishing"], "f0", "{r}");
+        assert_eq!(r["size"], json!([1.0, 1.0, 1.0]), "the given size is used");
+    }
+
+    #[test]
+    fn edit_refuses_non_finite_and_out_of_range_numbers() {
+        let mut s = session();
+        run(&mut s, PLACE, json!({ "item": "armchair", "at": [1.0, 1.0] }));
+        let hostile = [
+            (json!({ "id": "f0", "at": [f64::NAN, 1.0] }), "`at` must be"),
+            (json!({ "id": "f0", "at": [1.0, f64::INFINITY] }), "`at` must be"),
+            (json!({ "id": "f0", "rotation": f64::NAN }), "`rotation` must be a finite number"),
+            (json!({ "id": "f0", "rotation": f64::INFINITY }), "`rotation` must be a finite number"),
+            (json!({ "id": "f0", "elevation": f64::NAN }), "`elevation` must be a finite number"),
+            (json!({ "id": "f0", "elevation": -0.001 }), "`elevation` must be between 0 and 100"),
+            (json!({ "id": "f0", "elevation": 100.001 }), "`elevation` must be between 0 and 100"),
+            (json!({ "id": "f0", "size": [f64::NAN, 1.0, 1.0] }), "`size` must be"),
+            (json!({ "id": "f0", "size": [0.0, 1.0, 1.0] }), "`size` must be"),
+            (json!({ "id": "f0", "size": [1.0, 1.0, 100.001] }), "`size` must be"),
+        ];
+        for (p, want) in hostile {
+            let e = refused(&mut s, EDIT, p.clone());
+            assert!(e.contains(want), "{p}: {e}");
+        }
+        // The furnishing is unchanged.
+        let f = model(&s).furnishings[0].clone();
+        assert_eq!((f.at, f.rotation, f.elevation, f.size), ([1.0, 1.0], 0.0, 0.0, record(&s, "armchair").size.unwrap_or_default()));
+    }
+
+    #[test]
+    fn delete_a_furnishing_with_a_non_finite_position_does_not_panic() {
+        let mut s = session();
+        run(&mut s, PLACE, json!({ "item": "armchair", "at": [1.0, 1.0] }));
+        if let Ok(d) = s.doc_mut() {
+            if let Some(f) = d.arch.furnishing_mut(ArchId(0)) {
+                f.at = [f64::NAN, f64::NAN];
+            }
+        }
+        let r = run(&mut s, DELETE, json!({ "id": "f0" }));
+        assert_eq!(r, json!({ "deleted": "f0" }));
+        assert!(model(&s).furnishings.is_empty());
+    }
+
+    #[test]
+    fn centre_a_furnishing_with_non_finite_position_is_refused() {
+        let mut s = session();
+        run(&mut s, PLACE, json!({ "item": "armchair", "at": [1.0, 1.0] }));
+        if let Ok(d) = s.doc_mut() {
+            if let Some(f) = d.arch.furnishing_mut(ArchId(0)) {
+                f.at = [f64::NAN, f64::NAN];
+            }
+        }
+        let e = refused(&mut s, CENTRE, json!({ "id": "f0", "on": "room" }));
+        assert!(e.contains("not in a room") || e.contains("no finite extent"), "{e}");
+        let e = refused(&mut s, CENTRE, json!({ "id": "f0", "on": "wall" }));
+        assert!(e.contains("no wall face within 0.3 m"), "{e}");
+    }
 }
