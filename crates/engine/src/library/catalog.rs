@@ -1301,5 +1301,51 @@ mod tests {
                 assert!(keywords.contains(k), "finish {} missing keyword {}", f.name(), k);
             }
         }
+
+        #[test]
+        fn entry_record_keyword_boundary() {
+            let base = json!({
+                "id": "k:b",
+                "name": "B",
+                "category": "Furniture",
+                "licence": "CC0-1.0",
+                "source": "s",
+                "file": "b.glb"
+            });
+            // exactly MAX_KEYWORDS (64) keywords is accepted
+            let kw64: Vec<Value> = (0..64).map(|i| Value::String(format!("kw{}", i))).collect();
+            let mut e = base.clone();
+            e["keywords"] = Value::Array(kw64);
+            assert!(entry_record(&e, "x").is_ok());
+            // 65 keywords is refused
+            let kw65: Vec<Value> = (0..65).map(|i| Value::String(format!("kw{}", i))).collect();
+            let mut e2 = base.clone();
+            e2["keywords"] = Value::Array(kw65);
+            assert!(entry_record(&e2, "x").is_err());
+            // a keyword exactly at MAX_SHORT (256) chars is accepted
+            let long_kw = "a".repeat(256);
+            let mut e3 = base.clone();
+            e3["keywords"] = json!([long_kw]);
+            assert!(entry_record(&e3, "x").is_ok());
+            // a keyword at 257 chars is refused
+            let long_kw2 = "a".repeat(257);
+            let mut e4 = base.clone();
+            e4["keywords"] = json!([long_kw2]);
+            assert!(entry_record(&e4, "x").is_err());
+            // symbolType exactly at MAX_SHORT (256) is accepted
+            let long_st = "s".repeat(256);
+            let mut e5 = base.clone();
+            e5["symbolType"] = json!(long_st);
+            assert!(entry_record(&e5, "x").is_ok());
+            // symbolType at 257 chars is refused
+            let long_st2 = "s".repeat(257);
+            let mut e6 = base.clone();
+            e6["symbolType"] = json!(long_st2);
+            assert!(entry_record(&e6, "x").is_err());
+            // elevation 0.0 is accepted (unlike size, zero is allowed)
+            let mut e7 = base.clone();
+            e7["elevation"] = json!(0.0);
+            assert!(entry_record(&e7, "x").is_ok());
+        }
     }
 }

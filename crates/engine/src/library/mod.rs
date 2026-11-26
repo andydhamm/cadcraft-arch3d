@@ -755,6 +755,7 @@ pub(crate) mod testing {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn env<'a>(vars: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<OsString> + 'a {
         move |k| vars.iter().find(|(n, _)| *n == k).map(|(_, v)| OsString::from(v))
@@ -802,5 +803,60 @@ mod tests {
         assert_eq!(st.tags.len(), 1);
         assert_eq!(st.filters.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["good"]);
         assert_eq!(st.local, [LocalCatalog { path: "/z".into(), licence: "CC0-1.0".into(), category: "Furniture".into() }]);
+    }
+
+    #[test]
+    fn parse_query_boundary_lengths() {
+        // text exactly at MAX_QUERY_TEXT (1000 chars) is accepted
+        let text1000 = "a".repeat(1000);
+        let ok = parse_query(Some(&json!(text1000)), None).unwrap();
+        assert_eq!(ok.text.chars().count(), 1000);
+        // text at 1001 chars is refused
+        let text1001 = "a".repeat(1001);
+        assert!(parse_query(Some(&json!(text1001)), None).is_err());
+        // chip value exactly at MAX_CHIP_VALUE (256) chars is accepted
+        let v256 = json!([{"kind": "tag", "value": "b".repeat(256)}]);
+        let ok2 = parse_query(None, Some(&v256)).unwrap();
+        assert_eq!(ok2.chips.len(), 1);
+        assert_eq!(ok2.chips[0].value.chars().count(), 256);
+        // chip value at 257 chars is refused
+        let v257 = json!([{"kind": "tag", "value": "b".repeat(257)}]);
+        assert!(parse_query(None, Some(&v257)).is_err());
+        // exactly MAX_CHIPS (32) chips are accepted
+        let many: Vec<Value> = (0..32).map(|i| json!(format!("t{}", i))).collect();
+        let ok3 = parse_query(None, Some(&json!(many))).unwrap();
+        assert_eq!(ok3.chips.len(), 32);
+        // 33 chips are refused
+        let too_many: Vec<Value> = (0..33).map(|i| json!(format!("t{}", i))).collect();
+        assert!(parse_query(None, Some(&json!(too_many))).is_err());
+        // an empty text string is accepted
+        let ok4 = parse_query(Some(&json!("")), None).unwrap();
+        assert_eq!(ok4.text, "");
+        // null text and null chips give a default (empty) query
+        let ok5 = parse_query(None, None).unwrap();
+        assert_eq!(ok5.text, "");
+        assert!(ok5.chips.is_empty());
+    }
+
+    #[test]
+    fn check_name_boundary() {
+        // length boundary: 64 chars accepted, 65 refused
+        let name64 = "a".repeat(64);
+        let name65 = "a".repeat(65);
+        assert!(check_name("tag", &name64).is_ok());
+        assert!(check_name("tag", &name65).is_err());
+        // empty and space-at-either-end names are refused
+        assert!(check_name("tag", "").is_err());
+        assert!(check_name("tag", " leading").is_err());
+        assert!(check_name("tag", "trailing ").is_err());
+        assert!(check_name("tag", " a ").is_err());
+        assert!(check_name("filter name", "  spaced  ").is_err());
+        // control characters are refused
+        assert!(check_name("tag", "a\u{7}b").is_err());
+        assert!(check_name("tag", "a\nb").is_err());
+        assert!(check_name("tag", "a\tb").is_err());
+        // plain valid names pass
+        assert!(check_name("tag", "ok").is_ok());
+        assert!(check_name("filter name", "Living room").is_ok());
     }
 }
