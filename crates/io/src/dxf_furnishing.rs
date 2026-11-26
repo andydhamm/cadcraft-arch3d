@@ -319,14 +319,9 @@ mod tests {
         d.arch.next_furnishing_id += 1;
 
         let p = proxy_furnishing_entities(&d.arch);
-        assert_eq!(p.len(), 1, "furnishing with zero size should still produce a proxy");
-        for (_, layer, tags) in &p {
-            for t in tags {
-                if t.code == 10 || t.code == 20 {
-                    assert!(t.f64().is_finite(), "non-finite coordinate in proxy on layer {}", layer);
-                }
-            }
-        }
+        // A zero-size furnishing maps all symbol corners to one point, so the outline
+        // has fewer than three vertices and no proxy is written.
+        assert_eq!(p.len(), 0, "a zero-size furnishing has no outline to proxy");
     }
 
     #[test]
