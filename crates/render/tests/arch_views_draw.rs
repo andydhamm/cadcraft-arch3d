@@ -274,9 +274,13 @@ fn a_view_with_overflowing_geometry_draws_nothing() {
         ..ViewGeometry::default()
     };
     // A fresh view placed at a huge insert so every placed point overflows to infinity.
-    let view = ArchView { name: "Huge".into(), insert: [1e308, 1e308], scale: 50.0, generated: Some(g), ..ArchView::default() };
+    // `push_view` refuses to store such an insert (InsertTooLarge), so reach the same
+    // placed-overflow state the renderer must survive by mutating the stored field — the
+    // guard stays in force for programmatic creation.
+    let view = ArchView { name: "Huge".into(), insert: [10.0, 20.0], scale: 50.0, generated: Some(g), ..ArchView::default() };
     let hid = d.arch.push_view(view).expect("view is valid");
     let h = view_handle(hid);
+    d.arch.views.iter_mut().find(|v| v.id == hid).unwrap().insert = [1e308, 1e308];
     let list = build(&d, false);
     assert!(list.prims.iter().all(|p| p.handle != h), "overflowing geometry must emit no prims");
 }
@@ -423,4 +427,76 @@ fn multiple_views_get_distinct_handles() {
     assert_eq!(l1.len(), 1, "view 2 must draw one line");
     assert_eq!(polyline_pts(&list, &l0[0]), [Vec2::new(10.0, 20.0), Vec2::new(11.0, 20.0)], "view 1 at its insert");
     assert_eq!(polyline_pts(&list, &l1[0]), [Vec2::new(100.0, 200.0), Vec2::new(101.0, 200.0)], "view 2 at its insert");
+}
+
+/// A NaN in the view's insert trips the renderer's whole-view finiteness guard and nothing
+/// is drawn per-point; no NaN vertex escapes the list.
+#[test]
+fn a_view_with_nan_insert_draws_nothing() {
+    let (mut d, id) = drawing(true);
+    d.arch.views.iter_mut().find(|v| v.id == id).unwrap().insert = [f64::NAN, 20.0];
+    let h = view_handle(id);
+    let list = build(&d, false);
+    assert!(list.prims.iter().all(|p| p.handle != h), "a NaN insert must draw no prims");
+    assert!(list.verts.iter().all(|p| p.is_finite()), "a NaN insert must not leak NaN vertices");
+}
+
+/// A huge (but finite) scale grows the dimension ticks and text size; the placed geometry
+/// itself stays finite, so no vertex or triangle may overflow to inf or NaN.
+#[test]
+fn a_view_with_huge_scale_draws_only_finite_vertices() {
+    let (mut d, id) = drawing(true);
+    d.arch.views.iter_mut().find(|v| v.id == id).unwrap().scale = 1e12;
+    let h = view_handle(id);
+    let list = build(&d, false);
+    assert!(
+        list.verts.iter().all(|p| p.is_finite()) && list.tris.iter().all(|p| p.is_finite()),
+        "a huge scale must not overflow vertices or tris to inf or NaN",
+    );
+    assert!(list.prims.iter().any(|p| p.handle == h && p.kind == Kind::Tris), "the fill must still draw");
+}
+
+/// The ring loop is capped at `MAX_VIEW_ITEMS` like the line loop: 100 005 valid triangle
+/// rings draw exactly 100 000 fills and 100 000 outlines, no more.
+#[test]
+fn a_view_with_many_rings_is_capped() {
+    let mut rings = Vec::with_capacity(100_005);
+    for i in 0..100_005usize {
+        let x = (i % 7) as f64;
+        rings.push(ViewRing {
+            kind: ArchKind::Wall,
+            object: ArchId(1),
+            points: vec![[x, 0.0], [x + 0.1, 0.0], [x + 0.1, 0.1]],
+            ..ViewRing::default()
+        });
+    }
+    let (d, id) = drawing_with(ViewGeometry { extent: [0.0, 0.0, 4.0, 3.0], lines: vec![], rings, dims: vec![], ..ViewGeometry::default() });
+    let h = view_handle(id);
+    let ink = color_of(&d, "A-SECT-MCUT");
+    let list = build(&d, false);
+    let tris = list.prims.iter().filter(|p| p.handle == h && p.kind == Kind::Tris && p.color == ink).count();
+    let outlines = list.prims.iter().filter(|p| p.handle == h && p.kind == Kind::Polyline && p.color == ink && p.len == 4).count();
+    assert_eq!(tris, 100_000, "ring fills must be capped at MAX_VIEW_ITEMS, got {tris}");
+    assert_eq!(outlines, 100_000, "ring outlines must be capped at MAX_VIEW_ITEMS, got {outlines}");
+}
+
+/// Freezing A-SECT-MCUT removes only the filled poché; the view's line and dimension prims
+/// draw from their own (still-visible) layers.
+#[test]
+fn a_frozen_sect_mcut_layer_hides_only_the_fill() {
+    let (mut d, id) = drawing(true);
+    if let Some(l) = d.layer_mut("A-SECT-MCUT") {
+        l.frozen = true;
+    }
+    let h = view_handle(id);
+    let list = build(&d, false);
+    assert!(list.prims.iter().all(|p| p.handle != h || p.kind != Kind::Tris), "freezing A-SECT-MCUT must remove the fill",);
+    assert!(
+        list.prims.iter().any(|p| p.handle == h && p.kind == Kind::Polyline && p.color == color_of(&d, "A-ELEV")),
+        "A-ELEV lines must still draw"
+    );
+    assert!(
+        list.prims.iter().any(|p| p.handle == h && p.kind == Kind::Polyline && p.color == color_of(&d, "A-ANNO-DIMS") && p.len == 2),
+        "dimension prims must still draw"
+    );
 }
