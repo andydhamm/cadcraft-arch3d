@@ -1062,7 +1062,7 @@ mod tests {
         // Hinged door with hinge/swing
         let mut door = Opening::new(wid, 1.0, 0.9, 2.1, OpeningKind::Door);
         door.hinge = cadcraft_doc::arch::Hinge::Left;
-        door.swing = cadcraft_doc::arch::Swing::Inside;
+        door.swing = cadcraft_doc::arch::Swing::In;
         let door_id = d.arch.push_opening(door);
 
         // Casement window with recess and sill
@@ -1084,7 +1084,7 @@ mod tests {
 
         let door_r = back.arch.opening(door_id).unwrap();
         assert_eq!(door_r.hinge, cadcraft_doc::arch::Hinge::Left, "hinge lost");
-        assert_eq!(door_r.swing, cadcraft_doc::arch::Swing::Inside, "swing lost");
+        assert_eq!(door_r.swing, cadcraft_doc::arch::Swing::In, "swing lost");
 
         let window_r = back.arch.opening(window_id).unwrap();
         assert_eq!(window_r.recess, 0.05, "recess lost");
