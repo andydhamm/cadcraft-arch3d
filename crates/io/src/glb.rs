@@ -1890,6 +1890,7 @@ mod tests {
             m.material = "window-glass".into();
             m.object = ArchId(11);
             // Valid mesh
+            m
         });
 
         let bytes = write(&scene);

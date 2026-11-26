@@ -1061,8 +1061,8 @@ mod tests {
 
         // Hinged door with hinge/swing
         let mut door = Opening::new(wid, 1.0, 0.9, 2.1, OpeningKind::Door);
-        door.hinge = Some(cadcraft_doc::arch::Hinge::Left);
-        door.swing = Some(cadcraft_doc::arch::Swing::Inward);
+        door.hinge = cadcraft_doc::arch::Hinge::Left;
+        door.swing = cadcraft_doc::arch::Swing::Inside;
         let door_id = d.arch.push_opening(door);
 
         // Casement window with recess and sill
@@ -1073,7 +1073,7 @@ mod tests {
 
         // Garage door with style
         let mut garage = Opening::new(wid, 6.5, 2.4, 2.1, OpeningKind::GarageDoor);
-        garage.style = Some("garage".into());
+        garage.style = "garage".into();
         let garage_id = d.arch.push_opening(garage);
 
         let snap = d.arch.clone();
@@ -1083,15 +1083,15 @@ mod tests {
         assert_eq!(back.arch.openings.len(), 3);
 
         let door_r = back.arch.opening(door_id).unwrap();
-        assert_eq!(door_r.hinge, Some(cadcraft_doc::arch::Hinge::Left), "hinge lost");
-        assert_eq!(door_r.swing, Some(cadcraft_doc::arch::Swing::Inward), "swing lost");
+        assert_eq!(door_r.hinge, cadcraft_doc::arch::Hinge::Left, "hinge lost");
+        assert_eq!(door_r.swing, cadcraft_doc::arch::Swing::Inside, "swing lost");
 
         let window_r = back.arch.opening(window_id).unwrap();
         assert_eq!(window_r.recess, 0.05, "recess lost");
         assert_eq!(window_r.sill, 0.9, "sill lost");
 
         let garage_r = back.arch.opening(garage_id).unwrap();
-        assert_eq!(garage_r.style.as_deref(), Some("garage"), "garage style lost");
+        assert_eq!(garage_r.style.as_ref(), "garage", "garage style lost");
 
         // Verify layers exist in output
         assert!(text.contains("A-DOOR"));
