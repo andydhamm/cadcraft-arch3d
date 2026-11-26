@@ -374,4 +374,55 @@ mod tests {
         assert_eq!(scene.materials.get("sym:k:0").and_then(|m| m.texture.clone()), None);
         assert!(scene.textures.is_empty());
     }
+
+    #[test]
+    fn empty_symbol_builds_a_box() {
+        let mut model = ArchModel::default();
+        model.symbols.insert("empty".into(), SymbolMesh { key: "empty".into(), parts: Vec::new(), ..Default::default() });
+        let f = Furnishing { symbol: "empty".into(), size: [1.0, 1.0, 1.0], ..Default::default() };
+        let meshes = furnishing_meshes(&model, &f);
+        assert_eq!(meshes.len(), 1);
+        assert_eq!(meshes[0].material, MISSING_SYMBOL_MATERIAL);
+    }
+
+    #[test]
+    fn symbol_with_zero_extents_scales_by_one() {
+        let mut model = ArchModel::default();
+        let part = SymbolPart {
+            positions: vec![[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            normals: vec![[0.0, 0.0, 1.0]; 3],
+            indices: vec![0, 1, 2],
+            ..Default::default()
+        };
+        model.symbols.insert("zero".into(), SymbolMesh { key: "zero".into(), parts: vec![part], ..Default::default() });
+        let f = Furnishing { symbol: "zero".into(), size: [2.0, 2.0, 2.0], at: [1.0, 1.0], ..Default::default() };
+        let meshes = furnishing_meshes(&model, &f);
+        assert_eq!(meshes.len(), 1);
+        // All positions should be at the furnishing's location (1, 1, 0) since extents are 0.
+        for p in &meshes[0].positions {
+            assert!((p[0] - 1.0).abs() < 1e-6);
+            assert!((p[1] - 1.0).abs() < 1e-6);
+            assert!((p[2] - 0.0).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn mirrored_furnishing_reverses_winding() {
+        let part = triangle_part();
+        let (model, mut f) = model_with(part);
+        f.mirrored = true;
+        let meshes = furnishing_meshes(&model, &f);
+        assert_eq!(meshes.len(), 1);
+        // Original indices: 0, 1, 2. Mirrored should be 0, 2, 1 (swap 1 and 2).
+        assert_eq!(meshes[0].indices, vec![0, 2, 1]);
+    }
+
+    #[test]
+    fn furnishing_with_nan_level_elevation_builds_nothing() {
+        let (mut model, f) = model_with(triangle_part());
+        model.levels.push(cadcraft_doc::arch::Level { index: 0, elevation: f64::NAN, ..Default::default() });
+        let mut f = f;
+        f.level = 0;
+        assert!(furnishing_meshes(&model, &f).is_empty());
+    }
 }

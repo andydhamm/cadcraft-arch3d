@@ -137,13 +137,13 @@ pub enum Backdrop {
         /// Library item id.
         image: String,
         /// Brightness multiplier.
-        #[serde(default = "one")]
+        #[serde(default = "one", skip_serializing_if = "is_one_f64")]
         intensity: f64,
         /// Rotation about the vertical axis, degrees.
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "is_zero_f64")]
         rotation: f64,
         /// Horizon offset, degrees.
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "is_zero_f64")]
         horizon: f64,
     },
 }
@@ -154,6 +154,10 @@ fn one() -> f64 {
 
 fn is_zero_f64(v: &f64) -> bool {
     *v == 0.0
+}
+
+fn is_one_f64(v: &f64) -> bool {
+    *v == 1.0
 }
 
 #[cfg(test)]
@@ -231,5 +235,41 @@ mod tests {
         assert!(!img.is_valid());
         let img = ImageRgbe { width: 0, height: 0, rgbe: vec![] };
         assert!(!img.is_valid());
+    }
+
+    #[test]
+    fn backdrop_sky_and_hdri_serde() {
+        let sky = Backdrop::Sky;
+        let json = serde_json::to_string(&sky).unwrap();
+        assert_eq!(json, r#"{"kind":"sky"}"#);
+        let back: Backdrop = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, sky);
+
+        let hdri = Backdrop::Hdri { image: "studio.hdr".into(), intensity: 1.5, rotation: 30.0, horizon: -5.0 };
+        let json = serde_json::to_string(&hdri).unwrap();
+        assert!(json.contains(r#""kind":"hdri""#));
+        assert!(json.contains(r#""image":"studio.hdr""#));
+        assert!(json.contains(r#""intensity":1.5"#));
+        assert!(json.contains(r#""rotation":30"#));
+        assert!(json.contains(r#""horizon":-5"#));
+        let back: Backdrop = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, hdri);
+
+        let hdri_min = Backdrop::Hdri { image: "test.hdr".into(), intensity: 1.0, rotation: 0.0, horizon: 0.0 };
+        let json_min = serde_json::to_string(&hdri_min).unwrap();
+        assert!(!json_min.contains("intensity"));
+        assert!(!json_min.contains("rotation"));
+        assert!(!json_min.contains("horizon"));
+        let back_min: Backdrop = serde_json::from_str(&json_min).unwrap();
+        assert_eq!(back_min, hdri_min);
+    }
+
+    #[test]
+    fn backdrop_image_nonzero_horizon_round_trips() {
+        let img = Backdrop::Image { item: "wallpaper".into(), projection: Projection::Flat, horizon: 15.0 };
+        let json = serde_json::to_string(&img).unwrap();
+        assert!(json.contains(r#""horizon":15"#));
+        let back: Backdrop = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, img);
     }
 }
