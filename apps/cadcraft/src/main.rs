@@ -534,7 +534,8 @@ fn main() -> eframe::Result {
 
 #[cfg(test)]
 mod tests {
-    use super::{STENCIL_BITS, filters_for_save, follow_desktop, saved_window, stencil_bits, window_options, without_tiny_window};
+    use super::{STENCIL_BITS, filters_for_save, follow_desktop, install_io, saved_window, stencil_bits, window_options, without_tiny_window};
+    use cadcraft_engine::Session;
 
     #[test]
     fn save_dialog_offers_dwg_with_the_drawing_format_first() {
