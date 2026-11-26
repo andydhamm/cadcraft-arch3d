@@ -482,6 +482,10 @@ impl Pane3d {
             return (look, Ok(self.view.sun_dir));
         }
         let Some(site) = self.site.as_ref() else { return (look, Ok(None)) };
+        // A NaN latitude or longitude means the site is invalid; treat as no sun.
+        if !site.latitude.is_finite() || !site.longitude.is_finite() {
+            return (look, Ok(None));
+        }
         let dir = cadcraft_arch::sun::sun_position(site.latitude, self.sun_date.trim(), self.sun_time.trim())
             .map(|sun| cadcraft_arch::site::true_to_drawing(Some(site), cadcraft_arch::sun::sun_dir(&sun)));
         match dir {
@@ -676,7 +680,7 @@ impl Pane3d {
         use cadcraft_doc::arch::photo;
         let look = &self.view.look;
         let spp = lock_final(&self.finalize).samples.clamp(1, cadcraft_render3d::pathtrace::MAX_SPP);
-        let mut opts = cadcraft_render3d::pathtrace::PathOptions { spp, ..Default::default() };
+        let mut opts = cadcraft_render3d::pathtrace::PathOptions::default();
         let mut lighting = self.lighting.clone();
         if look.technique == cadcraft_doc::arch::Technique::Photoreal {
             cadcraft_render3d::look::apply_photo(&mut opts, &mut lighting, &photo::rung(7));
@@ -689,10 +693,11 @@ impl Pane3d {
         } else {
             cadcraft_render3d::look::apply_photo(&mut opts, &mut lighting, &photo::PhotoSettings::default());
             // The plain Finalize keeps the user's samples, bounces and the live lighting.
-            opts.spp = spp;
             opts.bounces = cadcraft_render3d::pathtrace::PathOptions::default().bounces;
             lighting = self.lighting.clone();
         }
+        // User-specified samples always win over the preset.
+        opts.spp = spp;
         (opts, lighting)
     }
 
@@ -914,10 +919,21 @@ impl Pane3d {
     /// Identifies the held scene's content for the renderer's mesh cache.
     fn scene_key(&self) -> u64 {
         let today = self.doc.unwrap_or(0).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ self.scene_revision;
+        // Include a hash of the lighting state (night, sun presence) so toggling night changes the key.
+        let mut lighting_hash = 0u64;
+        if self.night {
+            lighting_hash ^= 0x1234_5678_9ABC_DEF0;
+        }
+        if self.lighting.sun.is_some() {
+            lighting_hash ^= 0x0FED_CBA9_8765_4321;
+        }
+
+        let base = today ^ lighting_hash;
+
         if self.filter_key == 0 && self.light_set_key == 0 {
-            today
+            base
         } else {
-            let mixed = today ^ self.filter_key.rotate_left(32).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ self.light_set_key.rotate_left(17);
+            let mixed = base ^ self.filter_key.rotate_left(32).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ self.light_set_key.rotate_left(17);
             mixed | (1 << 63)
         }
     }
