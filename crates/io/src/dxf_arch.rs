@@ -219,7 +219,9 @@ pub(crate) fn is_view_proxy(tags: &[Tag]) -> bool {
 }
 ///
 /// Returns `None` for a degenerate wall: a non-finite endpoint, `thickness <= 0`, or a
-/// centre-line shorter than `1e-12`.
+/// centre-line shorter than `1e-12`; the computed ring is also refused when it overflows
+/// to a non-finite corner (hostile, still-finite endpoints so far apart that `end - start`
+/// overflows to infinity, which would otherwise write NaN into the proxy).
 fn wall_ring(w: &cadcraft_doc::Wall) -> Option<Vec<Vec2>> {
     if !w.start.is_finite() || !w.end.is_finite() {
         return None;
@@ -228,12 +230,19 @@ fn wall_ring(w: &cadcraft_doc::Wall) -> Option<Vec<Vec2>> {
         return None;
     }
     let dir = w.end - w.start;
+    if !dir.is_finite() {
+        return None;
+    }
     let len = dir.len();
-    if len < 1e-12 {
+    if !len.is_finite() || len < 1e-12 {
         return None;
     }
     let perp = dir.rotate(std::f64::consts::PI / 2.0) * (w.thickness / 2.0 / len);
-    Some([w.start + perp, w.end + perp, w.end - perp, w.start - perp].into_iter().collect())
+    let corners = [w.start + perp, w.end + perp, w.end - perp, w.start - perp];
+    if !corners.iter().all(|c| c.is_finite()) {
+        return None;
+    }
+    Some(corners.into_iter().collect())
 }
 
 /// The four corners of an opening's rough rectangle along the host wall, in the same corner
@@ -3103,5 +3112,100 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// A wall whose endpoints are so far apart that `end - start` overflows to infinity would
+    /// otherwise yield NaN corners in its ring; the ring is now refused, while a sane wall on
+    /// the same model still produces a finite ring.
+    #[test]
+    fn a_wall_at_the_edge_of_floating_point_does_not_emit_nan() {
+        let mut m = ArchModel::default();
+        // `(-1.7e308) - (1.7e308)` overflows to `-inf`; finite endpoints, so the wall is a
+        // legal, storable, hostile input.
+        m.push_wall(Wall::new(Vec2::new(1.7e308, 0.0), Vec2::new(-1.7e308, 0.0), 0.2));
+        // A sane wall on the same model must still produce its ring.
+        m.push_wall(Wall::new(Vec2::new(0.0, 5.0), Vec2::new(10.0, 5.0), 0.2)));
+        let polys = proxy_polylines(&m);
+        assert_eq!(polys.len(), 1, "only the finite wall should yield a ring");
+        for tags in &polys {
+            for t in tags {
+                if t.code == 10 || t.code == 20 {
+                    assert!(t.f64().is_finite(), "non-finite coordinate in the proxy ring");
+                }
+            }
+        }
+    }
+
+    /// Degenerate walls (zero-length and zero-thickness) and a valid wall all round-trip:
+    /// the three walls survive, and no `ARCHWALL` proxy polyline survives the read.
+    #[test]
+    fn degenerate_and_valid_walls_round_trip() {
+        let mut d = Drawing::new_imperial();
+        d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0), 0.2));
+        d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.0));
+        d.arch.push_wall(Wall::new(Vec2::new(0.0, 2.0), Vec2::new(10.0, 2.0), 0.2));
+        let first = read_dxf(write_dxf(&d).as_bytes()).unwrap();
+        assert_eq!(first.arch.walls.len(), 3, "all walls must survive the round trip");
+        // The `ARCHWALL` xdata marker must not survive the read (proxies are dropped).
+        let count_proxy = |d: &Drawing| {
+            d.model
+                .iter()
+                .filter(|e| matches!(&e.kind, EntityKind::LwPolyline(_)))
+                .filter(|e| e.common.xdata.iter().any(|t| t.code == 1000 && t.value.trim() == ARCH_PROXY_MARKER))
+                .count();
+        };
+        assert_eq!(count_proxy(&first), 0, "ARCHWALL proxy polyline survived the read");
+    }
+
+    /// `is_arch_proxy` is the single disambiguator for the read: it must accept the wall,
+    /// opening and view proxy markers and reject an empty list, the wrong group code, or
+    /// foreign xdata.
+    #[test]
+    fn is_arch_proxy_recognises_markers_and_rejects_others() {
+        assert!(
+            is_arch_proxy(&[
+                Tag::s(1001, crate::dxf_ext::APP),
+                Tag::s(1000, ARCH_PROXY_MARKER),
+                Tag::s(1000, "w1"),
+            ]),
+            "the wall proxy marker must be recognised",
+        );
+        assert!(
+            is_arch_proxy(&[
+                Tag::s(1001, crate::dxf_ext::APP),
+                Tag::s(1000, ARCH_OPENING_MARKER),
+                Tag::s(1000, "o1"),
+            ]),
+            "the opening proxy marker must be recognised",
+        );
+        assert!(
+            is_arch_proxy(&[
+                Tag::s(1001, crate::dxf_ext::APP),
+                Tag::s(1000, ARCH_VIEW_MARKER),
+                Tag::s(1000, "v1"),
+            ]),
+            "the view proxy marker must be recognised",
+        );
+        assert!(!is_arch_proxy(&[]), "an empty tag list is not an arch proxy");
+        assert!(
+            !is_arch_proxy(&[Tag::s(1001, "ARCHWALL")]),
+            "a marker string under the wrong group code (no APP header) is not an arch proxy",
+        );
+        assert!(
+            !is_arch_proxy(&[
+                Tag::s(1001, crate::dxf_ext::APP),
+                Tag::s(1000, "OTHERMARKER"),
+            ]),
+            "foreign xdata without an arch proxy marker is not an arch proxy",
+        );
+    }
+
+    /// Pins the spec contract: an empty model writes no wall proxies.
+    #[test]
+    fn proxy_polylines_is_empty_for_an_empty_model() {
+        assert!(
+            proxy_polylines(&ArchModel::default()).is_empty(),
+            "an empty model must write no wall proxies",
+        );
     }
 }
