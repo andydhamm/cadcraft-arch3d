@@ -1,5 +1,6 @@
 use cadcraft_color::Color;
-use cadcraft_doc::*;
+use cadcraft_doc::arch::OpeningKind;
+use cadcraft_doc::{self, *};
 use cadcraft_geom::{PolyVertex, Vec2, Vec3};
 
 use crate::*;
@@ -4085,6 +4086,72 @@ fn reading_a_drawing_with_only_an_opening_reports_metres() {
     let back = roundtrip(&d);
     assert_eq!(back.arch.openings.len(), 1);
     assert_eq!(back.header.i64("INSUNITS", 0), 6);
+}
+
+#[test]
+fn arch_revision_survives_roundtrip() {
+    let mut d = Drawing::new_metric();
+    d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+    // Touch arch to bump revision (simulating an edit)
+    d.touch_arch();
+    let rev = d.arch_revision;
+    assert!(rev > 0, "revision should be bumped");
+
+    let back = roundtrip(&d);
+    assert_eq!(back.arch_revision, rev, "arch_revision must survive the DXF round trip");
+    assert_eq!(back.arch.walls.len(), 1);
+}
+
+#[test]
+fn arch_openings_roundtrip_via_xrecord() {
+    let mut d = Drawing::new_metric();
+    let w = d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+    let o = Opening { id: ArchId(1), host: w, offset: 5.0, width: 1.0, height: 2.1, sill: 0.0, kind: OpeningKind::Door, ..Default::default() };
+    d.arch.openings.push(o.clone());
+
+    let text = write_dxf(&d);
+    assert!(text.contains("CADCRAFT_ARCH"), "XRECORD should be present");
+
+    let back = roundtrip(&d);
+    assert_eq!(back.arch.openings.len(), 1, "opening should be restored");
+    let got = &back.arch.openings[0];
+    assert_eq!(got.host, w, "host wall handle preserved");
+    assert_eq!(got.offset, 5.0, "offset preserved");
+    assert_eq!(got.width, 1.0, "width preserved");
+    assert_eq!(got.height, 2.1, "height preserved");
+    assert_eq!(got.kind, OpeningKind::Door, "kind preserved");
+}
+
+#[test]
+fn arch_xrecord_coexists_with_constraints() {
+    let mut d = Drawing::new_imperial();
+
+    // Add constraints
+    let l1 = d.add(&Space::Model, Common::default(), EntityKind::Line(Line { a: Vec3::ZERO, b: Vec3::new(4.0, 0.0, 0.0) })).unwrap();
+    d.constraints.push(Constraint {
+        id: 1,
+        kind: ConstraintKind::Horizontal,
+        refs: vec![GeomRef::whole(l1)],
+        name: String::new(),
+        expr: String::new(),
+    });
+
+    // Add arch objects
+    d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+
+    let text = write_dxf(&d);
+
+    // Both keys should be present in the dictionary
+    assert!(text.contains("CADCRAFT_ARCH"), "CADCRAFT_ARCH key present");
+    assert!(text.contains("CADCRAFT_CONSTRAINTS"), "CADCRAFT_CONSTRAINTS key present");
+
+    // Verify the dictionary has entries for both
+    // The dictionary is in the OBJECTS section, usually near the top of that section.
+    // We just verify they are distinct keys in the output.
+
+    let back = roundtrip(&d);
+    assert_eq!(back.arch.walls.len(), 1, "arch restored");
+    assert_eq!(back.constraints.len(), 1, "constraints restored");
 }
 
 #[test]
