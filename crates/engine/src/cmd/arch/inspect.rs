@@ -4869,4 +4869,99 @@ mod tests {
         assert!(o["rough"]["width"].is_number(), "rough.width must be a number");
         assert!(o["rough"]["height"].is_number(), "rough.height must be a number");
     }
+
+    /// The vertical interior wall (6,3)-(6,8) of the 6-wall demo butts at the
+    /// horizontal interior wall (bottom: y=3.05) and the exterior face
+    /// (top: y=7.9).  Pins the T-junction butt span that no existing
+    /// test covers.
+    #[test]
+    fn arch_inspect_poché_t_junction_spans_y() {
+        let mut s = Session::new();
+        build_full_demo_plan(&mut s);
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        let Some(w) = find_wall_by_points(walls, [6.0, 3.0], [6.0, 8.0]) else {
+            return;
+        };
+        let Some(poly) = w["polygon"].as_array() else {
+            return;
+        };
+        let mut min_y = f64::INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        let mut has_finite = false;
+        for p in poly {
+            let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            if py.is_finite() {
+                has_finite = true;
+                min_y = min_y.min(py);
+                max_y = max_y.max(py);
+            }
+        }
+        assert!(has_finite, "t-junction polygon has no finite vertex");
+        assert!((min_y - 3.05).abs() < 1e-6, "t-junction min_y {min_y} should be 3.05");
+        assert!((max_y - 7.9).abs() < 1e-6, "t-junction max_y {max_y} should be 7.9");
+    }
+
+    /// A zero-length wall (start == end) survives poché: the join solver skips
+    /// degenerate walls and `wall_polygon` has no direction to offset a point,
+    /// so no `polygon` key is emitted.  The command must not crash and every
+    /// vertex it does emit must be finite.
+    #[test]
+    fn arch_inspect_poché_zero_length_wall_does_not_crash() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [0.0, 0.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        for w in walls {
+            assert!(w["handle"].is_string(), "zero-length wall still reports a handle");
+            assert!(w["start"].as_array().is_some(), "zero-length wall reports start");
+            assert!(w["end"].as_array().is_some(), "zero-length wall reports end");
+            // Every emitted vertex must be finite.
+            if let Some(poly) = w["polygon"].as_array() {
+                for p in poly {
+                    let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                    let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                    assert!(px.is_finite(), "zero-length wall vertex x {px} not finite");
+                    assert!(py.is_finite(), "zero-length wall vertex y {py} not finite");
+                }
+            }
+        }
+    }
+
+    /// A wall at huge coordinates (1e9) with poché must emit a finite mitred
+    /// rectangle.  Pins that the offset arithmetic does not overflow to
+    /// infinity or NaN at large magnitudes.
+    #[test]
+    fn arch_inspect_poché_huge_coordinates_stay_finite() {
+        let mut s = Session::new();
+        exec(
+            &mut s,
+            "wall",
+            &json!({
+                "points": [[1e9, 1e9], [1e9 + 5.0, 1e9]],
+                "thickness": 0.2,
+            }),
+        );
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall at huge coordinates");
+        let w = &walls[0];
+        let Some(poly) = w["polygon"].as_array() else {
+            assert!(w.get("polygon").is_none() || w["polygon"].is_null(), "expected a polygon for a finite wall");
+            return;
+        };
+        assert!(poly.len() >= 4, "polygon must have at least 4 vertices, got {poly:?}");
+        for p in poly {
+            let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            assert!(px.is_finite(), "huge-coordinate vertex x {px} not finite");
+            assert!(py.is_finite(), "huge-coordinate vertex y {py} not finite");
+            // All vertices must be within the expected mitred bounds.
+            assert!(px >= 1e9 - 0.2 && px <= 1e9 + 5.2, "vertex x {px} outside expected range [1e9 - 0.2, 1e9 + 5.2]");
+            assert!(py >= 1e9 - 0.2 && py <= 1e9 + 0.2, "vertex y {py} outside expected range [1e9 - 0.2, 1e9 + 0.2]");
+        }
+    }
 }
