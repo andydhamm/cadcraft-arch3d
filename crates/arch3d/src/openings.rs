@@ -12,6 +12,7 @@ use cadcraft_geom::{Vec2, Vec3};
 
 use crate::mesh::Mesh;
 use crate::solid::{Frame, clip_convex, clip_left, push_profile};
+use crate::wall_span;
 
 /// How far (metres) the opening header sits inside each wall face, so that
 /// hidden-line elevations hide it behind the wall above the rough opening.
