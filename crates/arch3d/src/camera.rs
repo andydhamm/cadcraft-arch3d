@@ -804,4 +804,54 @@ mod tests {
         assert!(f.y.is_nan() || f.y.is_finite());
         assert!(f.z.is_nan() || f.z.is_finite());
     }
+
+    #[test]
+    fn full_camera_fit_keeps_every_corner_in_view() {
+        let b = Bounds3::new([0.0, 0.0, 0.0], [12.0, 8.0, 2.7]);
+        let fit = FullCamera::fit(&b, 1.6);
+        let cam = Camera::Full(fit);
+        for c in corners(&b) {
+            let p = project_point(&cam, (900, 900), c).expect("corner projects");
+            assert!((0.0..=900.0).contains(&p[0]) && (0.0..=900.0).contains(&p[1]), "corner {c:?} -> {p:?}");
+        }
+    }
+
+    #[test]
+    fn projected_scene_bounds_falls_back_for_empty_scene() {
+        let cam = Camera::Orbit(Orbit::at_origin(0.0, 0.0, 10.0, 45.0));
+        let scene = Scene3d::default();
+        let b = projected_scene_bounds(&cam, &scene, (64u32, 64u32));
+        let b2 = projected_bounds(&cam, &scene.bounds, (64u32, 64u32));
+        assert_eq!(b, b2);
+    }
+
+    #[test]
+    fn ray_at_center_equals_forward() {
+        let cam = Camera::Orbit(Orbit::at_origin(30.0, 30.0, 20.0, 45.0));
+        let size = (64u32, 64u32);
+        let (origin, dir) = ray_at(&cam, size, [32.0, 32.0]).unwrap();
+        let fw = forward(&cam);
+        assert!((dir - fw).len() < 1e-6, "center ray {dir:?} != forward {fw:?}");
+        assert!((origin - cam.eye()).len() < 1e-9, "origin should be the eye");
+    }
+
+    #[test]
+    fn full_camera_fit_empty_bounds() {
+        let b = Bounds3::new([5.0, 3.0, 1.0], [5.0, 3.0, 1.0]);
+        let fit = FullCamera::fit(&b, 1.6);
+        assert!((fit.target - Vec3::new(5.0, 3.0, 1.0)).len() < 1e-12);
+        assert!(fit.eye.is_finite());
+        assert!(fit.fov_deg.is_finite());
+        let cam = Camera::Full(fit);
+        let p = project_point(&cam, (100, 100), [5.0, 3.0, 1.0]).unwrap();
+        assert!((p[0] - 50.0).abs() < 1.0);
+        assert!((p[1] - 50.0).abs() < 1.0);
+    }
+
+    #[test]
+    fn project_point_at_eye_is_none() {
+        let cam = Camera::Orbit(Orbit::at_origin(0.0, 0.0, 10.0, 45.0));
+        let eye = cam.eye();
+        assert!(project_point(&cam, (64u32, 64u32), [eye.x, eye.y, eye.z]).is_none());
+    }
 }
