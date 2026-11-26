@@ -1540,7 +1540,7 @@ mod tests {
     fn a_window_with_right_sill_only_produces_one_sill() {
         let model = wall_model();
         let mut o = window_opening();
-        o.sill_sides = OpeningSides { left: false, right: true };
+        o.sill_sides = OpeningSides { left: false, right: true, ..Default::default() };
         let meshes = opening_meshes(&walls_map(&model), &o, None);
         let sills: Vec<&Mesh> = meshes.iter().filter(|m| m.material.contains("sill")).collect();
         assert_eq!(sills.len(), 1, "expected 1 sill mesh, got {}", sills.len());
@@ -1552,7 +1552,7 @@ mod tests {
     fn a_window_with_left_sill_only_produces_one_sill() {
         let model = wall_model();
         let mut o = window_opening();
-        o.sill_sides = OpeningSides { left: true, right: false };
+        o.sill_sides = OpeningSides { left: true, right: false, ..Default::default() };
         let meshes = opening_meshes(&walls_map(&model), &o, None);
         let sills: Vec<&Mesh> = meshes.iter().filter(|m| m.material.contains("sill")).collect();
         assert_eq!(sills.len(), 1, "expected 1 sill mesh, got {}", sills.len());
@@ -1564,7 +1564,7 @@ mod tests {
     fn a_window_with_both_sill_sides_produces_two_sills() {
         let model = wall_model();
         let mut o = window_opening();
-        o.sill_sides = OpeningSides { left: true, right: true };
+        o.sill_sides = OpeningSides { left: true, right: true, ..Default::default() };
         let meshes = opening_meshes(&walls_map(&model), &o, None);
         let sills: Vec<&Mesh> = meshes.iter().filter(|m| m.material.contains("sill")).collect();
         assert_eq!(sills.len(), 2, "expected 2 sill meshes, got {}", sills.len());
@@ -1579,7 +1579,7 @@ mod tests {
     fn a_window_with_right_casing_only_produces_one_casing() {
         let model = wall_model();
         let mut o = window_opening();
-        o.casing_sides = OpeningSides { left: false, right: true };
+        o.casing_sides = OpeningSides { left: false, right: true, ..Default::default() };
         let meshes = opening_meshes(&walls_map(&model), &o, None);
         let casings: Vec<&Mesh> = meshes.iter().filter(|m| m.material.contains("casing")).collect();
         assert_eq!(casings.len(), 1, "expected 1 casing mesh, got {}", casings.len());
@@ -1591,7 +1591,7 @@ mod tests {
     fn a_window_with_left_casing_only_produces_one_casing() {
         let model = wall_model();
         let mut o = window_opening();
-        o.casing_sides = OpeningSides { left: true, right: false };
+        o.casing_sides = OpeningSides { left: true, right: false, ..Default::default() };
         let meshes = opening_meshes(&walls_map(&model), &o, None);
         let casings: Vec<&Mesh> = meshes.iter().filter(|m| m.material.contains("casing")).collect();
         assert_eq!(casings.len(), 1, "expected 1 casing mesh, got {}", casings.len());
@@ -1603,7 +1603,7 @@ mod tests {
     fn a_window_with_both_casing_sides_produces_two_casings() {
         let model = wall_model();
         let mut o = window_opening();
-        o.casing_sides = OpeningSides { left: true, right: true };
+        o.casing_sides = OpeningSides { left: true, right: true, ..Default::default() };
         let meshes = opening_meshes(&walls_map(&model), &o, None);
         let casings: Vec<&Mesh> = meshes.iter().filter(|m| m.material.contains("casing")).collect();
         assert_eq!(casings.len(), 2, "expected 2 casing meshes, got {}", casings.len());
@@ -1618,7 +1618,7 @@ mod tests {
     fn a_grille_with_top_only_produces_bars_in_upper_half() {
         let model = wall_model();
         let mut o = window_opening();
-        o.grille = Some(Grille { across: 2, down: 2, top_only: true });
+        o.grille = Some(Grille { across: 2, down: 2, top_only: true, ..Default::default() });
         let meshes = opening_meshes(&walls_map(&model), &o, None);
         let grille = meshes.iter().find(|m| m.material == "window-grille");
         assert!(grille.is_some(), "missing window-grille mesh");
