@@ -4076,4 +4076,63 @@ mod tests {
             assert!(!m.positions.is_empty(), "mesh {} has no positions", m.material);
         }
     }
+
+    #[test]
+    fn scene_with_single_wall_has_correct_bounds() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(1.0, 2.0),
+            end: Vec2::new(4.0, 2.0),
+            thickness: 0.3,
+            height: 2.5,
+            ..Default::default()
+        });
+        let scene = Scene3d::build(&model);
+        assert_eq!(scene.mesh_count(), 1);
+        // Wall runs from x=1 to x=4, thickness 0.3 centered at y=2, height 2.5.
+        assert!(scene.bounds.min[0] <= 1.0 + 1e-6, "bounds min x too large: {}", scene.bounds.min[0]);
+        assert!(scene.bounds.max[0] >= 4.0 - 1e-6, "bounds max x too small: {}", scene.bounds.max[0]);
+        assert!(scene.bounds.min[1] <= 2.0 + 0.15 + 1e-6, "bounds min y too large: {}", scene.bounds.min[1]);
+        assert!(scene.bounds.max[1] >= 2.0 - 0.15 - 1e-6, "bounds max y too small: {}", scene.bounds.max[1]);
+        assert!(scene.bounds.min[2] <= 1e-6, "bounds min z too large: {}", scene.bounds.min[2]);
+        assert!(scene.bounds.max[2] >= 2.5 - 1e-6, "bounds max z too small: {}", scene.bounds.max[2]);
+    }
+
+    #[test]
+    fn wall_span_with_equal_base_and_top_is_none() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 2.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 1, elevation: 2.0, ceiling_height: 2.4, ..Default::default() });
+        let wall = Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        };
+        // top_level has the same elevation as base_level, so top <= base.
+        assert!(wall_span(&model, &wall).is_none(), "spanning wall with equal base and top elevation must be skipped");
+    }
+
+    #[test]
+    fn wall_span_with_top_below_base_is_none() {
+        let mut model = ArchModel::default();
+        model.levels.push(Level { index: 0, elevation: 5.0, ceiling_height: 2.4, ..Default::default() });
+        model.levels.push(Level { index: 1, elevation: 2.0, ceiling_height: 2.4, ..Default::default() });
+        let wall = Wall {
+            id: ArchId(1),
+            base_level: 0,
+            top_level: Some(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(4.0, 0.0),
+            thickness: 0.3,
+            height: 2.4,
+            ..Default::default()
+        };
+        assert!(wall_span(&model, &wall).is_none(), "spanning wall with top below base must be skipped");
+    }
 }
