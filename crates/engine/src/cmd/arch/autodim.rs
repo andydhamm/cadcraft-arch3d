@@ -396,7 +396,7 @@ fn run_dimauto(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
         work.touch_arch();
-        *s.doc_mut()? = work;
+        *s.doc_mut()? = work.clone();
     }
 
     let out = reply(&work, level);
