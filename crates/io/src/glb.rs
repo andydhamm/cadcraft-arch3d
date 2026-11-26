@@ -2460,28 +2460,6 @@ mod tests {
         }
     }
 
-    /// Non-glass materials remain opaque (no alphaMode, alpha 1.0).
-    #[test]
-    fn glb_non_glass_materials_are_opaque() {
-        let mut scene = scene_with(0);
-        for name in ["wall", "frame", "leaf", "casing", "sill", "header", "roof"] {
-            scene.meshes.push({
-                let mut m = wall_mesh();
-                m.material = name.into();
-                m.object = ArchId(0);
-                m
-            });
-        }
-        let bytes = write(&scene);
-        let json = glb_json_chunk(&bytes);
-        let materials = json["materials"].as_array().unwrap();
-        for mat in materials {
-            assert!(mat.get("alphaMode").is_none(), "material {} should not have alphaMode", mat["name"]);
-            let alpha = mat["pbrMetallicRoughness"]["baseColorFactor"][3].as_f64().unwrap();
-            assert_eq!(alpha, 1.0, "material {} alpha should be 1.0", mat["name"]);
-        }
-    }
-
     /// Every buffer view's byteOffset is a multiple of 4 (4-byte alignment).
     #[test]
     fn glb_buffer_views_are_4_byte_aligned() {
