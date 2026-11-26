@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-26 22:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-26 22:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 4 of 5 segments merged**
 
@@ -33,7 +33,7 @@ Updated 2026-11-26 22:30 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 7.4 h so far · expected done Nov 26 23:50–Nov 28 21:49 UTC |
+| 23 | Phase 23 | pending | — | 7.6 h so far · expected done Nov 27 00:08–Nov 28 23:40 UTC |
 
 ## Phase 23 segments
 
@@ -78,4 +78,4 @@ Updated 2026-11-26 22:30 UTC. This page and the card in the README are regenerat
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
 | tturbo-mac | tturbo-ultraheretic | idle | 1337 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 759 |
+| tturbo-mac2 | tturbo-ultraheretic | agent | 761 |
