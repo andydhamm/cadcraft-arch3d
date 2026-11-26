@@ -447,4 +447,27 @@ mod tests {
         let b = Backsplash::default();
         assert!(segments(&m, &b).is_empty());
     }
+
+    #[test]
+    fn hostile_input_gives_no_segments() {
+        let m = kitchen(true);
+        for h in [f64::NAN, f64::INFINITY, -1.0, 0.0] {
+            let b = Backsplash { height: h, ..run_bs() };
+            assert!(segments(&m, &b).is_empty());
+        }
+        // Non-finite cabinet and wall data never panics.
+        let mut hostile = kitchen(true);
+        hostile.cabinets[3].elevation = f64::NAN;
+        hostile.cabinets[0].width = f64::NAN;
+        hostile.walls[0].thickness = f64::NAN;
+        let _ = segments(&hostile, &run_bs());
+        let _ = segments(&hostile, &Backsplash { to_ceiling: true, ..run_bs() });
+        let mut lvl = kitchen(false);
+        lvl.levels[0].elevation = f64::NAN;
+        assert!(segments(&lvl, &run_bs()).is_empty());
+        lvl.levels.clear();
+        assert!(segments(&lvl, &Backsplash { to_ceiling: true, ..run_bs() }).is_empty());
+        // No model at all.
+        assert!(segments(&ArchModel::default(), &run_bs()).is_empty());
+    }
 }
