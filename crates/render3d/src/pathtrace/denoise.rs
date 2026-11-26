@@ -514,6 +514,88 @@ mod tests {
     }
 
     #[test]
+    fn zero_variance_image_is_byte_identity() {
+        // The zero-variance early return: the centre pixel copies through, so every pixel's RGB
+        // comes back bit-exact and only w is reset to 1.
+        let Some(gpu) = compute() else { return };
+        let mut noise = Noise(0x9a2b_c1d4);
+        let count = (N as usize) * (N as usize);
+        let color: Vec<[f32; 4]> = (0..count)
+            .map(|_| {
+                let v = 0.5 * (1.0 + 0.2 * noise.next());
+                [v, v, v, 0.0]
+            })
+            .collect();
+        let aov: Vec<[f32; 4]> = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+        let out = denoise(&gpu, &color, &aov, (N, N)).unwrap();
+        for (i, (in_px, out_px)) in color.iter().zip(out.iter()).enumerate() {
+            assert_eq!(in_px[0], out_px[0], "pixel {i} r must be bit-exact: {in_px:?} -> {out_px:?}");
+            assert_eq!(in_px[1], out_px[1], "pixel {i} g must be bit-exact: {out_px:?}");
+            assert_eq!(in_px[2], out_px[2], "pixel {i} b must be bit-exact: {out_px:?}");
+            assert_eq!(out_px[3], 1.0, "pixel {i} w must be reset to 1");
+        }
+    }
+
+    #[test]
+    fn zero_variance_pixels_do_not_freeze_their_noisy_neighbours() {
+        // The early return must stop only the centre pixel. A noisy pixel (w = 0.1) next to a
+        // zero-variance constant must still be denoised: its denominator uses the sum of both
+        // pixels' variances, so the noisy pixel's own w keeps the filter wide.
+        let Some(gpu) = compute() else { return };
+        let mut noise = Noise(0x7f5a_023c);
+        let count = (N as usize) * (N as usize);
+        let color: Vec<[f32; 4]> = (0..count)
+            .map(|i| {
+                let x = i % N;
+                if x < N / 2 {
+                    [0.5, 0.5, 0.5, 0.0]
+                } else {
+                    let v = 0.5 * (1.0 + 0.2 * noise.next());
+                    [v, v, v, 0.1]
+                }
+            })
+            .collect();
+        let aov: Vec<[f32; 4]> = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+        let raw = rmse(&color.iter().map(|p| [p[0], p[1], p[2], 1.0]).collect::<Vec<[f32; 4]>>(), 0.5);
+        let out = denoise(&gpu, &color, &aov, (N, N)).unwrap();
+        // Left half (zero variance) is untouched.
+        for (i, p) in out.iter().enumerate() {
+            if i % N < N / 2 {
+                assert!((p[0] - 0.5).abs() <= 1e-9, "zero-variance half drifted at pixel {i}: {p:?}");
+            }
+        }
+        // Right half (noisy) is still denoised.
+        assert!(raw > 0.04, "the noisy half is not noisy: {raw}");
+        let clean = rmse(&out, 0.5);
+        assert!(clean <= 0.3 * raw, "the noisy half was frozen instead of denoised: {raw} -> {clean}");
+    }
+
+    #[test]
+    fn zero_variance_at_small_and_edge_sizes_is_byte_identity() {
+        // Degenerate sizes that are not multiples of the workgroup, with zero variance: taps
+        // outside the image are skipped and the centre copies through, so every pixel is
+        // bit-exact.
+        let Some(gpu) = compute() else { return };
+        for (w, h) in [(1u32, 1u32), (5u32, 9u32), (9u32, 5u32)] {
+            let count = (w * h) as usize;
+            let color: Vec<[f32; 4]> = (0..count)
+                .map(|i| {
+                    let v = 0.5 + 0.01 * f32::from(i);
+                    [v, v - 0.02, v + 0.03, 0.0]
+                })
+                .collect();
+            let aov: Vec<[f32; 4]> = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+            let out = denoise(&gpu, &color, &aov, (w, h)).unwrap();
+            for (i, (in_px, out_px)) in color.iter().zip(out.iter()).enumerate() {
+                assert_eq!(in_px[0], out_px[0], "({w}x{h}) pixel {i} r: {in_px:?} -> {out_px:?}");
+                assert_eq!(in_px[1], out_px[1], "({w}x{h}) pixel {i} g: {out_px:?}");
+                assert_eq!(in_px[2], out_px[2], "({w}x{h}) pixel {i} b: {out_px:?}");
+                assert_eq!(out_px[3], 1.0, "({w}x{h}) pixel {i} w must be reset to 1");
+            }
+        }
+    }
+
+    #[test]
     fn buffers_that_do_not_fit_the_size_are_refused() {
         let Some(gpu) = compute() else { return };
         let color = vec![[0.5, 0.5, 0.5, 1.0]; 4];
