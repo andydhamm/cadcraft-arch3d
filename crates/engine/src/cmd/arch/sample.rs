@@ -1205,4 +1205,36 @@ mod tests {
         assert_eq!(d.arch.levels.len(), 2, "house should have 2 levels");
         assert_eq!(d.arch.roofs.len(), 1, "house should have 1 roof");
     }
+
+    /// A float wall count is not a u64, so it defaults to 64.
+    #[test]
+    fn arch_sample_walls_as_float_defaults_to_64() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "walls": 10.5 })).unwrap();
+        assert_eq!(r["walls"].as_u64(), Some(64));
+        assert_eq!(s.doc().unwrap().arch.walls.len(), 64);
+    }
+
+    /// A string wall count is not a u64, so it defaults to 64.
+    #[test]
+    fn arch_sample_walls_as_string_defaults_to_64() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "walls": "ten" })).unwrap();
+        assert_eq!(r["walls"].as_u64(), Some(64));
+        assert_eq!(s.doc().unwrap().arch.walls.len(), 64);
+    }
+
+    /// When both house and house2 are true, house2 wins (checked first).
+    #[test]
+    fn arch_sample_both_house_and_house2_prefers_house2() {
+        let mut s = fresh_session();
+        let r = s.execute("arch.sample", &json!({ "house": true, "house2": true })).unwrap();
+        let d = s.doc().unwrap();
+        // house2 has 3 levels, house has 2.
+        assert_eq!(d.arch.levels.len(), 3, "house2 should win when both are true");
+        // house2 has no openings.
+        assert!(d.arch.openings.is_empty(), "house2 has no openings");
+        // house2 has no roof.
+        assert!(d.arch.roofs.is_empty(), "house2 has no roof");
+    }
 }
