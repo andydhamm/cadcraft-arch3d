@@ -471,6 +471,49 @@ mod tests {
     }
 
     #[test]
+    fn denoise_zero_variance_constant_image_is_identity() {
+        // With w = 0 the colour-weight denominator is (sigma_c^2 * (0 + 0) + 1e-8) = 16e-8.
+        // For a constant image every tap has dl = 0, so every weight = b3(dx)*b3(dy) * 1 * 1 * 1
+        // and the weighted average of a constant is that constant. The read-back resets w to 1.
+        let Some(gpu) = compute() else { return };
+        let count = (N as usize) * (N as usize);
+        let color: Vec<[f32; 4]> = vec![[0.5, 0.5, 0.5, 0.0]; count];
+        let aov: Vec<[f32; 4]> = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+        let out = denoise(&gpu, &color, &aov, (N, N)).unwrap();
+        for (i, p) in out.iter().enumerate() {
+            assert!(
+                (p[0] - 0.5).abs() <= 1e-6 && (p[1] - 0.5).abs() <= 1e-6 && (p[2] - 0.5).abs() <= 1e-6,
+                "constant zero-variance pixel {i}: {p:?}"
+            );
+            assert_eq!(p[3], 1.0, "read-back must set w = 1");
+        }
+    }
+
+    #[test]
+    fn denoise_zero_variance_preserves_noisy_colour() {
+        // Zero variance on a genuinely noisy image: the colour-weight denominator is ~16e-8,
+        // so any neighbour with |dl| > ~1e-4 gets weight exp(-(dl^2)/16e-8) ~= 0. Only the
+        // centre tap (dl = 0) survives, and each pixel outputs its own colour — the filter is
+        // identity in the per-pixel RGB sense.
+        let Some(gpu) = compute() else { return };
+        let mut noise = Noise(0xdeadbeef);
+        let count = (N as usize) * (N as usize);
+        let color: Vec<[f32; 4]> = (0..count)
+            .map(|_| {
+                let v = 0.5 * (1.0 + 0.2 * noise.next());
+                [v, v, v, 0.0]
+            })
+            .collect();
+        let aov: Vec<[f32; 4]> = (0..count).flat_map(|_| [[0.5, 0.5, 0.5, 1.0], [0.0, 0.0, 1.0, 1.0]]).collect();
+        let out = denoise(&gpu, &color, &aov, (N, N)).unwrap();
+        for (i, (in_px, out_px)) in color.iter().zip(out.iter()).enumerate() {
+            let diff = (in_px[0] - out_px[0]).abs().max((in_px[1] - out_px[1]).abs()).max((in_px[2] - out_px[2]).abs());
+            assert!(diff <= 1e-5, "zero-variance pixel {i} was denoised: in={in_px:?} out={out_px:?}");
+            assert_eq!(out_px[3], 1.0);
+        }
+    }
+
+    #[test]
     fn buffers_that_do_not_fit_the_size_are_refused() {
         let Some(gpu) = compute() else { return };
         let color = vec![[0.5, 0.5, 0.5, 1.0]; 4];
