@@ -512,7 +512,7 @@ mod tests {
     fn obj_mesh_with_fewer_than_three_indices_is_left_out() {
         let mut s = Scene3d::default();
         let full = mesh("wall", 1, true);
-        let partial = mesh("wall", 2, false);
+        let mut partial = mesh("wall", 2, false);
         partial.indices = vec![0, 1];
         s.meshes = vec![full, partial];
         let obj = write_obj(&s, "x.mtl");
