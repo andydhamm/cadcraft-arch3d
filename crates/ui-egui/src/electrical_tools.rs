@@ -72,11 +72,14 @@ pub struct ElectricalTools {
 /// The wall face a plan point is on: the wall, the side the point lies on and the offset along
 /// the wall from its start. Walls of `level` only when it is given.
 pub fn wall_face_at(model: &ArchModel, p: Vec2, level: Option<u32>) -> Option<(ArchId, WallSide, f64)> {
+    if !p.is_finite() {
+        return None;
+    }
     let mut best: Option<(f64, ArchId, WallSide, f64)> = None;
     for w in model.walls.iter().filter(|w| level.is_none_or(|l| w.base_level == l)) {
         let d = w.end - w.start;
         let len = d.len();
-        if !len.is_finite() || len < 1e-9 || !p.is_finite() {
+        if !len.is_finite() || len < 1e-9 || !w.thickness.is_finite() || w.thickness < 0.0 {
             continue;
         }
         let dir = d * (1.0 / len);
@@ -226,18 +229,22 @@ pub fn arc_grips(model: &ArchModel) -> Vec<ArcGrip> {
 
 /// The grip under plan point `p`.
 pub fn grip_at(model: &ArchModel, p: Vec2) -> Option<ArcGrip> {
-    arc_grips(model).into_iter().filter(|g| g.at.dist(p) <= PICK_RADIUS).min_by(|a, b| a.at.dist(p).total_cmp(&b.at.dist(p)))
+    if !p.is_finite() {
+        return None;
+    }
+    arc_grips(model).into_iter().filter(|g| g.at.is_finite() && g.at.dist(p) <= PICK_RADIUS).min_by(|a, b| a.at.dist(p).total_cmp(&b.at.dist(p)))
 }
 
 /// The bulge that puts the arc `grip` belongs to through plan point `p`: the sagitta over half
 /// the chord, positive to the left of switch→light, within -1..1.
 pub fn bulge_through(grip: &ArcGrip, p: Vec2) -> Option<f64> {
     let chord = grip.to - grip.from;
-    let half = chord.len() / 2.0;
-    if !half.is_finite() || half < 1e-9 || !p.is_finite() {
+    let len = chord.len();
+    let half = len / 2.0;
+    if !len.is_finite() || half < 1e-9 || !p.is_finite() {
         return None;
     }
-    let dir = chord * (1.0 / chord.len());
+    let dir = chord * (1.0 / len);
     let sagitta = (p - grip.from.mid(grip.to)).dot(dir.perp());
     Some((sagitta / half).clamp(-1.0, 1.0))
 }
@@ -645,5 +652,182 @@ mod tests {
     fn bulge_through_with_degenerate_chord() {
         let grip = ArcGrip { connection: ArchId(0), at: Vec2::new(1.0, 1.0), from: Vec2::new(1.0, 1.0), to: Vec2::new(1.0, 1.0) };
         assert!(bulge_through(&grip, Vec2::new(2.0, 2.0)).is_none());
+    }
+
+    #[test]
+    fn bulge_through_with_nan_in_grip_returns_none() {
+        let nan = f64::NAN;
+        let grip = ArcGrip { connection: ArchId(0), at: Vec2::new(1.0, 1.0), from: Vec2::new(nan, 1.0), to: Vec2::new(2.0, 1.0) };
+        assert!(bulge_through(&grip, Vec2::new(1.5, 2.0)).is_none());
+        let grip2 = ArcGrip { connection: ArchId(0), at: Vec2::new(1.0, 1.0), from: Vec2::new(1.0, 1.0), to: Vec2::new(nan, 1.0) };
+        assert!(bulge_through(&grip2, Vec2::new(1.5, 2.0)).is_none());
+        let grip3 = ArcGrip { connection: ArchId(0), at: Vec2::new(1.0, 1.0), from: Vec2::new(1.0, 1.0), to: Vec2::new(2.0, nan) };
+        assert!(bulge_through(&grip3, Vec2::new(1.5, 2.0)).is_none());
+    }
+
+    #[test]
+    fn bulge_through_with_nan_point_returns_none() {
+        let grip = ArcGrip { connection: ArchId(0), at: Vec2::new(1.5, 1.0), from: Vec2::new(1.0, 1.0), to: Vec2::new(2.0, 1.0) };
+        assert!(bulge_through(&grip, Vec2::new(f64::NAN, 2.0)).is_none());
+        assert!(bulge_through(&grip, Vec2::new(1.5, f64::NAN)).is_none());
+    }
+
+    #[test]
+    fn bulge_through_with_huge_values_stays_clamped() {
+        let grip = ArcGrip { connection: ArchId(0), at: Vec2::new(1.5, 1.0), from: Vec2::new(1.0, 1.0), to: Vec2::new(2.0, 1.0) };
+        let huge = 1e300;
+        let r = bulge_through(&grip, Vec2::new(1.5, huge));
+        assert!(r.is_some());
+        let b = r.unwrap();
+        assert!(b >= -1.0 && b <= 1.0, "bulge {b} should be clamped");
+    }
+
+    #[test]
+    fn grip_at_with_nan_point_returns_none() {
+        let mut s = session_with_wall();
+        let (switch, light) = {
+            let doc = s.doc_mut().expect("doc");
+            let wall = doc.arch.walls[0].id;
+            let switch = doc.arch.push_electrical(cadcraft_doc::arch::ElectricalDevice {
+                wall,
+                kind: ElectricalKind::SinglePole,
+                side: WallSide::Left,
+                offset: 1.0,
+                height: 1.2,
+                ..Default::default()
+            });
+            doc.arch.lights.push(cadcraft_doc::arch::LightFixture::new(ArchId(0), "pot", Vec2::new(2.0, 1.5)));
+            (switch, ArchId(0))
+        };
+        let _ = connection_release(&mut s, switch, Vec2::new(2.0, 1.5), false).expect("connection");
+        let doc = s.doc().expect("doc");
+        assert!(grip_at(&doc.arch, Vec2::new(f64::NAN, 1.0)).is_none());
+        assert!(grip_at(&doc.arch, Vec2::new(1.0, f64::NAN)).is_none());
+    }
+
+    #[test]
+    fn wall_face_at_with_nan_thickness_skips_wall() {
+        let mut s = Session::empty();
+        s.new_drawing(false);
+        if let Ok(doc) = s.doc_mut() {
+            doc.arch.push_wall(cadcraft_doc::Wall {
+                start: Vec2::ZERO,
+                end: Vec2::new(6.0, 0.0),
+                thickness: f64::NAN,
+                height: 2.7,
+                ..Default::default()
+            });
+        }
+        let model = s.doc().unwrap().arch.clone();
+        assert!(wall_face_at(&model, Vec2::new(3.0, 0.1), None).is_none());
+    }
+
+    #[test]
+    fn wall_face_at_with_negative_thickness_skips_wall() {
+        let mut s = Session::empty();
+        s.new_drawing(false);
+        if let Ok(doc) = s.doc_mut() {
+            doc.arch.push_wall(cadcraft_doc::Wall {
+                start: Vec2::ZERO,
+                end: Vec2::new(6.0, 0.0),
+                thickness: -0.2,
+                height: 2.7,
+                ..Default::default()
+            });
+        }
+        let model = s.doc().unwrap().arch.clone();
+        assert!(wall_face_at(&model, Vec2::new(3.0, 0.1), None).is_none());
+    }
+
+    #[test]
+    fn wall_face_at_with_nan_point_returns_none() {
+        let model = s_doc_arch(session_with_wall());
+        assert!(wall_face_at(&model, Vec2::new(f64::NAN, 0.1), None).is_none());
+        assert!(wall_face_at(&model, Vec2::new(3.0, f64::NAN), None).is_none());
+    }
+
+    fn s_doc_arch(s: Session) -> cadcraft_doc::ArchModel {
+        s.doc().expect("doc").arch.clone()
+    }
+
+    #[test]
+    fn plan_place_with_nan_point_is_refused() {
+        let mut s = session_with_wall();
+        assert!(plan_place(&mut s, ElectricalKind::Duplex, Vec2::new(f64::NAN, 0.1)).is_err());
+        assert!(plan_place(&mut s, ElectricalKind::Duplex, Vec2::new(3.0, f64::NAN)).is_err());
+    }
+
+    #[test]
+    fn connection_release_with_nan_point_is_refused() {
+        let mut s = session_with_wall();
+        let switch = {
+            let doc = s.doc_mut().expect("doc");
+            let wall = doc.arch.walls[0].id;
+            doc.arch.push_electrical(cadcraft_doc::arch::ElectricalDevice {
+                wall,
+                kind: ElectricalKind::SinglePole,
+                side: WallSide::Left,
+                offset: 1.0,
+                height: 1.2,
+                ..Default::default()
+            })
+        };
+        doc_arch_lights(&mut s);
+        assert!(connection_release(&mut s, switch, Vec2::new(f64::NAN, 1.5), false).is_err());
+    }
+
+    fn doc_arch_lights(s: &mut Session) {
+        let doc = s.doc_mut().expect("doc");
+        doc.arch.lights.push(cadcraft_doc::arch::LightFixture::new(ArchId(0), "pot", Vec2::new(2.0, 1.5)));
+    }
+
+    #[test]
+    fn level_choices_with_no_levels_shows_only_all() {
+        let mut s = Session::empty();
+        s.new_drawing(false);
+        let model = s.doc().expect("doc").arch.clone();
+        let rows = level_choices(&model);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "All levels");
+        assert_eq!(level_selected(&model), 0);
+    }
+
+    #[test]
+    fn level_selected_with_missing_level_returns_zero() {
+        let mut s = session_with_wall();
+        if let Ok(doc) = s.doc_mut() {
+            doc.arch.levels.push(cadcraft_doc::arch::Level { index: 0, name: "Ground".into(), ..Default::default() });
+            doc.arch.plan_level = Some(99);
+        }
+        let model = s.doc().expect("doc").arch.clone();
+        assert_eq!(level_selected(&model), 0, "a level not in the list falls back to all");
+    }
+
+    #[test]
+    fn view_on_with_whitespace_only_name_is_false() {
+        let mut s = session_with_wall();
+        let d = s.doc_mut().unwrap();
+        d.arch.active_plan_view = Some("   ".to_string());
+        assert!(!view_on(&d.arch));
+    }
+
+    #[test]
+    fn with_light_set_does_not_mutate_params_without_a_set() {
+        let tools = ElectricalTools::default();
+        let p = with_light_set(json!({ "out": "a.png" }), &tools);
+        assert_eq!(p["lightSet"], Value::Null);
+        assert_eq!(p["out"], "a.png");
+    }
+
+    #[test]
+    fn toggle_view_when_already_on_restores_saved_clayer() {
+        let mut s = session_with_wall();
+        s.execute("layer.new", &json!({ "name": "Custom" })).expect("layer");
+        s.execute("layer.current", &json!({ "name": "Custom" })).expect("current");
+        let mut tools = ElectricalTools::default();
+        toggle_view(&mut s, &mut tools).expect("on");
+        assert!(tools.saved_clayer.is_some());
+        toggle_view(&mut s, &mut tools).expect("off");
+        assert_eq!(s.doc().expect("doc").header.str("CLAYER", "0"), "Custom");
     }
 }
