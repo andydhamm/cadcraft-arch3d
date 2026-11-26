@@ -3079,7 +3079,7 @@ mod tests {
     }
 
     #[test]
-    fn build_dirty_rebuilds_neighbours_of_new_wall() {
+    fn build_dirty_rebuilds_neighbours_of_new_wall_2() {
         // Start with one wall, then add a new wall that joins it.
         let mut model = ArchModel::default();
         model.walls.push(Wall {
@@ -3728,5 +3728,115 @@ mod tests {
         assert_eq!(partial.stairs, full.stairs, "stairs unchanged: partial={} full={}", partial.stairs, full.stairs);
         assert_eq!(partial.railings, full.railings, "railings unchanged: partial={} full={}", partial.railings, full.railings);
         assert_eq!(partial.decks, full.decks, "decks unchanged: partial={} full={}", partial.decks, full.decks);
+    }
+
+    #[test]
+    fn build_dirty_reuses_non_dirty_opening_meshes() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.3,
+            height: 2.5,
+            ..Default::default()
+        });
+
+        let mut opening1 = Opening::default();
+        opening1.id = ArchId(10);
+        opening1.host = ArchId(1);
+        opening1.offset = 2.0;
+        opening1.width = 1.0;
+        opening1.height = 1.5;
+        model.openings.push(opening1);
+
+        let mut opening2 = Opening::default();
+        opening2.id = ArchId(11);
+        opening2.host = ArchId(1);
+        opening2.offset = 6.0;
+        opening2.width = 1.0;
+        opening2.height = 1.5;
+        model.openings.push(opening2);
+
+        let full = Scene3d::build(&model);
+        assert!(full.mesh_for(&ArchId(10)).is_some());
+        assert!(full.mesh_for(&ArchId(11)).is_some());
+
+        // Dirty only opening 10. Opening 11 should be reused.
+        let dirty: BTreeSet<ArchId> = BTreeSet::from([ArchId(10)]);
+        let partial = Scene3d::build_dirty(&model, &dirty, &full);
+
+        assert!(partial.mesh_for(&ArchId(10)).is_some());
+        assert!(partial.mesh_for(&ArchId(11)).is_some());
+
+        // Verify mesh content for reused opening 11 is identical
+        let full_mesh_11 = full.mesh_for(&ArchId(11)).unwrap();
+        let partial_mesh_11 = partial.mesh_for(&ArchId(11)).unwrap();
+        assert_eq!(full_mesh_11.positions, partial_mesh_11.positions);
+    }
+
+    #[test]
+    fn build_dirty_rebuilds_host_wall_when_opening_dirty() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.3,
+            height: 2.5,
+            ..Default::default()
+        });
+
+        let mut opening = Opening::default();
+        opening.id = ArchId(10);
+        opening.host = ArchId(1);
+        opening.offset = 5.0;
+        opening.width = 1.0;
+        opening.height = 1.5;
+        model.openings.push(opening);
+
+        let full = Scene3d::build(&model);
+        let full_wall_mesh = full.mesh_for(&ArchId(1)).unwrap();
+
+        // Edit opening width
+        let mut edited = model.clone();
+        if let Some(o) = edited.openings.iter_mut().find(|o| o.id == ArchId(10)) {
+            o.width = 2.0;
+        }
+
+        let dirty: BTreeSet<ArchId> = BTreeSet::from([ArchId(10)]);
+        let partial = Scene3d::build_dirty(&edited, &dirty, &full);
+        let partial_wall_mesh = partial.mesh_for(&ArchId(1)).unwrap();
+
+        // The wall mesh should have changed because the opening hole changed
+        assert_ne!(full_wall_mesh.positions, partial_wall_mesh.positions, "wall mesh should rebuild when host opening is dirty");
+    }
+
+    #[test]
+    fn build_handles_wall_with_zero_thickness() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.0,
+            height: 2.5,
+            ..Default::default()
+        });
+
+        let scene = Scene3d::build(&model);
+        // Zero thickness walls are degenerate; they might produce empty meshes or be skipped.
+        // The spec says "Never drop a wall mesh for a non-degenerate wall".
+        // A zero-thickness wall is degenerate.
+        // However, raw_wall_mesh calculates half = 0.0, so p0==p1==p2==p3.
+        // The mesh will have zero area.
+        // mesh_is_finite checks positions.
+        // If positions are all same, it's finite.
+        // But triangle_count might be 0 or indices might be invalid if not handled.
+        // Let's see what happens.
+        // If it produces a mesh, it should be finite.
+        // If it produces no mesh, that's also acceptable for degenerate input.
+        // The key is it doesn't crash.
+        assert!(scene.mesh_for(&ArchId(1)).is_none() || scene.mesh_for(&ArchId(1)).unwrap().triangle_count() == 0);
     }
 }
