@@ -489,4 +489,64 @@ mod tests {
         let want = [("stair-s0", 2), ("stair-s1", 2)];
         assert_eq!(groups, want.iter().map(|&(n, c)| (n.to_string(), c)).collect::<Vec<_>>());
     }
+
+    #[test]
+    fn obj_number_formatting_edge_cases() {
+        assert_eq!(num(0.0), "0");
+        assert_eq!(num(1.0), "1");
+        assert_eq!(num(-1.0), "-1");
+        assert_eq!(num(1.5), "1.5");
+        assert_eq!(num(-0.0), "0");
+        assert_eq!(num(1.0000001), "1");
+        assert_eq!(num(1.000001), "1.000001");
+        assert_eq!(num(1e10), "10000000000");
+        assert_eq!(num(1e-7), "0");
+        assert_eq!(num(f32::NAN), "0");
+        assert_eq!(num(f32::INFINITY), "0");
+        assert_eq!(num(f32::NEG_INFINITY), "0");
+        assert_eq!(num(0.123456), "0.123456");
+        assert_eq!(num(0.1234567), "0.123457");
+    }
+
+    #[test]
+    fn obj_mesh_with_fewer_than_three_indices_is_left_out() {
+        let mut s = Scene3d::default();
+        let full = mesh("wall", 1, true);
+        let partial = mesh("wall", 2, false);
+        partial.indices = vec![0, 1];
+        s.meshes = vec![full, partial];
+        let obj = write_obj(&s, "x.mtl");
+        let groups: Vec<&str> = obj.lines().filter_map(|l| l.strip_prefix("o ")).collect();
+        assert_eq!(groups, ["wall-w1"]);
+        let v_count = obj.lines().filter(|l| l.starts_with("v ")).count();
+        assert_eq!(v_count, 3);
+    }
+
+    #[test]
+    fn obj_mtl_empty_scene_has_no_materials() {
+        let s = Scene3d::default();
+        let mtl = write_mtl(&s);
+        assert!(mtl.starts_with("# CADCraft arch3d\n"));
+        assert!(!mtl.contains("newmtl "));
+    }
+
+    #[test]
+    fn obj_output_is_deterministic() {
+        let s = scene();
+        let a = write_obj(&s, "x.mtl");
+        let b = write_obj(&s, "x.mtl");
+        assert_eq!(a, b);
+        let mtl_a = write_mtl(&s);
+        let mtl_b = write_mtl(&s);
+        assert_eq!(mtl_a, mtl_b);
+    }
+
+    #[test]
+    fn obj_mtl_has_illum_2_for_all_materials() {
+        let s = scene();
+        let mtl = write_mtl(&s);
+        let newmtl_count = mtl.lines().filter(|l| l.starts_with("newmtl ")).count();
+        let illum_count = mtl.lines().filter(|l| l.trim() == "illum 2").count();
+        assert_eq!(newmtl_count, illum_count, "every material must have illum 2");
+    }
 }
