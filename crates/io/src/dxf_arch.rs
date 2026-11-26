@@ -3152,7 +3152,7 @@ mod tests {
                 .iter()
                 .filter(|e| matches!(&e.kind, EntityKind::LwPolyline(_)))
                 .filter(|e| e.common.xdata.iter().any(|t| t.code == 1000 && t.value.trim() == ARCH_PROXY_MARKER))
-                .count();
+                .count()
         };
         assert_eq!(count_proxy(&first), 0, "ARCHWALL proxy polyline survived the read");
     }
@@ -3186,5 +3186,76 @@ mod tests {
     #[test]
     fn proxy_polylines_is_empty_for_an_empty_model() {
         assert!(proxy_polylines(&ArchModel::default()).is_empty(), "an empty model must write no wall proxies",);
+    }
+
+    /// The written wall ring carries the `APP`/`ARCHWALL`/`w<N>` xdata contract that
+    /// `is_arch_proxy` reads, so a wall ring is recognised as an arch proxy and dropped on
+    /// read.
+    #[test]
+    fn proxy_ring_carrys_the_app_archwall_wall_id_xdata_contract() {
+        let mut m = ArchModel::default();
+        let wid = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        let rings = proxy_polylines(&m);
+        assert_eq!(rings.len(), 1, "expected one proxy ring for one wall");
+        let t = &rings[0];
+        let wall_id = wid.to_string();
+        assert!(t.iter().any(|x| x.code == 1001 && x.str() == crate::dxf_ext::APP), "the ring must carry an `APP` xdata group",);
+        assert!(t.iter().any(|x| x.code == 1000 && x.str() == ARCH_PROXY_MARKER), "the ring must carry the `ARCHWALL` marker",);
+        assert!(t.iter().any(|x| x.code == 1000 && x.str() == wall_id), "the ring must carry the wall id as xdata",);
+        assert!(is_arch_proxy(t), "the written wall ring must be recognised by is_arch_proxy");
+    }
+
+    /// The `degenerate_and_valid_walls_round_trip` count closure returns `usize` (no trailing
+    /// semicolon), so `assert_eq!(count_proxy(&first), 0, …)` type-checks: the read must not
+    /// keep an `ARCHWALL` proxy polyline, yet all three walls (two degenerate, one valid)
+    /// survive via the XRECORD.
+    #[test]
+    fn degenerate_and_valid_walls_round_trip() {
+        let mut d = Drawing::new_imperial();
+        d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0), 0.2));
+        d.arch.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.0));
+        d.arch.push_wall(Wall::new(Vec2::new(0.0, 2.0), Vec2::new(10.0, 2.0), 0.2));
+        let first = read_dxf(write_dxf(&d).as_bytes()).unwrap();
+        assert_eq!(first.arch.walls.len(), 3, "all walls must survive the round trip");
+        // The `ARCHWALL` xdata marker must not survive the read (proxies are dropped).
+        let count_proxy = |d: &Drawing| {
+            d.model
+                .iter()
+                .filter(|e| matches!(&e.kind, EntityKind::LwPolyline(_)))
+                .filter(|e| e.common.xdata.iter().any(|t| t.code == 1000 && t.value.trim() == ARCH_PROXY_MARKER))
+                .count()
+        };
+        assert_eq!(count_proxy(&first), 0, "ARCHWALL proxy polyline survived the read");
+    }
+
+    /// The proxy output is capped at [`cadcraft_doc::MAX_WALLS`] polylines, so a model with
+    /// more walls than that still writes only `MAX_WALLS` rings.
+    #[test]
+    fn proxy_polylines_capped_at_max_walls() {
+        let mut m = ArchModel::default();
+        let n = cadcraft_doc::MAX_WALLS + 5;
+        for i in 0..n {
+            m.push_wall(Wall::new(Vec2::new(i as f64 * 12.0, 0.0), Vec2::new(i as f64 * 12.0 + 10.0, 0.0), 0.2));
+        }
+        assert_eq!(proxy_polylines(&m).len(), cadcraft_doc::MAX_WALLS, "the proxy output must be capped at MAX_WALLS",);
+    }
+
+    /// A wall at huge-but-finite coordinates survives a write→read cycle with its wall intact
+    /// and a proxy ring whose corners stay finite.
+    #[test]
+    fn huge_wall_round_trip_keeps_wall_and_finite_proxy() {
+        let mut d = Drawing::new_metric();
+        d.ensure_layer(ARCH_PROXY_LAYER);
+        d.arch.push_wall(Wall::new(Vec2::new(1e15, 1e15), Vec2::new(1e15 + 10.0, 1e15), 0.2));
+
+        let first = read_dxf(write_dxf(&d).as_bytes()).unwrap();
+        assert_eq!(first.arch.walls.len(), 1, "wall lost on the round trip");
+        let rings = proxy_polylines(&first.arch);
+        assert_eq!(rings.len(), 1, "the wall must still write a proxy after the round trip");
+        for t in &rings[0] {
+            if t.code == 10 || t.code == 20 {
+                assert!(t.f64().is_finite(), "non-finite corner in the huge wall's proxy ring");
+            }
+        }
     }
 }
