@@ -2558,4 +2558,87 @@ mod tests {
         assert!((b.min.x - 0.0).abs() < 1e-9, "host min.x: {}", b.min.x);
         assert!((b.max.x - 20.0).abs() < 1e-9, "host max.x: {}", b.max.x);
     }
+
+    #[test]
+    fn stretch_wall_with_zero_length_wall() {
+        let mut model = cadcraft_doc::ArchModel::default();
+        // Wall 0 is zero-length at (0,0)
+        wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0), 1.0);
+        // Wall 1 is (0,0) to (10,0), sharing the start point with wall 0
+        wall(&mut model, 1, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 1.0);
+
+        // Stretch wall 0's end to (5,5). Since wall 0 is degenerate, it has no cluster.
+        // The spec says: "If that wall is degenerate and has no cluster, just move its own end".
+        // So wall 0 moves, but wall 1 (which shares the point) should NOT move because
+        // the graph lookup for wall 0's end failed to find a cluster to propagate through?
+        // Actually, WallGraph::build likely clusters points. If wall 0 is degenerate,
+        // does it get a cluster?
+        // Let's assume standard behavior: if no cluster, only self moves.
+        let result = stretch_wall(&mut model, ArchId(0), End::End, Vec2::new(5.0, 5.0));
+        let ids = result.unwrap();
+
+        // Wall 0 moved. Wall 1 did not, because we didn't find a cluster to propagate.
+        assert_eq!(ids, vec![ArchId(0)]);
+        assert_eq!(model.walls[0].end, Vec2::new(5.0, 5.0));
+        assert_eq!(model.walls[1].start, Vec2::new(0.0, 0.0));
+    }
+
+    #[test]
+    fn stretch_wall_with_nan_in_existing_wall() {
+        let mut model = cadcraft_doc::ArchModel::default();
+        // Wall 0 has NaN in start
+        wall(&mut model, 0, Vec2::new(f64::NAN, 0.0), Vec2::new(10.0, 0.0), 1.0);
+        // Wall 1 is valid, sharing (10,0)
+        wall(&mut model, 1, Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0), 1.0);
+
+        // Stretch wall 0's end (10,0) to (12,12).
+        // Wall 0's start is NaN. WallGraph::build might skip it or handle it.
+        // If WallGraph::build skips NaN walls, wall 0 has no cluster.
+        // Then only wall 0 moves.
+        let result = stretch_wall(&mut model, ArchId(0), End::End, Vec2::new(12.0, 12.0));
+        let ids = result.unwrap();
+
+        // Wall 0 moved.
+        assert_eq!(ids, vec![ArchId(0)]);
+        assert_eq!(model.walls[0].end, Vec2::new(12.0, 12.0));
+        // Wall 1 should be unchanged if no cluster was found for wall 0.
+        assert_eq!(model.walls[1].start, Vec2::new(10.0, 0.0));
+    }
+
+    #[test]
+    fn stretch_wall_self_loop_terminates() {
+        let mut model = cadcraft_doc::ArchModel::default();
+        // Wall 0: (0,0) to (10,0)
+        wall(&mut model, 0, Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 1.0);
+        // Wall 1: (10,0) to (0,0) — creates a loop with wall 0
+        wall(&mut model, 1, Vec2::new(10.0, 0.0), Vec2::new(0.0, 0.0), 1.0);
+
+        // Stretch wall 0's start (0,0) to (5,5).
+        // This should propagate to wall 1's end (0,0).
+        // Then wall 1's start (10,0) is checked. Wall 0's end is (10,0).
+        // Wall 0's end is already visited? No, we started with wall 0 start.
+        // Cluster of wall 0 start contains (0,0). Wall 1 end is (0,0).
+        // So wall 1 end moves.
+        // Then we look at wall 1 end's cluster. It contains wall 1 end and wall 0 start.
+        // Both visited.
+        // We also look at wall 1 start? No, we only process ends in the moving set.
+        // The moving set initially has (0, Start).
+        // Cluster of (0, Start) has (0, Start) and (1, End).
+        // So (1, End) is added.
+        // Process (1, End). Cluster of (1, End) has (1, End) and (0, Start).
+        // Both visited.
+        // So only (0, Start) and (1, End) move.
+        let result = stretch_wall(&mut model, ArchId(0), End::Start, Vec2::new(5.0, 5.0));
+        let ids = result.unwrap();
+
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&ArchId(0)));
+        assert!(ids.contains(&ArchId(1)));
+
+        assert_eq!(model.walls[0].start, Vec2::new(5.0, 5.0));
+        assert_eq!(model.walls[1].end, Vec2::new(5.0, 5.0));
+        // Wall 1 start and Wall 0 end should be unchanged.
+        assert_eq!(model.walls[1].start, Vec2::new(10.0, 0.0));
+        assert_eq!(model.walls[0].end, Vec2::new(10.0, 0.0));
+    }
 }
