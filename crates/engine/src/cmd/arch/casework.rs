@@ -1123,4 +1123,25 @@ mod tests {
         let a = c["alongWall"].as_array().cloned().unwrap_or_default();
         assert!((a[0].as_f64().unwrap_or(0.0) - 3.4).abs() < 1e-9 && (a[1].as_f64().unwrap_or(0.0) - 4.0).abs() < 1e-9, "{v}");
     }
+
+    #[test]
+    fn arch_default_on_cabinet_with_pull_includes_pull() {
+        let dir = crate::temp_dir::TempDir::new("casework-pull-default");
+        let mut s = pull_session(&dir);
+        let _ = run(&mut s, "cabinet", json!({ "kind": "base", "wall": "w0", "offset": 1.0, "pull": "own:bar" }));
+        let r = run(&mut s, "arch.default", json!({ "id": "cb0" })).unwrap_or(Value::Null);
+        assert_eq!(r["kind"], "cabinet.base");
+        assert_eq!(r["default"]["pull"], "own:bar");
+    }
+
+    #[test]
+    fn arch_default_on_cabinet_with_pull_cleared_excludes_pull() {
+        let dir = crate::temp_dir::TempDir::new("casework-pull-default-clear");
+        let mut s = pull_session(&dir);
+        let _ = run(&mut s, "cabinet", json!({ "kind": "base", "wall": "w0", "offset": 1.0, "pull": "own:bar" }));
+        let _ = run(&mut s, "cabinet.edit", json!({ "id": "cb0", "pull": null }));
+        let r = run(&mut s, "arch.default", json!({ "id": "cb0" })).unwrap_or(Value::Null);
+        assert_eq!(r["kind"], "cabinet.base");
+        assert!(r["default"].get("pull").is_none());
+    }
 }
