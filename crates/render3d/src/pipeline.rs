@@ -1523,4 +1523,54 @@ mod tests {
         // NaN alpha is sanitized to the default 1.0 by fin()
         assert_eq!(p.alpha, 1.0);
     }
+
+    #[test]
+    fn material_draw_with_missing_texture_uses_base_colour() {
+        // A MaterialDef with a texture key not in scene.textures uses just the base colour.
+        let mut scene = Scene3d::default();
+        let def = MaterialDef {
+            base_color: [0.5, 0.3, 0.1, 1.0],
+            metallic: 0.2,
+            roughness: 0.6,
+            texture: Some("sym:missing:t0".into()),
+            ..Default::default()
+        };
+        scene.materials.insert("sym:k:0".into(), def);
+        let layers = SceneLayers::of(&scene);
+        let d = material_draw(&scene, &layers, "sym:k:0");
+        assert_eq!(d.albedo, [0.5, 0.3, 0.1]);
+        assert_eq!(d.metallic, 0.2);
+        assert_eq!(d.roughness, 0.6);
+        assert_eq!(d.layer, 0);
+    }
+
+    #[test]
+    fn material_draw_with_invalid_texture_uses_base_colour() {
+        // A MaterialDef with a texture key in scene.textures but an invalid image uses just the base colour.
+        let mut scene = Scene3d::default();
+        let invalid = cadcraft_doc::arch::ImageRgba { width: 0, height: 0, ..Default::default() };
+        scene.textures.insert("sym:k:t0".into(), invalid);
+        let def =
+            MaterialDef { base_color: [0.4, 0.5, 0.6, 1.0], metallic: 0.1, roughness: 0.7, texture: Some("sym:k:t0".into()), ..Default::default() };
+        scene.materials.insert("sym:k:0".into(), def);
+        let layers = SceneLayers::of(&scene);
+        let d = material_draw(&scene, &layers, "sym:k:0");
+        assert_eq!(d.albedo, [0.4, 0.5, 0.6]);
+        assert_eq!(d.layer, 0);
+    }
+
+    #[test]
+    fn pbr_uniform_clamps_layer_to_max() {
+        // A draw with a layer past MAX_LAYERS is clamped in the PbrUniform.
+        let draw = Draw { layer: crate::textures::MAX_LAYERS + 10, ..Default::default() };
+        let p = PbrUniform::new(&crate::light::Light::DEFAULT, 1.0, &draw, STYLE_SHADED, [0.0; 3]);
+        assert_eq!(p._p2[1], (crate::textures::MAX_LAYERS - 1) as f32);
+    }
+
+    #[test]
+    fn draw_is_blended_with_nan_alpha() {
+        // A draw with NaN alpha is not blended (NaN < 1.0 is false).
+        let draw = Draw { alpha: f32::NAN, ..Default::default() };
+        assert!(!draw.is_blended());
+    }
 }
