@@ -2841,7 +2841,7 @@ impl ArchModel {
                 continue;
             }
 
-            if !(w.thickness > MIN_WALL_THICKNESS) {
+            if !w.thickness.is_finite() || !(w.thickness > MIN_WALL_THICKNESS) {
                 messages.push(format!("{}: thickness {} below minimum {}", id, w.thickness, MIN_WALL_THICKNESS));
             }
 
@@ -2863,19 +2863,19 @@ impl ArchModel {
             }
         }
 
+        // Duplicate ids, one message each, in first-appearance order (walk the
+        // walls twice: mark ids seen twice, then emit in wall order).
         let mut seen = std::collections::HashSet::new();
-        let mut dupes = Vec::new();
+        let mut dupes = std::collections::HashSet::new();
         for w in &self.walls {
-            if seen.contains(&w.id) {
-                if !dupes.contains(&w.id) {
-                    dupes.push(w.id);
-                }
-            } else {
-                seen.insert(w.id);
+            if !seen.insert(w.id) {
+                dupes.insert(w.id);
             }
         }
-        for id in &dupes {
-            messages.push(format!("duplicate wall id {}", id));
+        for w in &self.walls {
+            if dupes.remove(&w.id) {
+                messages.push(format!("duplicate wall id {}", w.id));
+            }
         }
 
         if self.openings.len() > MAX_OPENINGS {
@@ -5796,5 +5796,142 @@ mod tests {
             let back: ViewKind = serde_json::from_str(&serde_json::to_string(&k).unwrap()).unwrap();
             assert_eq!(back, k, "{k:?}");
         }
+    }
+
+    /// A wall whose endpoints are non-finite reports *only* "non-finite endpoints" and skips
+    /// the remaining checks (thickness, length, wall type, level), exactly as the spec's
+    /// "skip the remaining geometric checks for that wall" rule requires.
+    #[test]
+    fn non_finite_endpoints_skip_the_remaining_checks() {
+        let mut m = ArchModel::default();
+        let id = m.push_wall(Wall {
+            start: Vec2::new(f64::NAN, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.0,            // would be flagged if not skipped
+            wall_type: "Bogus".into(), // would be flagged if not skipped
+            base_level: 99,            // would be flagged if not skipped
+            ..Wall::default()
+        });
+        let msgs = m.validate();
+        assert_eq!(msgs.len(), 1, "expected only the endpoints message: {msgs:?}");
+        assert_eq!(msgs[0], format!("{}: non-finite endpoints", id));
+    }
+
+    /// Every per-wall message is keyed by the wall id via `ArchId`'s `Display`
+    /// (`w{n}`) and is emitted in `walls` order, one per violating property.
+    #[test]
+    fn per_wall_messages_are_keyed_by_arch_id_display() {
+        let mut m = ArchModel::default();
+        let i0 = m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
+        let i1 = m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(1.0, 0.0), base_level: 99, ..Wall::default() });
+        let i2 = m.push_wall(Wall { start: Vec2::new(f64::INFINITY, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
+        let msgs = m.validate();
+        assert_eq!(msgs.len(), 3);
+        assert_eq!(msgs[0], format!("{}: zero or near-zero length", i0));
+        assert_eq!(msgs[1], format!("{}: unknown level 99", i1));
+        assert_eq!(msgs[2], format!("{}: non-finite endpoints", i2));
+    }
+
+    /// The "model has … max" message is emitted exactly once, *before* any per-wall
+    /// message, per the spec's "checked once, before the per-wall loop" rule.
+    #[test]
+    fn too_many_walls_message_precedes_per_wall_messages() {
+        let mut m = ArchModel::default();
+        // Wall 0 is zero-length (one per-wall message); the rest are clean.
+        m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
+        for i in 1..=MAX_WALLS {
+            m.push_wall(Wall::new(Vec2::new(i as f64, 0.0), Vec2::new((i as f64) + 1.0, 0.0), 0.2));
+        }
+        let msgs = m.validate();
+        assert_eq!(msgs.len(), 2, "max message plus the one per-wall message: {msgs:?}");
+        assert_eq!(msgs[0], format!("model has {} walls, max {MAX_WALLS}", MAX_WALLS + 1));
+        assert_eq!(msgs[1], "w0: zero or near-zero length");
+    }
+
+    /// Hostile huge-but-finite coordinates whose `dist` overflows to `inf` must NOT
+    /// produce a spurious "zero or near-zero length" (`inf > MIN_WALL_LENGTH` is true).
+    #[test]
+    fn huge_finite_coordinates_do_not_false_zero_length() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall { start: Vec2::new(1e200, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
+        // dx*dx overflows f64 to inf, so start.dist(end) is inf, not NaN/0.
+        let msgs = m.validate();
+        assert!(msgs.is_empty(), "huge finite wall wrongly flagged: {msgs:?}");
+    }
+
+    /// A degenerate (zero-length) wall survives a JSON round-trip, keeps its id, and is still
+    /// flagged by `validate` after the round trip.
+    #[test]
+    fn zero_length_wall_survives_round_trip_and_still_flags() {
+        let mut m = ArchModel::default();
+        let id = m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
+        let json = serde_json::to_string(&m).unwrap();
+        let mut back: ArchModel = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.walls.len(), 1);
+        assert_eq!(back.walls[0].id, id);
+        assert_eq!(back.walls[0].start, Vec2::new(0.0, 0.0));
+        assert_eq!(back.walls[0].end, Vec2::new(0.0, 0.0));
+        assert!(m.validate().iter().any(|s| s.contains("zero or near-zero length")), "in-memory zero-length wall not flagged");
+        assert!(back.validate().iter().any(|s| s.contains("zero or near-zero length")), "zero-length wall not flagged after round trip");
+    }
+
+    /// A single wall with several independent violations reports *each* one, in the spec's
+    /// per-wall order (length, type, level); only non-finite endpoints skip the rest.
+    #[test]
+    fn independent_wall_checks_report_in_spec_order() {
+        let mut m = ArchModel::default();
+        let id =
+            m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), wall_type: "Bogus".into(), base_level: 99, ..Wall::default() });
+        let msgs = m.validate();
+        assert_eq!(msgs.len(), 3);
+        assert_eq!(msgs[0], format!("{}: zero or near-zero length", id));
+        assert_eq!(msgs[1], format!("{}: unknown wall type `Bogus`", id));
+        assert_eq!(msgs[2], format!("{}: unknown level 99", id));
+    }
+
+    /// Duplicate-id messages are emitted in first-appearance order, one per repeated id,
+    /// regardless of which wall copies the id.
+    #[test]
+    fn duplicate_wall_id_messages_appear_in_first_appearance_order() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), 0.2));
+        m.push_wall(Wall::new(Vec2::new(2.0, 0.0), Vec2::new(3.0, 0.0), 0.2));
+        m.push_wall(Wall::new(Vec2::new(0.0, 2.0), Vec2::new(1.0, 2.0), 0.2));
+        m.push_wall(Wall::new(Vec2::new(2.0, 2.0), Vec2::new(3.0, 2.0), 0.2));
+        m.push_wall(Wall::new(Vec2::new(0.0, 4.0), Vec2::new(1.0, 4.0), 0.2));
+        m.walls[2].id = ArchId(0); // repeats id 0 (first seen at index 0)
+        m.walls[4].id = ArchId(1); // repeats id 1 (first seen at index 1)
+        assert_eq!(m.validate(), vec!["duplicate wall id w0", "duplicate wall id w1"]);
+    }
+
+    /// The thickness message is exactly `w{n}: thickness {t} below minimum {MIN_WALL_THICKNESS}`,
+    /// with `{t}` as Rust's `Display` of the offending value (NaN stays `NaN`).
+    #[test]
+    fn thickness_message_formats_value_and_minimum_exactly() {
+        let mut m = ArchModel::default();
+        let id = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), f64::NAN));
+        assert_eq!(m.validate(), vec![format!("{}: thickness NaN below minimum {}", id, MIN_WALL_THICKNESS)]);
+
+        let mut m2 = ArchModel::default();
+        let id2 = m2.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), -1.0));
+        assert_eq!(m2.validate(), vec![format!("{}: thickness -1 below minimum {}", id2, MIN_WALL_THICKNESS)]);
+    }
+
+    /// validate() is deterministic and does not mutate the wall data: two calls on the same
+    /// model yield identical messages and the walls are unchanged.
+    #[test]
+    fn validate_is_deterministic_and_does_not_mutate_walls() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.0));
+        m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), f64::INFINITY));
+        let before = m.walls.clone();
+        let a = m.validate();
+        let b = m.validate();
+        assert_eq!(a, b);
+        assert_eq!(m.walls, before);
+        assert_eq!(
+            a,
+            vec![format!("w0: thickness 0 below minimum {}", MIN_WALL_THICKNESS), format!("w1: thickness inf below minimum {}", MIN_WALL_THICKNESS),]
+        );
     }
 }
