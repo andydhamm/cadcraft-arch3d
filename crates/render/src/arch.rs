@@ -2458,4 +2458,203 @@ mod tests {
             "mitred corner (9.9, 0.1) must be in the solved ring"
         );
     }
+
+    /// A glass wall draws its outline (a closed 5-point ring) but no filled poché
+    /// (no `Kind::Tris` prim). The outline is always emitted; the fill is skipped
+    /// only for glass.
+    #[test]
+    fn glass_wall_draws_an_outline_without_fill() {
+        let mut d = Drawing::new_metric();
+        let wid = d.arch.add_wall(Wall {
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.01,
+            height: 2.0,
+            wall_type: "Glass".into(),
+            ..Wall::default()
+        });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let handle = arch_handle(wid);
+        // No filled poché: a glass wall skips the `Kind::Tris` prim.
+        assert!(list.prims.iter().all(|p| p.handle != handle || p.kind != Kind::Tris), "glass wall must not have a filled poché (Tris prim)");
+        // Exactly one outline polyline prim.
+        let outlines: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == handle && p.kind == Kind::Polyline).collect();
+        assert_eq!(outlines.len(), 1, "glass wall should have exactly one outline polyline");
+        // The outline is a closed ring: 4 corners + first point repeated = 5.
+        assert_eq!(outlines[0].len, 5, "outline should be a closed 5-point ring");
+        // Every vertex is finite.
+        let pts = list.points(outlines[0]);
+        assert!(pts.iter().all(|p| p.is_finite()), "non-finite point in glass wall outline");
+    }
+
+    /// A T-junction: a short vertical wall butts into the middle of a long horizontal
+    /// wall. The short wall's solved ring must extend to the long wall's face (y =
+    /// t/2), past its raw end (y = ts/2), proving the plan draws the solved ring
+    /// (butted) rather than the raw 4-corner rectangle. This is the perpendicular
+    /// analogue of `plan_poché_butts_interior_walls`.
+    #[test]
+    fn plan_poché_t_junction_butts_into_the_mid_wall() {
+        let t = 0.2;
+        let ts = 0.1;
+        let mut d = Drawing::new_metric();
+        let long_id = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+        let short_id = d.arch.add_wall(Wall { start: Vec2::new(5.0, -3.0), end: Vec2::new(5.0, 0.0), thickness: ts, height: 3.0, ..Wall::default() });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        // The short wall's solved ring extends to the long wall's far face (y = t/2),
+        // past the raw end (y = ts/2).
+        let short_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == arch_handle(short_id) && p.kind == Kind::Polyline).collect();
+        assert_eq!(short_prims.len(), 1, "short wall should have one outline polyline at the T-junction");
+        let pts = list.points(short_prims[0]);
+        assert!(pts.iter().all(|p| p.is_finite()), "non-finite vertex in T-junction outline");
+        let max_y = pts.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+        assert!(
+            max_y >= t / 2.0 - 1e-6,
+            "T-junction: short wall solved ring max_y {} should reach the long wall's face (t/2 = {}); raw end is only y = 0.05",
+            max_y,
+            t / 2.0
+        );
+
+        // The long wall also draws its solved outline, finite.
+        let long_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == arch_handle(long_id) && p.kind == Kind::Polyline).collect();
+        assert!(long_prims.len() >= 1, "long wall should have an outline polyline");
+        let long_pts = list.points(long_prims[0]);
+        assert!(long_pts.iter().all(|p| p.is_finite()), "non-finite vertex in long wall outline at T-junction");
+    }
+
+    /// Two walls of different thicknesses meet at a 90° corner. The solved corner is
+    /// bounded by both walls' faces: wall A's outline stays within wall B's face band
+    /// and reaches at least its raw end, while wall B's outline extends into wall A's
+    /// strip but no further than its own face. Pins the mixed-thickness corner that a
+    /// uniform-thickness rectangle does not exercise.
+    #[test]
+    fn plan_poché_mixed_thickness_at_join() {
+        let mut d = Drawing::new_metric();
+        let a_t = 0.2;
+        let b_t = 0.4;
+        // Wall A: horizontal centre line (0,0)→(10,0), thickness 0.2 (faces y = ±0.1).
+        let id_a = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), a_t));
+        // Wall B: vertical centre line (10,0)→(10,8), thickness 0.4 (faces x = 10±0.2).
+        let id_b = d.arch.add_wall(Wall { start: Vec2::new(10.0, 0.0), end: Vec2::new(10.0, 8.0), thickness: b_t, height: 3.0, ..Wall::default() });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        // Wall A's solved corner must reach at least its raw end (x = 10.0) and stay
+        // inside wall B's face band (x ≤ 10 + b_t/2).
+        let a_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == arch_handle(id_a) && p.kind == Kind::Polyline).collect();
+        assert_eq!(a_prims.len(), 1, "wall A should have one outline polyline");
+        let pts_a = list.points(a_prims[0]);
+        assert!(pts_a.iter().all(|p| p.is_finite()), "non-finite vertex in wall A outline");
+        let max_x_a = pts_a.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+        assert!(max_x_a >= 10.0 - 1e-6, "wall A solved outline max_x {} should reach its raw end (10.0)", max_x_a);
+        assert!(
+            max_x_a <= 10.0 + b_t / 2.0 + 1e-6,
+            "wall A solved outline must not extend past wall B's far face (10 + b_t/2 = {}): max_x {}",
+            10.0 + b_t / 2.0,
+            max_x_a
+        );
+
+        // Wall B's solved corner extends down into wall A's strip to at least wall A's
+        // far face (y = -a_t/2) and no further than wall B's own face (y = -b_t/2).
+        let b_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == arch_handle(id_b) && p.kind == Kind::Polyline).collect();
+        assert_eq!(b_prims.len(), 1, "wall B should have one outline polyline");
+        let pts_b = list.points(b_prims[0]);
+        assert!(pts_b.iter().all(|p| p.is_finite()), "non-finite vertex in wall B outline");
+        let min_y_b = pts_b.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+        assert!(
+            min_y_b <= 0.0 - a_t / 2.0 + 1e-6,
+            "wall B solved outline min_y {} should reach wall A's far face (y = -a_t/2 = {})",
+            min_y_b,
+            -a_t / 2.0
+        );
+        assert!(
+            min_y_b >= -b_t / 2.0 - 1e-6,
+            "wall B solved outline must not extend past its own face (y = -b_t/2 = {}): min_y {}",
+            -b_t / 2.0,
+            min_y_b
+        );
+    }
+
+    /// A very thin wall (0.001 thick) in a joined group must still draw a closed
+    /// outline of the correct (thin) extent and, being solid, a filled poché. The
+    /// join extends the thin wall along its length (to the thick wall's face) but the
+    /// outline's transverse extent stays ≈ its thickness.
+    #[test]
+    fn plan_poché_very_thin_wall_in_joined_group() {
+        let thin = 0.001;
+        let thick = 0.2;
+        let mut d = Drawing::new_metric();
+        // Thick wall along x: (0,0)→(10,0), thickness 0.2.
+        d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), thick));
+        // Thin wall T-joining its middle: (5,-2)→(5,0), thickness 0.001.
+        let id_thin =
+            d.arch.add_wall(Wall { start: Vec2::new(5.0, -2.0), end: Vec2::new(5.0, 0.0), thickness: thin, height: 2.0, ..Wall::default() });
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+
+        let thin_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == arch_handle(id_thin) && p.kind == Kind::Polyline).collect();
+        assert_eq!(thin_prims.len(), 1, "thin wall should have one outline polyline");
+        let prim = &thin_prims[0];
+        assert!(prim.len >= 4, "thin wall outline should be a closed ring (>= 4 points), got {}", prim.len);
+        let pts = list.points(prim);
+        assert!(pts.iter().all(|p| p.is_finite()), "non-finite vertex in thin wall outline");
+
+        // The transverse (x) extent stays ≈ the wall's thickness: the join extends the
+        // ring along the wall's length, not across it.
+        let min_x = pts.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+        let max_x = pts.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+        let dx = max_x - min_x;
+        assert!(dx > 5e-4 && dx < 3e-3, "thin wall x-extent {} should be ≈ its thickness 0.001", dx);
+        // It butts into the thick wall's face (y = thick/2).
+        let max_y = pts.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+        assert!(max_y >= thick / 2.0 - 1e-6, "thin wall should extend to the thick wall's face (y = {}); max_y {}", thick / 2.0, max_y);
+        // Solid (not glass): it gets a filled poché.
+        let tris_prims: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == arch_handle(id_thin) && p.kind == Kind::Tris).collect();
+        assert!(!tris_prims.is_empty(), "thin solid wall in a joined group should get a filled poché (Tris prim)");
+    }
+
+    /// Determinism / round-trip across builds for a solved joined group: two independent
+    /// `Drawing`s with an identical rectangle-plus-interior-wall layout must produce
+    /// byte-identical display lists — prim counts, handles, kinds, transparency and
+    /// every vertex. The existing determinism test covers isolated walls only; this
+    /// pins the solved-ring (mitred/butted) path.
+    #[test]
+    fn build_arch_solved_joins_is_deterministic() {
+        let t = 0.2;
+        let mk = || -> Drawing {
+            let mut d = Drawing::new_metric();
+            d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+            d.arch.add_wall(wall(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), t));
+            d.arch.add_wall(wall(Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0), t));
+            d.arch.add_wall(wall(Vec2::new(0.0, 8.0), Vec2::new(0.0, 0.0), t));
+            // Interior wall T-butting the top and bottom walls (the solved-ring path).
+            d.arch.add_wall(wall(Vec2::new(0.0, 4.0), Vec2::new(10.0, 4.0), 0.1));
+            d.touch_arch();
+            d
+        };
+        let d1 = mk();
+        let d2 = mk();
+        let l1 = build_arch(&d1, &Options::default(), false);
+        let l2 = build_arch(&d2, &Options::default(), false);
+
+        assert_eq!(l1.prims.len(), l2.prims.len(), "prim counts differ for solved joins");
+        for (p1, p2) in l1.prims.iter().zip(l2.prims.iter()) {
+            assert_eq!(p1.handle, p2.handle, "handle drift in solved joins");
+            assert_eq!(p1.kind, p2.kind, "kind drift in solved joins");
+            assert_eq!(p1.len, p2.len, "len drift in solved joins");
+            assert_eq!(p1.color, p2.color, "color drift in solved joins");
+            assert_eq!(p1.transparency, p2.transparency, "transparency drift in solved joins");
+        }
+        assert_eq!(l1.verts.len(), l2.verts.len(), "vertex counts differ for solved joins");
+        for (a, b) in l1.verts.iter().zip(l2.verts.iter()) {
+            assert!((a.x - b.x).abs() < 1e-9 && (a.y - b.y).abs() < 1e-9, "vertex drift in solved joins: {a:?} vs {b:?}");
+        }
+        assert!((l1.bounds.min.x - l2.bounds.min.x).abs() < 1e-9, "bounds.min.x drift in solved joins");
+        assert!((l1.bounds.max.x - l2.bounds.max.x).abs() < 1e-9, "bounds.max.x drift in solved joins");
+        assert!((l1.bounds.min.y - l2.bounds.min.y).abs() < 1e-9, "bounds.min.y drift in solved joins");
+        assert!((l1.bounds.max.y - l2.bounds.max.y).abs() < 1e-9, "bounds.max.y drift in solved joins");
+    }
 }
