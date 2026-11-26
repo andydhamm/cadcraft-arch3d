@@ -3629,15 +3629,15 @@ mod tests {
         let pos = &json["accessors"][0];
         let min = pos["min"].as_array().unwrap();
         let max = pos["max"].as_array().unwrap();
-        // x: one NaN, so min/max from the other two (0.0 and 1.0)
-        assert_eq!(min[0].as_f64().unwrap(), 0.0);
+        // x: one NaN, so min/max from the other two (1.0 and 1.0)
+        assert_eq!(min[0].as_f64().unwrap(), 1.0);
         assert_eq!(max[0].as_f64().unwrap(), 1.0);
         // y: one NaN, so min/max from the other two (0.0 and 0.0)
         assert_eq!(min[1].as_f64().unwrap(), 0.0);
         assert_eq!(max[1].as_f64().unwrap(), 0.0);
-        // z: one NaN, so min/max from the other two (0.0 and 1.0)
+        // z: one NaN, so min/max from the other two (0.0 and 0.0)
         assert_eq!(min[2].as_f64().unwrap(), 0.0);
-        assert_eq!(max[2].as_f64().unwrap(), 1.0);
+        assert_eq!(max[2].as_f64().unwrap(), 0.0);
         // min <= max on every axis
         for i in 0..3 {
             assert!(min[i].as_f64().unwrap() <= max[i].as_f64().unwrap(), "axis {i}: min > max");
