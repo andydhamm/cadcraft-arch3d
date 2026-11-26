@@ -184,4 +184,73 @@ mod tests {
             assert_eq!(Finish::parse(f.name()), Some(f));
         }
     }
+
+    #[test]
+    fn parse_rejects_case_and_whitespace_variants() {
+        // Case variations of each finish name must be rejected.
+        for f in Finish::ALL {
+            let name = f.name();
+            let upper: String = name.chars().map(|c| c.to_ascii_uppercase()).collect();
+            if upper != name {
+                assert_eq!(Finish::parse(&upper), None, "parse({}) should be None", upper);
+            }
+            let lower: String = name.chars().map(|c| c.to_ascii_lowercase()).collect();
+            if lower != name {
+                assert_eq!(Finish::parse(&lower), None, "parse({}) should be None", lower);
+            }
+        }
+        // Whitespace-only and whitespace-padded strings.
+        for ws in ["", " ", "\t", "\n", "  ", "\t\n", "siding ", " siding", "s iding", " siding "] {
+            assert_eq!(Finish::parse(ws), None, "parse({:?}) should be None", ws);
+        }
+        // Unicode lookalikes and zero-width characters.
+        assert_eq!(Finish::parse("sïding"), None);
+        assert_eq!(Finish::parse("siding\u{200b}"), None);
+        assert_eq!(Finish::parse("siding\u{00a0}"), None);
+        // A long concatenated string.
+        assert_eq!(Finish::parse("sidingwoodbricktileconcretecarpetdrywallplaster"), None);
+        // A name that is a prefix of another.
+        assert_eq!(Finish::parse("wooden"), None);
+        assert_eq!(Finish::parse("tiles"), None);
+    }
+
+    #[test]
+    fn every_finish_is_valid_for_at_least_one_surface() {
+        // Invariant: no finish is dead code; each is usable on at least one surface type.
+        for f in Finish::ALL {
+            assert!(f.for_walls() || f.for_roofs() || f.for_floors() || f.for_ceilings(), "{:?} is not valid for any surface type", f);
+        }
+    }
+
+    #[test]
+    fn finish_names_are_lowercase_alphabetic_and_unique() {
+        let mut seen = std::collections::HashSet::new();
+        for f in Finish::ALL {
+            let name = f.name();
+            assert!(!name.is_empty(), "{:?} has an empty name", f);
+            assert!(name.chars().all(|c| c.is_ascii_lowercase()), "{:?} name {:?} contains non-lowercase characters", f, name);
+            assert!(name.chars().all(|c| c.is_alphabetic()), "{:?} name {:?} contains non-alphabetic characters", f, name);
+            assert!(seen.insert(name.to_string()), "{:?} name {:?} is not unique", f, name);
+        }
+    }
+
+    #[test]
+    fn serde_rejects_unknown_finish_name_in_wall() {
+        let json = serde_json::json!({
+            "start": {"x": 0.0, "y": 0.0},
+            "end": {"x": 1.0, "y": 0.0},
+            "finish": "marble"
+        });
+        let result: Result<Wall, _> = serde_json::from_value(json);
+        assert!(result.is_err(), "deserializing a wall with unknown finish 'marble' should fail");
+    }
+
+    #[test]
+    fn finish_ord_matches_declaration_order() {
+        // The derived Ord must agree with declaration order (Finish::ALL).
+        for window in Finish::ALL.windows(2) {
+            let (a, b) = (window[0], window[1]);
+            assert!(a < b, "{:?} should be less than {:?} in declaration order", a, b);
+        }
+    }
 }
