@@ -478,6 +478,16 @@ impl Pane3d {
         if self.night {
             look.sun.on = false;
         }
+
+        // A NaN latitude or longitude means the site is invalid; treat as no sun.
+        // Checked before view.sun_dir so a stale or erroneous direction from the view
+        // does not override an invalid site.
+        let site_valid = self.site.as_ref().is_some_and(|s| s.latitude.is_finite() && s.longitude.is_finite());
+        if !site_valid {
+            look.sun.on = false;
+            return (look, Ok(None));
+        }
+
         let Some(site) = self.site.as_ref() else {
             // No site: no sun from site. If there's a named angle, it's in view.sun_dir.
             if let Some(dir) = self.view.sun_dir {
@@ -489,11 +499,7 @@ impl Pane3d {
             }
             return (look, Ok(None));
         };
-        // A NaN latitude or longitude means the site is invalid; treat as no sun.
-        if !site.latitude.is_finite() || !site.longitude.is_finite() {
-            look.sun.on = false;
-            return (look, Ok(None));
-        }
+
         if let Some(dir) = self.view.sun_dir {
             if dir.iter().all(|v| v.is_finite()) {
                 return (look, Ok(Some(dir)));
@@ -502,6 +508,7 @@ impl Pane3d {
             look.sun.on = false;
             return (look, Ok(None));
         }
+
         let dir = cadcraft_arch::sun::sun_position(site.latitude, self.sun_date.trim(), self.sun_time.trim())
             .map(|sun| cadcraft_arch::site::true_to_drawing(Some(site), cadcraft_arch::sun::sun_dir(&sun)));
         match dir {
