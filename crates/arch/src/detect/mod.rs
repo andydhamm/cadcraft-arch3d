@@ -336,7 +336,7 @@ fn split_unexplained_gaps(walls: &mut Vec<WallRun>, openings: &mut Vec<OpeningCa
             let mut prev = 0.0;
             for (g_start, g_end) in &gaps_to_remove {
                 // Create a wall piece from prev to g_start
-                if g_start > prev + 1e-6 {
+                if *g_start > prev + 1e-6 {
                     let start = w.start + dir * prev;
                     let end = w.start + dir * *g_start;
                     let piece_gaps: Vec<(f64, f64)> = w
