@@ -38,7 +38,10 @@ pub(crate) const MAX_COPIED_BYTES: usize = 256 << 20;
 pub(crate) fn in_acad(states: &[LayerState]) -> Vec<bool> {
     let mut seen: HashSet<String> = HashSet::with_capacity(states.len());
     // arch3d: AutoCAD's form has no place for wildcard rules, so a state with rules stays in CADCraft's record.
-    states.iter().map(|st| st.rules.is_empty() && !st.name.trim().is_empty() && !st.name.starts_with('*') && seen.insert(st.name.to_lowercase())).collect()
+    states
+        .iter()
+        .map(|st| st.rules.is_empty() && !st.name.trim().is_empty() && !st.name.starts_with('*') && seen.insert(st.name.to_lowercase()))
+        .collect()
 }
 
 /// The states CADCraft's own record keeps (those [`in_acad`] leaves out).
