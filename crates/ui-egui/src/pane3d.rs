@@ -478,12 +478,27 @@ impl Pane3d {
         if self.night {
             look.sun.on = false;
         }
-        if self.view.sun_dir.is_some() {
-            return (look, Ok(self.view.sun_dir));
-        }
-        let Some(site) = self.site.as_ref() else { return (look, Ok(None)) };
+        let Some(site) = self.site.as_ref() else {
+            // No site: no sun from site. If there's a named angle, it's in view.sun_dir.
+            if let Some(dir) = self.view.sun_dir {
+                if dir.iter().all(|v| v.is_finite()) {
+                    return (look, Ok(Some(dir)));
+                }
+                look.sun.on = false;
+                return (look, Ok(None));
+            }
+            return (look, Ok(None));
+        };
         // A NaN latitude or longitude means the site is invalid; treat as no sun.
         if !site.latitude.is_finite() || !site.longitude.is_finite() {
+            look.sun.on = false;
+            return (look, Ok(None));
+        }
+        if let Some(dir) = self.view.sun_dir {
+            if dir.iter().all(|v| v.is_finite()) {
+                return (look, Ok(Some(dir)));
+            }
+            // Non-finite sun direction from the view: treat as no sun.
             look.sun.on = false;
             return (look, Ok(None));
         }
