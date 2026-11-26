@@ -3878,11 +3878,12 @@ mod tests {
 
     /// The first opening handle sits at `ARCH_HANDLE_BASE + OPENING_HANDLE_OFFSET` and is
     /// routable by picking (`is_arch_handle`) while being disambiguated from walls: for any
-    /// id, `arch_handle` and `opening_handle` are distinct, both are arch handles, and the
-    /// exact offset math holds (the invariant the spec states).
+    /// opening id in the 32768-wide band, `arch_handle` and `opening_handle` are distinct,
+    /// both are arch handles, the opening handle is recognised as an opening (not a room),
+    /// and the exact offset math holds (the invariant the spec states).
     #[test]
     fn opening_handle_offset_and_disambiguation() {
-        for id in [0u32, 3, 7000, u32::MAX - 1] {
+        for id in [0u32, 3, 7000, 32767] {
             let wh = arch_handle(ArchId(id));
             let oh = opening_handle(ArchId(id));
             assert_ne!(wh, oh, "wall and opening handles must differ for {id}");
