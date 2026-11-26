@@ -5356,4 +5356,72 @@ mod tests {
         assert!(ArchKind::Backsplash < ArchKind::MoldingLine);
         assert!(ArchKind::MoldingLine < ArchKind::Cabinet);
     }
+
+    /// The view proxy range is exactly `0x8000` wide and is disjoint from the railing
+    /// range below it and the terrain range above it.
+    #[test]
+    fn view_handle_range_boundaries() {
+        let base = ARCH_HANDLE_BASE + VIEW_HANDLE_OFFSET;
+        assert!(is_view_handle(Handle(base)), "range start must be inside");
+        assert!(is_view_handle(Handle(base + 32767)), "last in-range id must be inside");
+        assert!(!is_view_handle(Handle(base + 32768)), "first out-of-range id must be outside");
+        assert!(!is_view_handle(Handle(base - 1)), "id just below the range must be outside");
+        // Disjoint from the railing range ending just before the view offset.
+        assert!(!is_view_handle(Handle(ARCH_HANDLE_BASE + RAILING_HANDLE_OFFSET + 32767)));
+        // Disjoint from the terrain range beginning just after the view offset.
+        assert!(!is_view_handle(Handle(ARCH_HANDLE_BASE + VIEW_HANDLE_OFFSET + 32768)));
+    }
+
+    /// `placed`, `bounds` and `is_stale` follow the view-geometry contract: view space is
+    /// shifted into model space by `insert - extent`, and generated geometry is never
+    /// serialized.
+    #[test]
+    fn view_geometry_placed_bounds_and_stale() {
+        let v = ArchView { name: "Front".into(), look: [0.0, 1.0], scale: 50.0, insert: [10.0, 20.0], ..ArchView::default() };
+
+        // Without geometry: placed falls back to insert, bounds is None, is_stale is true.
+        assert_eq!(v.placed([1.0, 1.0]), [10.0, 20.0]);
+        assert!(v.bounds().is_none());
+        assert!(v.is_stale(7));
+
+        // With geometry: extent [u0, v0, u1, v1] maps view space to model space.
+        let mut g = v.clone();
+        g.generated = Some(ViewGeometry { revision: 5, extent: [2.0, 3.0, 5.0, 6.0], ..ViewGeometry::default() });
+        assert_eq!(g.placed([2.0, 3.0]), [10.0, 20.0], "placed( extent min ) == insert");
+        assert_eq!(g.placed([5.0, 6.0]), [13.0, 23.0], "placed( extent max ) == insert + span");
+        assert_eq!(g.bounds(), Some([10.0, 20.0, 13.0, 23.0]), "bounds == placed extent");
+        assert!(!g.is_stale(5), "current revision is not stale");
+        assert!(g.is_stale(6), "newer revision is stale");
+
+        // Generated geometry is never written, so a round trip returns it unset.
+        let json = serde_json::to_string(&g).unwrap();
+        assert!(!json.contains("generated"), "generated must not serialize: {json}");
+        let back: ArchView = serde_json::from_str(&json).unwrap();
+        assert!(back.generated.is_none());
+        assert_eq!(back.insert, [10.0, 20.0]);
+    }
+
+    /// `is_empty` must count a stored view as content: true with no views, false while a
+    /// view is stored, and true again after the view is removed.
+    #[test]
+    fn model_with_views_is_not_empty() {
+        let mut m = ArchModel::default();
+        assert!(m.is_empty(), "default model is empty");
+        let v = ArchView { name: "Front".into(), look: [0.0, 1.0], ..ArchView::default() };
+        let id = m.push_view(v).unwrap();
+        assert!(!m.is_empty(), "a model with a stored view is not empty");
+        assert_eq!(m.view(id).unwrap().name, "Front");
+        assert!(m.remove_view(id).is_some());
+        assert!(m.is_empty(), "after removing the only view the model is empty again");
+    }
+
+    /// `ViewKind` defaults to elevation and round-trips its own serde form.
+    #[test]
+    fn view_kind_defaults_and_round_trip() {
+        assert_eq!(ViewKind::default(), ViewKind::Elevation);
+        for k in [ViewKind::Elevation, ViewKind::Section, ViewKind::Interior] {
+            let back: ViewKind = serde_json::from_str(&serde_json::to_string(&k).unwrap()).unwrap();
+            assert_eq!(back, k, "{k:?}");
+        }
+    }
 }

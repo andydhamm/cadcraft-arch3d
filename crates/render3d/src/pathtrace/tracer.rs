@@ -2902,4 +2902,107 @@ mod tests {
         let p2 = super::super::shaders::PtPipelines::shared(&own2, None).unwrap();
         assert!(!std::sync::Arc::ptr_eq(&p1, &p2), "separate ComputeGpu instances must have independent pipeline caches");
     }
+
+    #[test]
+    fn single_pixel_render() {
+        let Some(gpu) = compute() else { return };
+        let opts = PathOptions { spp: 4, spp_per_step: 2, denoise: false, ..Default::default() };
+        let mut t = PathTracer::new(&gpu, &scene(), &camera(), &Lighting::default(), false, (1, 1), &opts, None).unwrap();
+        loop {
+            match t.step(&gpu) {
+                PathStatus::Done { width, height, rgba } => {
+                    assert_eq!(width, 1);
+                    assert_eq!(height, 1);
+                    assert_eq!(rgba.len(), 4);
+                    return;
+                }
+                PathStatus::Running { .. } => {}
+                other => panic!("unexpected: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn furnace_extreme_values() {
+        let Some(gpu) = compute() else { return };
+        // Albedo near 0
+        let opts1 =
+            PathOptions { furnace: Some(super::super::Furnace { albedo: 0.001, emission: 1.0, ..Default::default() }), spp: 4, ..Default::default() };
+        let mut t1 = PathTracer::new(&gpu, &furnace_scene(), &looking_inside(), &Lighting::default(), false, (8, 8), &opts1, None).unwrap();
+        loop {
+            match t1.step(&gpu) {
+                PathStatus::Done { .. } => break,
+                PathStatus::Running { .. } => {}
+                other => panic!("unexpected: {other:?}"),
+            }
+        }
+        // Albedo near 1
+        let opts2 =
+            PathOptions { furnace: Some(super::super::Furnace { albedo: 0.999, emission: 1.0, ..Default::default() }), spp: 4, ..Default::default() };
+        let mut t2 = PathTracer::new(&gpu, &furnace_scene(), &looking_inside(), &Lighting::default(), false, (8, 8), &opts2, None).unwrap();
+        loop {
+            match t2.step(&gpu) {
+                PathStatus::Done { .. } => break,
+                PathStatus::Running { .. } => {}
+                other => panic!("unexpected: {other:?}"),
+            }
+        }
+        // Emission near 0
+        let opts3 =
+            PathOptions { furnace: Some(super::super::Furnace { albedo: 0.5, emission: 0.001, ..Default::default() }), spp: 4, ..Default::default() };
+        let mut t3 = PathTracer::new(&gpu, &furnace_scene(), &looking_inside(), &Lighting::default(), false, (8, 8), &opts3, None).unwrap();
+        loop {
+            match t3.step(&gpu) {
+                PathStatus::Done { .. } => break,
+                PathStatus::Running { .. } => {}
+                other => panic!("unexpected: {other:?}"),
+            }
+        }
+        // Emission near 1000
+        let opts4 =
+            PathOptions { furnace: Some(super::super::Furnace { albedo: 0.5, emission: 999.0, ..Default::default() }), spp: 4, ..Default::default() };
+        let mut t4 = PathTracer::new(&gpu, &furnace_scene(), &looking_inside(), &Lighting::default(), false, (8, 8), &opts4, None).unwrap();
+        loop {
+            match t4.step(&gpu) {
+                PathStatus::Done { .. } => break,
+                PathStatus::Running { .. } => {}
+                other => panic!("unexpected: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn empty_scene_with_backdrop() {
+        let Some(gpu) = compute() else { return };
+        let backdrop = Backdrop::Colour { colour: [100, 150, 200] };
+        let empty = Scene3d { backdrop: Some(backdrop), ..Default::default() };
+        let opts = PathOptions { spp: 4, denoise: false, ..Default::default() };
+        let mut t = PathTracer::new(&gpu, &empty, &looking_up(), &Lighting::default(), false, (8, 8), &opts, None).unwrap();
+        let rgba = loop {
+            match t.step(&gpu) {
+                PathStatus::Running { .. } => {}
+                PathStatus::Done { rgba, .. } => break rgba,
+                s => panic!("{s:?}"),
+            }
+        };
+        // All pixels should be the backdrop color since the scene is empty
+        for i in 0..8 * 8 {
+            let p = &rgba[i * 4..i * 4 + 4];
+            assert_eq!(p[0], 100, "pixel {i} red");
+            assert_eq!(p[1], 150, "pixel {i} green");
+            assert_eq!(p[2], 200, "pixel {i} blue");
+        }
+    }
+
+    #[test]
+    fn preview_none_before_samples_some_after() {
+        let Some(gpu) = compute() else { return };
+        let opts = PathOptions { spp: 4, spp_per_step: 2, denoise: false, ..Default::default() };
+        let mut t = PathTracer::new(&gpu, &scene(), &camera(), &Lighting::default(), false, (8, 8), &opts, None).unwrap();
+        // Before any samples, preview should be None
+        assert!(t.preview(&gpu).is_none(), "preview before samples should be None");
+        // After one step, preview should be Some
+        t.step(&gpu);
+        assert!(t.preview(&gpu).is_some(), "preview after samples should be Some");
+    }
 }

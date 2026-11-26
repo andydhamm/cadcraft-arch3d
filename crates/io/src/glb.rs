@@ -2342,6 +2342,7 @@ mod tests {
         }
     }
 
+    /// Meshes with empty positions are skipped entirely, producing no nodes or accessors.
     /// Non-glass materials remain opaque (no alphaMode, alpha 1.0).
     #[test]
     fn glb_non_glass_materials_are_opaque() {
