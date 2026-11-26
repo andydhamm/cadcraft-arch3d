@@ -822,12 +822,12 @@ mod tests {
         // chip value at 257 chars is refused
         let v257 = json!([{"kind": "tag", "value": "b".repeat(257)}]);
         assert!(parse_query(None, Some(&v257)).is_err());
-        // exactly MAX_CHIPS (32) chips are accepted
-        let many: Vec<Value> = (0..32).map(|i| json!(format!("t{}", i))).collect();
+        // exactly MAX_CHIPS (32) chips are accepted (real {kind, value} chip objects).
+        let many: Vec<Value> = (0..32).map(|i| json!({"kind": "tag", "value": format!("t{}", i)})).collect();
         let ok3 = parse_query(None, Some(&json!(many))).unwrap();
         assert_eq!(ok3.chips.len(), 32);
         // 33 chips are refused
-        let too_many: Vec<Value> = (0..33).map(|i| json!(format!("t{}", i))).collect();
+        let too_many: Vec<Value> = (0..33).map(|i| json!({"kind": "tag", "value": format!("t{}", i)})).collect();
         assert!(parse_query(None, Some(&json!(too_many))).is_err());
         // an empty text string is accepted
         let ok4 = parse_query(Some(&json!("")), None).unwrap();
@@ -858,5 +858,43 @@ mod tests {
         // plain valid names pass
         assert!(check_name("tag", "ok").is_ok());
         assert!(check_name("filter name", "Living room").is_ok());
+    }
+
+    #[test]
+    fn parse_query_string_chip_is_refused() {
+        // A bare string chip is not a {kind, value} object, so it is refused — matching the
+        // `{"chips": ["tag"]}` refusal pinned in the `library` command's tests.
+        assert!(parse_query(None, Some(&json!(["tag"]))).is_err());
+        // A list mixing a valid chip with a bare string is also refused.
+        let mixed: Vec<Value> = vec![json!({"kind": "tag", "value": "x"}), json!("str")];
+        assert!(parse_query(None, Some(&json!(mixed))).is_err());
+        // chips must be a list; a single object is not a list and is refused.
+        assert!(parse_query(None, Some(&json!({"kind": "tag", "value": "x"}))).is_err());
+    }
+
+    #[test]
+    fn parse_query_combines_text_and_chips_and_refuses_any_bad() {
+        // text and chips combine; every chip must be a valid {kind, value} object.
+        let q = parse_query(
+            Some(&json!("door")),
+            Some(&json!([
+                {"kind": "style", "value": "hinged"},
+                {"kind": "category", "value": "Doors and windows"},
+            ])),
+        )
+        .expect("text plus chips");
+        assert_eq!(q.text, "door");
+        assert_eq!(q.chips.len(), 2);
+        // One bad chip among otherwise-valid ones refuses the whole query.
+        assert!(
+            parse_query(
+                Some(&json!("door")),
+                Some(&json!([
+                    {"kind": "style", "value": "hinged"},
+                    {"kind": "bogus", "value": "x"},
+                ])),
+            )
+            .is_err()
+        );
     }
 }

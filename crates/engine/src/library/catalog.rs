@@ -1110,6 +1110,40 @@ mod tests {
     }
 
     #[test]
+    fn entry_record_non_object_is_refused() {
+        // A catalog entry must be a JSON object; anything else is refused with a stable
+        // reason (never repaired, never a crash).
+        assert!(entry_record(&json!(1), "c").is_err());
+        assert!(entry_record(&json!(["a"]), "c").is_err());
+        assert!(entry_record(&json!("x"), "c").is_err());
+        assert!(entry_record(&json!(null), "c").is_err());
+        // A minimal valid object is accepted.
+        let rec = json!({
+            "id": "a",
+            "name": "A",
+            "category": "Furniture",
+            "licence": "CC0",
+            "source": "s",
+            "file": "a.glb",
+        });
+        assert!(entry_record(&rec, "c").is_ok());
+    }
+
+    #[test]
+    fn user_record_requires_and_validates_record() {
+        // A user item file must contain a "record" object; an empty one is refused.
+        assert!(user_record(&json!({})).is_err());
+        assert!(user_record(&json!(null)).is_err());
+        // A valid user record is accepted, forced to the "user" catalog and editable.
+        let v = json!({"record": {"id": "user:z", "name": "Z", "category": "Furniture"}});
+        let r = user_record(&v).expect("valid user record");
+        assert_eq!((r.catalog, r.read_only), ("user", false));
+        // A bad profile in a user record is still refused (never repaired).
+        let bad = json!({"record": {"id": "user:z", "name": "Z", "profile": [[0.0, 0.0], [0.01, 0.0]]}});
+        assert!(user_record(&bad).is_err());
+    }
+
+    #[test]
     fn hostile_entries_are_skipped_with_a_reason() {
         let ok = json!({"id": "a", "name": "A", "category": "Furniture", "licence": "CC0-1.0", "source": "me", "file": "a.glb"});
         assert!(entry_record(&ok, "x").is_ok());
