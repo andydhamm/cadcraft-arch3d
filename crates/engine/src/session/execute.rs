@@ -30,6 +30,11 @@ impl Session {
         if let Some(why) = crate::file_access::commands::refusal(spec.id) {
             return Err(EngineError::Disabled(spec.id.into(), why));
         }
+        // A command that may read a view's generated geometry gets a catch-up refresh while
+        // deferral is on; the refresh is not part of the command's undo step.
+        if self.views_deferred && !cmd::arch::views::defer_safe(spec.id) {
+            cmd::arch::views::refresh_views(self);
+        }
         (spec.enabled)(self).map_err(|m| EngineError::Disabled(spec.id.into(), m))?;
         if let Some(why) = cmd::blocks::bedit::refused_in_editor(self, spec.id) {
             return Err(EngineError::Disabled(spec.id.into(), why));
