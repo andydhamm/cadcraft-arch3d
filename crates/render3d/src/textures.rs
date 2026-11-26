@@ -892,4 +892,39 @@ mod tests {
         assert!(a == c);
         assert!(a.as_chunks::<4>().0.iter().any(|p| p[0] != a[0]), "the render shows the scene");
     }
+
+    #[test]
+    fn resample_1x1_image_fills_layer() {
+        // A 1x1 image resampled to 256x256 fills the whole layer with that pixel.
+        let img = solid([100, 150, 200]);
+        let out = resample(&img);
+        assert_eq!(out.len(), 256 * 256 * 4);
+        for chunk in out.as_chunks::<4>().0 {
+            assert_eq!(chunk, &[100, 150, 200, 255]);
+        }
+    }
+
+    #[test]
+    fn mean_linear_invalid_image_returns_none() {
+        // mean_linear returns None for an invalid image (wrong size or zero dimensions).
+        let invalid = ImageRgba { width: 0, height: 0, ..Default::default() };
+        assert_eq!(mean_linear(&invalid), None);
+        let wrong_size = ImageRgba { width: 2, height: 2, rgba: vec![0; 3], ..Default::default() };
+        assert_eq!(mean_linear(&wrong_size), None);
+    }
+
+    #[test]
+    fn scene_layers_caps_at_max() {
+        // A scene with more than MAX_SCENE_LAYERS textures layers only the first MAX_SCENE_LAYERS.
+        let mut scene = Scene3d::default();
+        for i in 0..300 {
+            scene.textures.insert(format!("sym:{i:03}:t0"), solid([200, 100, 50]));
+        }
+        let layers = SceneLayers::of(&scene);
+        assert_eq!(layers.keys().len(), MAX_SCENE_LAYERS as usize);
+        assert_eq!(layers.layer_count(), MAX_LAYERS);
+        assert_eq!(layers.layer_of("sym:000:t0"), Some(LAYERS));
+        assert_eq!(layers.layer_of("sym:245:t0"), Some(MAX_LAYERS - 1));
+        assert_eq!(layers.layer_of("sym:246:t0"), None);
+    }
 }

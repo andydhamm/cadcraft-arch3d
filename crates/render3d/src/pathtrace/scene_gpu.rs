@@ -1280,7 +1280,8 @@ mod tests {
         assert_eq!(luminance_rgb([0.0; 3]), [1.0; 3]);
     }
 
-    use crate::types::ArchId;
+    use crate::types::{ArchId, MaterialDef};
+    use cadcraft_doc::arch::ImageRgba;
     use cadcraft_geom::Vec3;
     use std::sync::Arc;
 
@@ -2233,6 +2234,46 @@ mod tests {
                 ..Default::default()
             }
         );
+    }
+
+    #[test]
+    fn material_for_scene_missing_texture_uses_base() {
+        // A MaterialDef with a texture key not in the scene uses just the base colour.
+        let mut scene = Scene3d::default();
+        let def = MaterialDef {
+            base_color: [0.5, 0.3, 0.1, 1.0],
+            metallic: 0.2,
+            roughness: 0.6,
+            texture: Some("sym:missing:t0".into()),
+            ..Default::default()
+        };
+        scene.materials.insert("sym:k:0".into(), def);
+        let m = material_for_scene(&scene, "sym:k:0");
+        assert_eq!(m.albedo, [0.5, 0.3, 0.1]);
+        assert_eq!(m.metallic, 0.2);
+        assert_eq!(m.roughness, 0.6);
+    }
+
+    #[test]
+    fn material_for_scene_invalid_texture_uses_base() {
+        // A MaterialDef with a texture key in the scene but an invalid image uses just the base colour.
+        let mut scene = Scene3d::default();
+        let invalid = ImageRgba { width: 0, height: 0, ..Default::default() };
+        scene.textures.insert("sym:k:t0".into(), invalid);
+        let def = MaterialDef { base_color: [0.4, 0.5, 0.6, 1.0], texture: Some("sym:k:t0".into()), ..Default::default() };
+        scene.materials.insert("sym:k:0".into(), def);
+        let m = material_for_scene(&scene, "sym:k:0");
+        assert_eq!(m.albedo, [0.4, 0.5, 0.6]);
+    }
+
+    #[test]
+    fn material_for_prefix_only_names() {
+        // "window-" (prefix only, no part) falls back to the neutral material.
+        let m1 = material_for("window-");
+        assert_eq!(m1.albedo, [0.75, 0.75, 0.75]);
+        // "door-" (prefix only) matches the "door" prefix in material_pbr, so it gets door albedo.
+        let m2 = material_for("door-");
+        assert_eq!(m2.albedo, material_pbr("door-").0);
     }
 }
 
