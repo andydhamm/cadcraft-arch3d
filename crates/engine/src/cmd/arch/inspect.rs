@@ -4058,4 +4058,91 @@ mod tests {
         };
         assert_eq!(before, after, "arch.inspect must not bump arch_revision");
     }
+
+    #[test]
+    fn inspect_walls_reports_handles_multiple_walls() {
+        let mut s = Session::new();
+        exec(
+            &mut s,
+            "wall",
+            &json!({
+                "points": [[0.0, 0.0], [5.0, 0.0]],
+                "thickness": 0.1,
+            }),
+        );
+        exec(
+            &mut s,
+            "wall",
+            &json!({
+                "points": [[5.0, 0.0], [5.0, 5.0]],
+                "thickness": 0.2,
+            }),
+        );
+        exec(
+            &mut s,
+            "wall",
+            &json!({
+                "points": [[5.0, 5.0], [0.0, 5.0]],
+                "thickness": 0.15,
+            }),
+        );
+        let v = exec(&mut s, "arch.inspect", &json!({ "walls": true }));
+        let walls = v["walls"].as_array().expect("walls array missing");
+        assert_eq!(walls.len(), 3, "expected 3 walls");
+        assert_eq!(walls[0]["id"], "w0");
+        assert_eq!(walls[0]["handle"], "a0000000");
+        assert_eq!(walls[1]["id"], "w1");
+        assert_eq!(walls[1]["handle"], "a0000001");
+        assert_eq!(walls[2]["id"], "w2");
+        assert_eq!(walls[2]["handle"], "a0000002");
+        // Verify each wall has the required fields
+        for w in walls {
+            assert!(w["id"].is_string());
+            assert!(w["handle"].is_string());
+            assert!(w["thickness"].is_number());
+            assert!(w["exterior"].is_boolean());
+            assert!(w["start"].is_array());
+            assert!(w["end"].is_array());
+        }
+    }
+
+    #[test]
+    fn inspect_walls_without_flags_does_not_report_handles() {
+        let mut s = Session::new();
+        exec(
+            &mut s,
+            "wall",
+            &json!({
+                "points": [[0.0, 0.0], [5.0, 0.0]],
+                "thickness": 0.1,
+            }),
+        );
+        let v = exec(&mut s, "arch.inspect", &json!({}));
+        let walls = v["walls"].as_array().expect("walls array missing");
+        assert_eq!(walls.len(), 1);
+        // Without the walls flag, id is numeric, not a label
+        assert_eq!(walls[0]["id"], 0);
+        // But handle is still present
+        assert_eq!(walls[0]["handle"], "a0000000");
+    }
+
+    #[test]
+    fn inspect_walls_with_exterior_flag() {
+        let mut s = Session::new();
+        exec(
+            &mut s,
+            "wall",
+            &json!({
+                "points": [[0.0, 0.0], [5.0, 0.0]],
+                "thickness": 0.2,
+                "exterior": true,
+            }),
+        );
+        let v = exec(&mut s, "arch.inspect", &json!({ "walls": true }));
+        let walls = v["walls"].as_array().expect("walls array missing");
+        assert_eq!(walls.len(), 1);
+        assert_eq!(walls[0]["exterior"], true);
+        assert_eq!(walls[0]["id"], "w0");
+        assert_eq!(walls[0]["handle"], "a0000000");
+    }
 }
