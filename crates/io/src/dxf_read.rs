@@ -71,6 +71,8 @@ struct Rx {
     block: Option<String>,
     /// The points HATCH boundary curves may still be sampled into.
     curves: hatch::CurvePoints,
+    /// Handles of the arch proxy linework entities read, dropped once the arch records are read.
+    arch_proxies: Vec<Handle>,
 }
 
 /// Read a DXF file into a drawing.
