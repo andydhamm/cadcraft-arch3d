@@ -975,19 +975,71 @@ mod tests {
 
         // If we run a command that *doesn't* change the drawing (e.g. a read-only command),
         // the Arc should be identical.
-        let before_arc_2 = s.doc().unwrap().clone();
-        s.execute("arch.inspect", &json!({})).unwrap();
-        let after_arc_2 = s.doc().unwrap().clone();
-
-        // Compare the Arcs inside the cloned Drawings? No, s.doc() returns &Arc<Drawing>.
-        // We cloned the Drawing, so we have two independent Drawings.
-        // The test intent was likely to check if the Session's internal Arc changed.
-        // Let's check the Session's internal Arc directly.
         let before_arc = s.doc().unwrap();
         s.execute("arch.inspect", &json!({})).unwrap();
         let after_arc = s.doc().unwrap();
 
         assert!(Arc::ptr_eq(before_arc, after_arc), "Arc should be identical for read-only command");
+    }
+
+    #[test]
+    fn dimauto_empty_model_is_noop() {
+        let mut s = Session::new();
+        // dimauto on an empty model should succeed but do nothing (no rows, no dimensions)
+        let r = s.execute("dimauto", &json!({}));
+        assert!(r.is_ok(), "dimauto on empty model should succeed");
+        let v = r.unwrap();
+        assert_eq!(v["dimensions"], 0);
+        assert!(v["rows"].as_array().unwrap().is_empty());
+        assert!(s.doc().unwrap().arch.auto_dims.is_empty());
+    }
+
+    #[test]
+    fn dimauto_non_finite_wall_is_safe() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            let w = cadcraft_doc::Wall {
+                start: cadcraft_geom::Vec2::new(f64::NAN, 0.0),
+                end: cadcraft_geom::Vec2::new(10.0, 0.0),
+                thickness: 0.2,
+                height: 2.4,
+                exterior: true,
+                ..Default::default()
+            };
+            d.arch.push_wall(w);
+            d.touch_arch();
+        }
+        // dimauto should not crash
+        let r = s.execute("dimauto", &json!({}));
+        assert!(r.is_ok(), "dimauto should handle non-finite geometry without crashing");
+
+        // The dimensions might be invalid, but the command shouldn't panic.
+        // We just check that we can still inspect.
+        let v = s.execute("arch.inspect", &json!({ "autoDims": true })).unwrap();
+        assert!(v["autoDims"].is_array());
+    }
+
+    #[test]
+    fn dimauto_zero_thickness_wall_is_safe() {
+        let mut s = Session::new();
+        if let Ok(d) = s.doc_mut() {
+            let w = cadcraft_doc::Wall {
+                start: cadcraft_geom::Vec2::new(0.0, 0.0),
+                end: cadcraft_geom::Vec2::new(10.0, 0.0),
+                thickness: 0.0,
+                height: 2.4,
+                exterior: true,
+                ..Default::default()
+            };
+            d.arch.push_wall(w);
+            d.touch_arch();
+        }
+        // dimauto should not crash
+        let r = s.execute("dimauto", &json!({}));
+        assert!(r.is_ok(), "dimauto should handle zero-thickness wall without crashing");
+
+        let v = s.execute("arch.inspect", &json!({ "autoDims": true })).unwrap();
+        assert!(v["autoDims"].is_array());
     }
 
     #[test]
