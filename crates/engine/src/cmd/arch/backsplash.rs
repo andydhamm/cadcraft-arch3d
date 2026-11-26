@@ -427,4 +427,30 @@ mod tests {
         assert!(v.get("backsplashes").is_none());
         assert_eq!(v["cabinets"][0]["backsplash"], true);
     }
+
+    #[test]
+    fn backsplash_edit_removes_paint_with_null_material() {
+        let mut s = kitchen();
+        s.execute("backsplash", &json!({ "run": "cb0", "material": "material-marble" })).unwrap();
+        assert!(s.doc().unwrap().arch.paints.contains_key("backsplash/bs0"));
+
+        // Edit with null material removes the paint entry
+        s.execute("backsplash.edit", &json!({ "id": "bs0", "material": null })).unwrap();
+        assert!(!s.doc().unwrap().arch.paints.contains_key("backsplash/bs0"));
+
+        // Edit with a new material adds it back
+        s.execute("backsplash.edit", &json!({ "id": "bs0", "material": "siding" })).unwrap();
+        assert!(s.doc().unwrap().arch.paints.contains_key("backsplash/bs0"));
+    }
+
+    #[test]
+    fn backsplash_delete_removes_paint() {
+        let mut s = kitchen();
+        s.execute("backsplash", &json!({ "run": "cb0", "material": "material-marble" })).unwrap();
+        assert!(s.doc().unwrap().arch.paints.contains_key("backsplash/bs0"));
+
+        s.execute("backsplash.delete", &json!({ "id": "bs0" })).unwrap();
+        assert!(s.doc().unwrap().arch.backsplashes.is_empty());
+        assert!(!s.doc().unwrap().arch.paints.contains_key("backsplash/bs0"));
+    }
 }
