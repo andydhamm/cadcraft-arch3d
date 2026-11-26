@@ -17,6 +17,9 @@ pub fn furnishing_layer(f: &Furnishing) -> &'static str {
 /// The convex hull (counter-clockwise, no repeated or collinear points) of the furnishing's
 /// placed symbol seen from above; a missing symbol gives the rotated size rectangle.
 pub fn plan_outline(model: &ArchModel, f: &Furnishing) -> Vec<Vec2> {
+    if !f.elevation.is_finite() {
+        return Vec::new();
+    }
     let mut pts: Vec<Vec2> = Vec::new();
     match model.symbols.get(&f.symbol) {
         Some(sym) if sym.parts.iter().any(|p| !p.positions.is_empty()) => {
