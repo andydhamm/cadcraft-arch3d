@@ -416,7 +416,7 @@ mod tests {
     fn image_rgba_mean_srgb_single_pixel_and_bounds() {
         let single = ImageRgba { width: 1, height: 1, rgba: vec![10, 20, 30, 255] };
         assert_eq!(single.mean_srgb(), [10, 20, 30]);
-        let white = ImageRgba { width: 2, height: 2, rgba: vec![255, 255, 255, 255; 4] };
+        let white = ImageRgba { width: 2, height: 2, rgba: vec![255u8; 16] };
         assert_eq!(white.mean_srgb(), [255, 255, 255]);
         let empty = ImageRgba::default();
         assert_eq!(empty.mean_srgb(), [0, 0, 0]);
