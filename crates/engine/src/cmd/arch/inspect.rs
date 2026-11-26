@@ -3970,7 +3970,7 @@ mod tests {
     /// default together.
     #[test]
     fn inspect_wall_finish_each_variant_and_null() {
-        let s = session_with(|m| {
+        let mut s = session_with(|m| {
             m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), ..Wall::default() });
             m.walls[0].finish = Some(cadcraft_doc::arch::Finish::Brick);
             m.push_wall(Wall { start: Vec2::new(6.0, 0.0), end: Vec2::new(10.0, 0.0), ..Wall::default() });
@@ -3990,7 +3990,7 @@ mod tests {
     /// pins for walls but never for rooms), while a finished room reports its name.
     #[test]
     fn inspect_floor_finish_null_when_unset() {
-        let s = session_with(|m| {
+        let mut s = session_with(|m| {
             m.push_room(Room {
                 name: "Finished".into(),
                 room_type: RoomType::Living,
@@ -4020,7 +4020,7 @@ mod tests {
     #[test]
     fn inspect_roof_covering_null_when_unset() {
         use cadcraft_doc::arch::{Finish, Roof};
-        let s = session_with(|m| {
+        let mut s = session_with(|m| {
             m.push_roof(Roof { covering: Some(Finish::Shingles), ..Roof::default() });
             m.push_roof(Roof { covering: None, ..Roof::default() });
         });
@@ -4037,7 +4037,7 @@ mod tests {
     #[test]
     fn inspect_wall_finish_is_read_only() {
         use cadcraft_doc::arch::Finish;
-        let s = session_with(|m| {
+        let mut s = session_with(|m| {
             m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), ..Wall::default() });
             m.walls[0].finish = Some(Finish::Brick);
         });
