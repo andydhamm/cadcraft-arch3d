@@ -1534,4 +1534,180 @@ mod tests {
             }
         }
     }
+
+    /// A window with only the right sill side enabled produces a single `window-sill` mesh.
+    #[test]
+    fn a_window_with_right_sill_only_produces_one_sill() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.sill_sides = OpeningSides { left: false, right: true };
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let sills: Vec<&Mesh> = meshes.iter().filter(|m| m.material.contains("sill")).collect();
+        assert_eq!(sills.len(), 1, "expected 1 sill mesh, got {}", sills.len());
+        assert_eq!(sills[0].material, "window-sill", "expected window-sill, got {}", sills[0].material);
+    }
+
+    /// A window with only the left sill side enabled produces a single `window-sill-left` mesh.
+    #[test]
+    fn a_window_with_left_sill_only_produces_one_sill() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.sill_sides = OpeningSides { left: true, right: false };
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let sills: Vec<&Mesh> = meshes.iter().filter(|m| m.material.contains("sill")).collect();
+        assert_eq!(sills.len(), 1, "expected 1 sill mesh, got {}", sills.len());
+        assert_eq!(sills[0].material, "window-sill-left", "expected window-sill-left, got {}", sills[0].material);
+    }
+
+    /// A window with both sill sides enabled produces two sill meshes.
+    #[test]
+    fn a_window_with_both_sill_sides_produces_two_sills() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.sill_sides = OpeningSides { left: true, right: true };
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let sills: Vec<&Mesh> = meshes.iter().filter(|m| m.material.contains("sill")).collect();
+        assert_eq!(sills.len(), 2, "expected 2 sill meshes, got {}", sills.len());
+        let has_right = sills.iter().any(|m| m.material == "window-sill-right");
+        let has_left = sills.iter().any(|m| m.material == "window-sill-left");
+        assert!(has_right, "missing window-sill-right");
+        assert!(has_left, "missing window-sill-left");
+    }
+
+    /// A window with only right casing enabled produces a single `window-casing` mesh.
+    #[test]
+    fn a_window_with_right_casing_only_produces_one_casing() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.casing_sides = OpeningSides { left: false, right: true };
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let casings: Vec<&Mesh> = meshes.iter().filter(|m| m.material.contains("casing")).collect();
+        assert_eq!(casings.len(), 1, "expected 1 casing mesh, got {}", casings.len());
+        assert_eq!(casings[0].material, "window-casing", "expected window-casing, got {}", casings[0].material);
+    }
+
+    /// A window with only left casing enabled produces a single `window-casing-left` mesh.
+    #[test]
+    fn a_window_with_left_casing_only_produces_one_casing() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.casing_sides = OpeningSides { left: true, right: false };
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let casings: Vec<&Mesh> = meshes.iter().filter(|m| m.material.contains("casing")).collect();
+        assert_eq!(casings.len(), 1, "expected 1 casing mesh, got {}", casings.len());
+        assert_eq!(casings[0].material, "window-casing-left", "expected window-casing-left, got {}", casings[0].material);
+    }
+
+    /// A window with both casing sides enabled produces two casing meshes.
+    #[test]
+    fn a_window_with_both_casing_sides_produces_two_casings() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.casing_sides = OpeningSides { left: true, right: true };
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let casings: Vec<&Mesh> = meshes.iter().filter(|m| m.material.contains("casing")).collect();
+        assert_eq!(casings.len(), 2, "expected 2 casing meshes, got {}", casings.len());
+        let has_right = casings.iter().any(|m| m.material == "window-casing-right");
+        let has_left = casings.iter().any(|m| m.material == "window-casing-left");
+        assert!(has_right, "missing window-casing-right");
+        assert!(has_left, "missing window-casing-left");
+    }
+
+    /// A grille with top_only=true produces bars only in the upper half of the glass.
+    #[test]
+    fn a_grille_with_top_only_produces_bars_in_upper_half() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.grille = Some(Grille { across: 2, down: 2, top_only: true });
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let grille = meshes.iter().find(|m| m.material == "window-grille");
+        assert!(grille.is_some(), "missing window-grille mesh");
+        let g = grille.unwrap();
+        // All grille vertices should be in the upper half of the glass
+        let glass = meshes.iter().find(|m| m.material == "window-glass").unwrap();
+        let g_min_z = glass.positions.iter().map(|p| p[2] as f64).fold(f64::MAX, f64::min);
+        let g_max_z = glass.positions.iter().map(|p| p[2] as f64).fold(f64::MIN, f64::max);
+        let mid_z = (g_min_z + g_max_z) / 2.0;
+        for p in &g.positions {
+            assert!(p[2] as f64 >= mid_z - 1e-6, "grille vertex below mid-height: z={}", p[2] as f64);
+        }
+    }
+
+    /// A window at the start of the wall (offset 0) still produces all components.
+    #[test]
+    fn a_window_at_wall_start_produces_all_components() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.offset = 0.0;
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        assert!(meshes.iter().any(|m| m.material == "window-frame"), "missing window-frame");
+        assert!(meshes.iter().any(|m| m.material == "window-glass"), "missing window-glass");
+        assert!(meshes.iter().any(|m| m.material == "window-sill"), "missing window-sill");
+        assert!(meshes.iter().any(|m| m.material == "window-header"), "missing window-header");
+    }
+
+    /// A window at the end of the wall (offset = wall length) still produces all components.
+    #[test]
+    fn a_window_at_wall_end_produces_all_components() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.offset = 10.0;
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        assert!(meshes.iter().any(|m| m.material == "window-frame"), "missing window-frame");
+        assert!(meshes.iter().any(|m| m.material == "window-glass"), "missing window-glass");
+        assert!(meshes.iter().any(|m| m.material == "window-sill"), "missing window-sill");
+        assert!(meshes.iter().any(|m| m.material == "window-header"), "missing window-header");
+    }
+
+    /// A very narrow window (width just above 2*frame_width) still produces glass.
+    #[test]
+    fn a_very_narrow_window_still_produces_glass() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.width = 0.11; // Just above 2 * 0.05 frame_width
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        assert!(meshes.iter().any(|m| m.material == "window-glass"), "missing window-glass for narrow window");
+    }
+
+    /// A window with frame_width equal to half the width produces zero-width glass (no glass mesh).
+    #[test]
+    fn a_window_with_frame_width_half_width_produces_no_glass() {
+        let model = wall_model();
+        let mut o = window_opening();
+        o.width = 0.10;
+        o.frame_width = 0.05;
+        let meshes = opening_meshes(&walls_map(&model), &o, None);
+        let has_glass = meshes.iter().any(|m| m.material == "window-glass");
+        assert!(!has_glass, "window with zero-width glass should not produce a glass mesh");
+    }
+
+    /// All opening component meshes are closed manifolds (regression: merged meshes must weld).
+    #[test]
+    fn all_door_meshes_are_closed_manifolds() {
+        let model = wall_model();
+        for o in [door_opening()] {
+            for m in opening_meshes(&walls_map(&model), &o, None) {
+                assert!(m.is_manifold(), "door component {} is not a closed manifold", m.material);
+                assert!(m.triangle_count() > 0, "door component {} has no triangles", m.material);
+            }
+        }
+    }
+
+    /// Opening meshes are deterministic across multiple calls.
+    #[test]
+    fn opening_meshes_are_deterministic() {
+        let model = wall_model();
+        let o = window_opening();
+        let wm = walls_map(&model);
+        let m1 = opening_meshes(&wm, &o, None);
+        let m2 = opening_meshes(&wm, &o, None);
+        assert_eq!(m1.len(), m2.len(), "mesh count differs between calls");
+        for (a, b) in m1.iter().zip(m2.iter()) {
+            assert_eq!(a.material, b.material);
+            assert_eq!(a.positions, b.positions);
+            assert_eq!(a.normals, b.normals);
+            assert_eq!(a.uvs, b.uvs);
+            assert_eq!(a.indices, b.indices);
+        }
+    }
 }
