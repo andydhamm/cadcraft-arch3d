@@ -3839,4 +3839,155 @@ mod tests {
         // The key is it doesn't crash.
         assert!(scene.mesh_for(&ArchId(1)).is_none() || scene.mesh_for(&ArchId(1)).unwrap().triangle_count() == 0);
     }
+
+    #[test]
+    fn build_dirty_reuses_non_dirty_walls_and_rebuilds_dirty() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.3,
+            height: 2.5,
+            ..Default::default()
+        });
+        model.walls.push(Wall {
+            id: ArchId(2),
+            start: Vec2::new(0.0, 5.0),
+            end: Vec2::new(10.0, 5.0),
+            thickness: 0.3,
+            height: 2.5,
+            ..Default::default()
+        });
+
+        let full = Scene3d::build(&model);
+        assert_eq!(full.mesh_count(), 2);
+
+        // Edit wall 2
+        let mut edited = model.clone();
+        if let Some(w) = edited.walls.iter_mut().find(|w| w.id == ArchId(2)) {
+            w.height = 3.0;
+        }
+
+        let dirty: BTreeSet<ArchId> = BTreeSet::from([ArchId(2)]);
+        let partial = Scene3d::build_dirty(&edited, &dirty, &full);
+        let full_edited = Scene3d::build(&edited);
+
+        assert_eq!(partial.mesh_count(), full_edited.mesh_count());
+
+        // Wall 1 should be reused (identical to full)
+        let full_w1 = full.mesh_for(&ArchId(1)).unwrap();
+        let partial_w1 = partial.mesh_for(&ArchId(1)).unwrap();
+        assert_eq!(full_w1.positions, partial_w1.positions);
+
+        // Wall 2 should be rebuilt (different from full, same as full_edited)
+        let partial_w2 = partial.mesh_for(&ArchId(2)).unwrap();
+        let full_edited_w2 = full_edited.mesh_for(&ArchId(2)).unwrap();
+        assert_eq!(partial_w2.positions, full_edited_w2.positions);
+        assert_ne!(full_w1.positions, partial_w2.positions); // Just a sanity check they are different walls
+    }
+
+    #[test]
+    fn build_handles_degenerate_walls_without_crashing() {
+        let mut model = ArchModel::default();
+
+        // Zero-length wall
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(0.0, 0.0),
+            thickness: 0.15,
+            height: 2.7,
+            ..Default::default()
+        });
+
+        // Zero-thickness wall
+        model.walls.push(Wall {
+            id: ArchId(2),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(1.0, 0.0),
+            thickness: 0.0,
+            height: 2.7,
+            ..Default::default()
+        });
+
+        // Zero-height wall
+        model.walls.push(Wall {
+            id: ArchId(3),
+            start: Vec2::new(0.0, 1.0),
+            end: Vec2::new(1.0, 1.0),
+            thickness: 0.15,
+            height: 0.0,
+            ..Default::default()
+        });
+
+        // NaN coordinates
+        model.walls.push(Wall {
+            id: ArchId(4),
+            start: Vec2::new(f64::NAN, 0.0),
+            end: Vec2::new(1.0, f64::NAN),
+            thickness: 0.15,
+            height: 2.7,
+            ..Default::default()
+        });
+
+        // Valid wall
+        model.walls.push(Wall {
+            id: ArchId(5),
+            start: Vec2::new(2.0, 0.0),
+            end: Vec2::new(3.0, 0.0),
+            thickness: 0.15,
+            height: 2.7,
+            ..Default::default()
+        });
+
+        let scene = Scene3d::build(&model);
+
+        // Valid wall must be present
+        assert!(scene.mesh_for(&ArchId(5)).is_some(), "Valid wall should be built");
+
+        // Degenerate walls should be skipped (no mesh or empty mesh)
+        // Depending on implementation, they might be skipped entirely or have empty positions.
+        // The spec says "Never drop a wall mesh for a non-degenerate wall", implying degenerate ones can be dropped.
+        // And "Filter meshes with empty positions".
+
+        for id in [ArchId(1), ArchId(2), ArchId(3), ArchId(4)] {
+            if let Some(m) = scene.mesh_for(&id) {
+                assert!(m.positions.is_empty() || m.triangle_count() == 0, "Degenerate wall {} should have empty mesh", id.0);
+            }
+        }
+    }
+
+    #[test]
+    fn build_dirty_with_deleted_opening_removes_mesh() {
+        let mut model = ArchModel::default();
+        model.walls.push(Wall {
+            id: ArchId(1),
+            start: Vec2::new(0.0, 0.0),
+            end: Vec2::new(10.0, 0.0),
+            thickness: 0.3,
+            height: 2.5,
+            ..Default::default()
+        });
+
+        let mut opening = Opening::default();
+        opening.id = ArchId(10);
+        opening.host = ArchId(1);
+        opening.offset = 5.0;
+        opening.width = 1.0;
+        opening.height = 1.5;
+        model.openings.push(opening);
+
+        let full = Scene3d::build(&model);
+        assert!(full.mesh_for(&ArchId(10)).is_some(), "Opening mesh should exist in full build");
+
+        let mut edited = model.clone();
+        edited.openings.clear();
+
+        let dirty: BTreeSet<ArchId> = BTreeSet::from([ArchId(10)]);
+        let partial = Scene3d::build_dirty(&edited, &dirty, &full);
+
+        assert!(partial.mesh_for(&ArchId(10)).is_none(), "Deleted opening mesh should be removed");
+        assert!(partial.mesh_for(&ArchId(1)).is_some(), "Host wall should remain");
+    }
 }
