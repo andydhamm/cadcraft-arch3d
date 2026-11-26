@@ -94,9 +94,7 @@ pub(crate) fn build_arch_with(d: &Drawing, plotting: bool, ann: &cadcraft_arch::
             // when every vertex is a number, otherwise fall back to the raw rectangle so a
             // bad solve never leaks non-finite vertices into the display list.
             let ring: Vec<Vec2> = match solved.get(&wall.id) {
-                Some(r) if !r.is_empty() && r.iter().all(|p| p.is_finite()) {
-                    r.iter().map(|p| p.clone()).collect()
-                }
+                Some(r) if !r.is_empty() && r.iter().all(|p| p.is_finite()) => r.iter().map(|p| p.clone()).collect(),
                 _ => vec![a, b, c, e],
             };
 
@@ -1928,7 +1926,10 @@ mod tests {
         // Mitred corners present; raw corner (10.0, ±0.1) absent.
         assert!(pts.iter().any(|p| (p.x - (-t / 2.0)).abs() < 1e-6 && (p.y - (-t / 2.0)).abs() < 1e-6), "missing (-0.1,-0.1)");
         assert!(pts.iter().any(|p| (p.x - (10.0 + t / 2.0)).abs() < 1e-6 && (p.y - (-t / 2.0)).abs() < 1e-6), "missing (10.1,-0.1)");
-        assert!(pts.iter().all(|p| !(((p.x - 10.0).abs() < 1e-6) && ((p.y - t / 2.0).abs() < 1e-6 || (p.y + t / 2.0).abs() < 1e-6))), "raw corner (10, ±0.1) still drawn");
+        assert!(
+            pts.iter().all(|p| !(((p.x - 10.0).abs() < 1e-6) && ((p.y - t / 2.0).abs() < 1e-6 || (p.y + t / 2.0).abs() < 1e-6))),
+            "raw corner (10, ±0.1) still drawn"
+        );
 
         // Two 2-vertex gap-edge prims (one per side of the opening) are still cut.
         let gap_edges: Vec<&DPrim> = list.prims.iter().filter(|p| p.handle == h && p.kind == Kind::Polyline && p.len == 2).collect();
@@ -2371,5 +2372,88 @@ mod tests {
         }
         d.arch.plan_level = Some(1);
         let _ = build_arch(&d, &Options::default(), false);
+    }
+
+    /// An isolated wall has no join neighbour, so its ring equals the raw rectangle.
+    /// Pin the solved-equals-raw contract: the outline is the exact five-point raw ring and
+    /// the display bounds reach the raw extents (not past them).
+    #[test]
+    fn plan_poché_isolated_wall_draws_the_raw_rectangle() {
+        let mut d = Drawing::new_metric();
+        let wid = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), 0.2));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        let h = arch_handle(wid);
+        // One tris + one closed outline (five points, first repeated at the end).
+        assert_eq!(list.prims.iter().filter(|p| p.handle == h).count(), 2, "isolated wall should draw exactly two prims");
+        let outline = list.prims.iter().find(|p| p.handle == h && p.kind == Kind::Polyline && p.len >= 4).expect("no outline prim");
+        let pts = list.points(outline);
+        let exp = [Vec2::new(0.0, -0.1), Vec2::new(10.0, -0.1), Vec2::new(10.0, 0.1), Vec2::new(0.0, 0.1), Vec2::new(0.0, -0.1)];
+        assert_eq!(pts.len(), 5, "outline should be a closed five-point ring");
+        for (i, (got, e)) in pts.iter().zip(exp.iter()).enumerate() {
+            assert!((got.x - e.x).abs() < 1e-9, "outline x[{}]: {} != {}", i, got.x, e.x);
+            assert!((got.y - e.y).abs() < 1e-9, "outline y[{}]: {} != {}", i, got.y, e.y);
+        }
+        // Bounds reach the raw rectangle extents exactly (the ring is not extended past them).
+        assert!((list.bounds.min.x - 0.0).abs() < 1e-9, "min x: {}", list.bounds.min.x);
+        assert!((list.bounds.max.x - 10.0).abs() < 1e-9, "max x: {}", list.bounds.max.x);
+        assert!((list.bounds.min.y - (-0.1)).abs() < 1e-9, "min y: {}", list.bounds.min.y);
+        assert!((list.bounds.max.y - 0.1).abs() < 1e-9, "max y: {}", list.bounds.max.y);
+    }
+
+    /// Two walls that never touch each join independently; each wall's outline is its own
+    /// raw rectangle (a wall's solved ring is never borrowed by another wall). Each draws
+    /// exactly two prims on its own proxy handle.
+    #[test]
+    fn plan_poché_two_separated_walls_keep_their_own_raw_rectangles() {
+        let mut d = Drawing::new_metric();
+        let wid0 = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
+        let wid1 = d.arch.add_wall(wall(Vec2::new(20.0, 0.0), Vec2::new(24.0, 0.0), 0.2));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        for (h, exp_min_x, exp_max_x) in [(arch_handle(wid0), 0.0, 4.0), (arch_handle(wid1), 20.0, 24.0)] {
+            assert_eq!(list.prims.iter().filter(|p| p.handle == h).count(), 2, "wall should draw exactly two prims");
+            let outline = list.prims.iter().find(|p| p.handle == h && p.kind == Kind::Polyline && p.len >= 4).expect("no outline prim");
+            let pts = list.points(outline);
+            assert_eq!(pts.len(), 5, "outline should be a closed five-point ring");
+            let min_x = pts.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+            let max_x = pts.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+            assert!((min_x - exp_min_x).abs() < 1e-9, "min x: {} != {}", min_x, exp_min_x);
+            assert!((max_x - exp_max_x).abs() < 1e-9, "max x: {} != {}", max_x, exp_max_x);
+        }
+    }
+
+    /// The mitred solved ring (not the raw rectangle) is emitted: the raw top corners
+    /// (0, 0.1) and (10, 0.1) are absent while the mitred corners (0.1, 0.1) and (9.9, 0.1)
+    /// are present on the bottom wall of the 10x8 rectangle.
+    #[test]
+    fn plan_poché_solved_ring_replaces_raw_corner() {
+        let t = 0.2;
+        let mut d = Drawing::new_metric();
+        let id0 = d.arch.add_wall(wall(Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), t));
+        d.arch.add_wall(wall(Vec2::new(10.0, 0.0), Vec2::new(10.0, 8.0), t));
+        d.arch.add_wall(wall(Vec2::new(10.0, 8.0), Vec2::new(0.0, 8.0), t));
+        d.arch.add_wall(wall(Vec2::new(0.0, 8.0), Vec2::new(0.0, 0.0), t));
+        d.touch_arch();
+        let list = build_arch(&d, &Options::default(), false);
+        let h = arch_handle(id0);
+        let outline =
+            list.prims.iter().find(|p| p.handle == h && p.kind == Kind::Polyline && p.len >= 4).expect("no outline prim for the bottom wall");
+        let pts = list.points(outline);
+        // Raw top corners must NOT be in the solved ring.
+        assert!(!pts.iter().any(|p| (p.x - 0.0).abs() < 1e-6 && (p.y - t / 2.0).abs() < 1e-6), "raw corner (0, 0.1) must not be in the solved ring");
+        assert!(
+            !pts.iter().any(|p| (p.x - 10.0).abs() < 1e-6 && (p.y - t / 2.0).abs() < 1e-6),
+            "raw corner (10, 0.1) must not be in the solved ring"
+        );
+        // The mitred corners must be.
+        assert!(
+            pts.iter().any(|p| (p.x - t / 2.0).abs() < 1e-6 && (p.y - t / 2.0).abs() < 1e-6),
+            "mitred corner (0.1, 0.1) must be in the solved ring"
+        );
+        assert!(
+            pts.iter().any(|p| (p.x - (10.0 - t / 2.0)).abs() < 1e-6 && (p.y - t / 2.0).abs() < 1e-6),
+            "mitred corner (9.9, 0.1) must be in the solved ring"
+        );
     }
 }
