@@ -383,6 +383,22 @@ mod tests {
         assert_eq!(r["openings"].as_u64(), Some(1), "expected 1 cut opening");
     }
 
+    /// Openings on multiple walls are all counted.
+    #[test]
+    fn build3d_openings_count_multiple_walls() {
+        let mut s = fresh_session();
+        let d = s.doc_mut().unwrap();
+        let w1 = d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+        let w2 = d.arch.push_wall(Wall { start: Vec2::new(10.0, 0.0), end: Vec2::new(10.0, 8.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+        d.arch.push_opening(Opening::new(w1, 3.0, 0.9, 2.0, OpeningKind::Door));
+        d.arch.push_opening(Opening::new(w1, 7.0, 1.2, 1.5, OpeningKind::Window));
+        d.arch.push_opening(Opening::new(w2, 2.0, 1.2, 1.5, OpeningKind::Window));
+        d.arch.push_opening(Opening::new(w2, 5.0, 0.9, 2.0, OpeningKind::Door));
+        d.touch_arch();
+        let r = s.execute("build3d", &json!({})).unwrap();
+        assert_eq!(r["openings"].as_u64(), Some(4), "expected 4 openings across 2 walls");
+    }
+
     #[test]
     fn build3d_reports_floor_and_ceiling_counts() {
         let mut s = rooms_session();

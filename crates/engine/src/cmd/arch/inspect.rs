@@ -4715,6 +4715,106 @@ mod tests {
         assert!((end - start - 1.02).abs() < 1e-6, "gap span must equal the stored rough width 1.02: {span}", span = end - start);
     }
 
+    /// The niche opening kind serializes as "niche".
+    #[test]
+    fn inspect_reports_niche_kind_label() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening::new(wid, 4.0, 0.5, 0.4, OpeningKind::Niche));
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert_eq!(openings.len(), 1);
+        assert_eq!(openings[0]["kind"].as_str().expect("kind should be a string"), "niche");
+    }
+
+    /// Multiple openings on the same wall: all report the same host, distinct handles,
+    /// and their stored offsets.
+    #[test]
+    fn inspect_multiple_openings_on_same_wall() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening::new(wid, 2.0, 0.9, 2.0, OpeningKind::Door));
+                d.arch.push_opening(Opening::new(wid, 5.0, 1.2, 1.5, OpeningKind::Window));
+                d.arch.push_opening(Opening::new(wid, 8.0, 0.9, 2.0, OpeningKind::Door));
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert_eq!(openings.len(), 3, "expected 3 openings on the same wall");
+        for o in openings {
+            assert_eq!(o["host"], "w0", "all openings should be on wall w0");
+        }
+        let h0 = openings[0]["handle"].as_str().expect("handle 0");
+        let h1 = openings[1]["handle"].as_str().expect("handle 1");
+        let h2 = openings[2]["handle"].as_str().expect("handle 2");
+        assert_ne!(h0, h1);
+        assert_ne!(h1, h2);
+        assert_ne!(h0, h2);
+        assert!((openings[0]["offset"].as_f64().expect("offset 0") - 2.0).abs() < 1e-9);
+        assert!((openings[1]["offset"].as_f64().expect("offset 1") - 5.0).abs() < 1e-9);
+        assert!((openings[2]["offset"].as_f64().expect("offset 2") - 8.0).abs() < 1e-9);
+    }
+
+    /// An opening at the very start of the wall (offset 0) still reports a valid gap.
+    #[test]
+    fn inspect_opening_at_wall_boundary() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening::new(wid, 0.0, 0.9, 2.0, OpeningKind::Door));
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true, "symbols": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert_eq!(openings.len(), 1);
+        assert_eq!(openings[0]["offset"], 0.0);
+        let gap = openings[0]["gap"].as_array().expect("gap must be an array");
+        assert_eq!(gap.len(), 2);
+        assert!(gap[0].is_number());
+        assert!(gap[1].is_number());
+    }
+
+    /// The style, hinge and swing fields carry their expected string values.
+    #[test]
+    fn inspect_opening_style_hinge_swing_values() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                let wid =
+                    d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.2, height: 2.7, ..Wall::default() });
+                d.arch.push_opening(Opening::new(wid, 4.0, 0.9, 2.0, OpeningKind::Door));
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "openings": true }));
+        let openings = v["openings"].as_array().expect("openings array missing");
+        assert_eq!(openings.len(), 1);
+        let o = &openings[0];
+        let style = o["style"].as_str().expect("style must be a string");
+        assert!(!style.is_empty(), "style should not be empty");
+        let hinge = o["hinge"].as_str().expect("hinge must be a string");
+        assert!(hinge == "left" || hinge == "right", "hinge should be 'left' or 'right', got {hinge}");
+        let swing = o["swing"].as_str().expect("swing must be a string");
+        assert!(!swing.is_empty(), "swing should not be empty");
+    }
+
     /// Full field set and types for a normal opening (the spec's field list), pinned
     /// against a single opening so a missing key or wrong type fails.
     #[test]
