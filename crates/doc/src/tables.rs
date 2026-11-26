@@ -944,14 +944,32 @@ pub struct LayerRule {
     pub transparency: Option<u8>,
 }
 
-/// A saved layer state (LAYERSTATE).
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
+/// A saved layer state (LAYERSTATE), as AutoCAD keeps one in the LAYER table's
+/// `ACAD_LAYERSTATES` dictionary.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct LayerState {
     pub name: String,
     pub layers: Vec<Layer>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// The properties restoring sets ([`LayerState::ON`] …): AutoCAD's mask (group 91 of the
+    /// state's XRECORD). Bits CADCraft doesn't use are kept as read.
+    pub mask: u32,
+    /// The layer restoring makes current; empty, or a layer the drawing doesn't have, leaves the
+    /// current layer as it is (AutoCAD 2024, measured).
+    pub current: String,
+    /// Group 301 of the state's XRECORD: empty as AutoCAD 2024's -LAYER saves a state; a text a
+    /// file holds there is kept.
+    pub description: String,
+    /// arch3d: wildcard rules for the layers the snapshot does not name (a plan view's layer set).
+    /// AutoCAD has no such thing, so a state with rules is kept in CADCraft's own record.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub rules: Vec<LayerRule>,
+}
+
+impl Default for LayerState {
+    fn default() -> Self {
+        LayerState { name: String::new(), layers: Vec::new(), mask: LayerState::ALL, current: String::new(), description: String::new(), rules: Vec::new() }
+    }
 }
 
 pub const MAX_LAYER_RULES: usize = 256;
@@ -999,6 +1017,25 @@ pub fn wildcard_match(pattern: &str, name: &str) -> bool {
 }
 
 impl LayerState {
+    pub const ON: u32 = 1;
+    pub const FROZEN: u32 = 2;
+    pub const LOCKED: u32 = 4;
+    pub const PLOT: u32 = 8;
+    pub const VP_FREEZE_NEW: u32 = 16;
+    pub const COLOR: u32 = 32;
+    pub const LINETYPE: u32 = 64;
+    pub const LINEWEIGHT: u32 = 128;
+    pub const PLOT_STYLE: u32 = 256;
+    pub const TRANSPARENCY: u32 = 1024;
+    /// Every property: the mask of AutoCAD 2024's -LAYER stAte Save with its defaults (2047; bit
+    /// 512, which no property toggles, is always set).
+    pub const ALL: u32 = 2047;
+
+    /// A state of every property of `layers`, with `current` the layer restoring makes current.
+    pub fn new(name: impl Into<String>, layers: Vec<Layer>, current: impl Into<String>) -> Self {
+        LayerState { name: name.into(), layers, current: current.into(), ..LayerState::default() }
+    }
+
     /// Apply this state to `layers`: each saved layer replaces the first layer of the same name
     /// (case-insensitive) whole; every layer the snapshot does not name takes the last matching
     /// rule (of the first [`MAX_LAYER_RULES`]): `on: true` turns it on and thaws it, `on: false`
@@ -1009,25 +1046,33 @@ impl LayerState {
         for (i, l) in layers.iter().enumerate() {
             index.entry(l.name.to_ascii_lowercase()).or_insert(i);
         }
-        let mut named = std::collections::HashSet::new();
         let mut changed = 0;
         for saved in &self.layers {
             if let Some(i) = index.get(&saved.name.to_ascii_lowercase()).copied()
                 && let Some(l) = layers.get_mut(i)
             {
-                named.insert(i);
                 if *l != *saved {
                     *l = saved.clone();
                     changed += 1;
                 }
             }
         }
+        changed + self.apply_rules(layers)
+    }
+
+    /// The rules alone: every layer the snapshot does not name (case-insensitive) takes the last
+    /// matching rule (of the first [`MAX_LAYER_RULES`]): `on: true` turns it on and thaws it,
+    /// `on: false` turns it off (frozen is left), a transparency is capped at 90. Returns how many
+    /// layers changed.
+    pub fn apply_rules(&self, layers: &mut [Layer]) -> usize {
         let rules = self.rules.get(..MAX_LAYER_RULES).unwrap_or(&self.rules);
         if rules.is_empty() {
-            return changed;
+            return 0;
         }
-        for (i, l) in layers.iter_mut().enumerate() {
-            if named.contains(&i) {
+        let named: std::collections::HashSet<String> = self.layers.iter().map(|l| l.name.to_ascii_lowercase()).collect();
+        let mut changed = 0;
+        for l in layers.iter_mut() {
+            if named.contains(&l.name.to_ascii_lowercase()) {
                 continue;
             }
             let Some(rule) = rules.iter().rev().find(|r| wildcard_match(&r.pattern, &l.name)) else { continue };
@@ -1101,7 +1146,7 @@ mod rule_tests {
     fn layer_state_apply_snapshot_then_rules() {
         let mut layers = vec![layer("A-WALL", true, false, 0), layer("a-door", true, false, 0), layer("E-POWR", true, false, 0)];
         let saved = Layer { on: false, transparency: 30, ..Layer::new("A-DOOR") };
-        let st = LayerState { name: "s".into(), layers: vec![saved], rules: vec![rule("*", Some(false), Some(10))] };
+        let st = LayerState { name: "s".into(), layers: vec![saved], rules: vec![rule("*", Some(false), Some(10))], ..Default::default() };
         let n = st.apply(&mut layers);
         assert_eq!(n, 3);
         // The snapshot replaced the layer whole (name too); the rule did not touch it.
@@ -1119,6 +1164,7 @@ mod rule_tests {
             name: "s".into(),
             layers: Vec::new(),
             rules: vec![rule("*", Some(false), Some(95)), rule("A-*", Some(true), None), rule("A-WALL", None, Some(60))],
+            ..Default::default()
         };
         st.apply(&mut layers);
         assert_eq!((layers[0].on, layers[0].transparency), (true, 60));
@@ -1128,7 +1174,7 @@ mod rule_tests {
     #[test]
     fn layer_state_apply_on_true_thaws_and_false_keeps_frozen() {
         let mut layers = vec![layer("A", false, true, 0), layer("B", true, true, 0)];
-        let st = LayerState { name: "s".into(), layers: Vec::new(), rules: vec![rule("A", Some(true), None), rule("B", Some(false), None)] };
+        let st = LayerState { name: "s".into(), layers: Vec::new(), rules: vec![rule("A", Some(true), None), rule("B", Some(false), None)], ..Default::default() };
         st.apply(&mut layers);
         assert!(layers[0].on && !layers[0].frozen);
         assert!(!layers[1].on && layers[1].frozen);
@@ -1178,7 +1224,7 @@ mod rule_tests {
     fn layer_state_apply_edge_cases() {
         // Empty rules: only snapshot applies.
         let mut layers = vec![layer("A", true, false, 0), layer("B", true, false, 0)];
-        let st = LayerState { name: "s".into(), layers: vec![layer("A", false, false, 0)], rules: vec![] };
+        let st = LayerState { name: "s".into(), layers: vec![layer("A", false, false, 0)], rules: vec![], ..Default::default() };
         let n = st.apply(&mut layers);
         assert_eq!(n, 1);
         assert!(!layers[0].on);
@@ -1186,20 +1232,20 @@ mod rule_tests {
 
         // Transparency capping at 90.
         let mut layers = vec![layer("A", true, false, 0)];
-        let st = LayerState { name: "s".into(), layers: vec![], rules: vec![rule("*", None, Some(100))] };
+        let st = LayerState { name: "s".into(), layers: vec![], rules: vec![rule("*", None, Some(100))], ..Default::default() };
         st.apply(&mut layers);
         assert_eq!(layers[0].transparency, 90);
 
         // Rule with only transparency (no on): layer stays on.
         let mut layers = vec![layer("A", true, false, 0)];
-        let st = LayerState { name: "s".into(), layers: vec![], rules: vec![rule("*", None, Some(50))] };
+        let st = LayerState { name: "s".into(), layers: vec![], rules: vec![rule("*", None, Some(50))], ..Default::default() };
         st.apply(&mut layers);
         assert!(layers[0].on);
         assert_eq!(layers[0].transparency, 50);
 
         // No matching rule: layer unchanged.
         let mut layers = vec![layer("X", true, false, 0)];
-        let st = LayerState { name: "s".into(), layers: vec![], rules: vec![rule("A-*", Some(false), None)] };
+        let st = LayerState { name: "s".into(), layers: vec![], rules: vec![rule("A-*", Some(false), None)], ..Default::default() };
         let n = st.apply(&mut layers);
         assert_eq!(n, 0);
         assert!(layers[0].on);
