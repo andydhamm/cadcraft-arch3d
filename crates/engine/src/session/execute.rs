@@ -24,12 +24,11 @@ impl Session {
         }
     }
 
+    /// Run a command by id, unless the automation roots, its own state or the block editor refuse it.
     fn execute_guarded(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
-        // A command that may read a view's generated geometry gets a catch-up refresh while
-        // deferral is on; the refresh is not part of the command's undo step.
-        if self.views_deferred && !cmd::arch::views::defer_safe(spec.id) {
-            cmd::arch::views::refresh_views(self);
+        if let Some(why) = crate::file_access::commands::refusal(spec.id) {
+            return Err(EngineError::Disabled(spec.id.into(), why));
         }
         (spec.enabled)(self).map_err(|m| EngineError::Disabled(spec.id.into(), m))?;
         if let Some(why) = cmd::blocks::bedit::refused_in_editor(self, spec.id) {
