@@ -313,7 +313,14 @@ fn osnap_all_with_neighborhood(
     // any model-space arch snap), and a viewport's replaces the best so far only when it
     // scores closer. A paper-space Nearest can therefore beat an Endpoint seen through a
     // viewport, which `ranked` alone would put first.
-    let mut pick = all.iter().min_by(|a, b| a.rank(cursor, aperture).cmp(&b.rank(cursor, aperture))).copied();
+    let mut pick = all
+        .iter()
+        .min_by(|a, b| {
+            let ra = a.rank(cursor, aperture);
+            let rb = b.rank(cursor, aperture);
+            ra.0.cmp(&rb.0).then(ra.1.total_cmp(&rb.1))
+        })
+        .copied();
     for view in views {
         let model_cursor = view.to_model(cursor);
         let model_aperture = aperture / view.scale;
