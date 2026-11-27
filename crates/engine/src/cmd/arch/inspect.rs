@@ -153,7 +153,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             // join; an isolated wall falls back to the raw end-cap rectangle,
             // as do walls the solver skips (degenerate / zero-length).
             let poly: Option<&Vec<cadcraft_geom::Vec2>> =
-                solved.get(&w.id).and_then(|(has_join, ring)| (*has_join).then(|| ring)).or_else(|| raw_wall_polygon(w).as_ref());
+                solved.get(&w.id).and_then(|(has_join, ring)| (*has_join).then(|| *ring)).or_else(|| raw_wall_polygon(w).as_ref());
             if let Some(poly) = poly {
                 let poly_json: Vec<Value> = poly.iter().map(|p| json!([p.x, p.y])).collect();
                 obj.insert("polygon".to_string(), Value::Array(poly_json));
