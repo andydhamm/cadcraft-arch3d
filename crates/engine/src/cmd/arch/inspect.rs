@@ -152,10 +152,12 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             // Use the solved (mitred/butted) ring only when this wall has a
             // join; an isolated wall falls back to the raw end-cap rectangle,
             // as do walls the solver skips (degenerate / zero-length).
-            let poly: Option<&Vec<cadcraft_geom::Vec2>> =
-                solved.get(&w.id).and_then(|(has_join, ring)| (*has_join).then(|| *ring)).or_else(|| raw_wall_polygon(w).as_ref());
-            if let Some(poly) = poly {
-                let poly_json: Vec<Value> = poly.iter().map(|p| json!([p.x, p.y])).collect();
+            let poly_json: Vec<Value> = solved
+                .get(&w.id)
+                .and_then(|(has_join, ring)| (*has_join).then(|| ring.iter().map(|p| json!([p.x, p.y])).collect()))
+                .or_else(|| raw_wall_polygon(w).map(|pts| pts.iter().map(|p| json!([p.x, p.y])).collect()))
+                .unwrap_or_default();
+            if !poly_json.is_empty() {
                 obj.insert("polygon".to_string(), Value::Array(poly_json));
             }
             let layers = wall_layer_polygons(w);
@@ -5438,5 +5440,119 @@ mod tests {
             assert!(px.is_finite(), "very-long wall vertex x {px} not finite");
             assert!(py.is_finite(), "very-long wall vertex y {py} not finite");
         }
+    }
+
+    /// The top wall (10,8)-(0,8) of the 4-wall exterior rectangle is mitred on
+    /// its interior face (y = 7.9): exterior face corners stay at x = -0.1 / 10.1,
+    /// interior face corners are cut to x = 0.1 / 9.9. Pins the top-wall mitre
+    /// symmetric to the bottom-wall test in `arch_inspect_mitres_exterior_corners`.
+    #[test]
+    fn arch_inspect_poché_top_wall_mitred_corners() {
+        build_exterior_rect(&mut s := &mut Session::new());
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        let Some(w) = find_wall_by_points(walls, [10.0, 8.0], [0.0, 8.0]) else {
+            return;
+        };
+        let Some(poly) = w["polygon"].as_array() else {
+            return;
+        };
+        let corners = [(-0.1, 8.1), (10.1, 8.1), (9.9, 7.9), (0.1, 7.9)];
+        for (cx, cy) in corners {
+            let found = poly.iter().any(|p| {
+                let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                (px - cx).abs() < 1e-6 && (py - cy).abs() < 1e-6
+            });
+            assert!(found, "top wall corner ({cx}, {cy}) not in polygon");
+        }
+        assert!(
+            !poly
+                .iter()
+                .any(|p| {
+                    let px = p
+                        .as_array()
+                        .and_then(|a| a.get(0).and_then(Value::as_f64))
+                        .unwrap_or(f64::NAN);
+                    let py = p
+                        .as_array()
+                        .and_then(|a| a.get(1).and_then(Value::as_f64))
+                        .unwrap_or(f64::NAN);
+                    ((px + 0.1).abs() < 1e-6 || (px - 10.1).abs() < 1e-6) && (py - 7.9).abs() < 1e-6
+                }),
+            "top wall polygon must not contain non-mitred interior corners at (x, 7.9) where x is not 0.1 or 9.9"
+        );
+    }
+
+    /// A wall with NaN thickness is skipped by the join solver (non-finite)
+    /// and `raw_wall_polygon` returns None, so `arch.inspect {poche:true}` must
+    /// still emit the wall row but must not emit a `polygon` key. Pins that
+    /// degenerate thickness does not crash and does not silently fall back to
+    /// a non-finite polygon.
+    #[test]
+    fn arch_inspect_poché_nan_thickness_has_no_polygon() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_wall(Wall {
+                    start: Vec2::new(0.0, 0.0),
+                    end: Vec2::new(5.0, 0.0),
+                    thickness: f64::NAN,
+                    ..Wall::default()
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall");
+        let w = &walls[0];
+        assert!(w["handle"].is_string(), "handle must still be present");
+        assert!(w["thickness"].is_null(), "NaN thickness serializes to null");
+        assert!(
+            w["polygon"].is_null(),
+            "NaN thickness wall must not emit a polygon (raw_wall_polygon returns None, solver skips it)"
+        );
+    }
+
+    /// The `polygon` and `layers` keys are emitted only when the `poché` flag is
+    /// set. Without the flag, the wall row still carries its core fields but
+    /// neither `polygon` nor `layers` appears. Pins the flag-controlled output
+    /// so that a regression that always emits `polygon` is caught.
+    #[test]
+    fn arch_inspect_polygon_absent_without_poché() {
+        let mut s = Session::new();
+        exec(
+            &mut s,
+            "wall",
+            &json!({
+                "points": [[0.0, 0.0], [5.0, 0.0]],
+                "thickness": 0.1,
+            }),
+        );
+        let v_no = exec(&mut s, "arch.inspect", &json!({}));
+        let walls = v_no["walls"].as_array().expect("walls array missing");
+        assert_eq!(walls.len(), 1, "expected one wall");
+        assert!(
+            walls[0]["polygon"].is_null(),
+            "polygon key must be absent when poché flag is not set"
+        );
+        assert!(
+            walls[0]["layers"].is_null(),
+            "layers key must be absent when poché flag is not set"
+        );
+        let v_yes = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let walls = v_yes["walls"].as_array().expect("walls array missing");
+        assert!(
+            walls[0]["polygon"].is_array(),
+            "polygon key must be an array when poché flag is set"
+        );
+        assert!(
+            walls[0]["layers"].is_array(),
+            "layers key must be an array when poché flag is set"
+        );
     }
 }
