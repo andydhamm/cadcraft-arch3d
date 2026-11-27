@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-27 19:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-27 19:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 9 of 10 segments merged**
 
@@ -33,20 +33,21 @@ Updated 2026-11-27 19:00 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 27.9 h so far · expected done Nov 27 20:51–Nov 30 05:17 UTC |
+| 23 | Phase 23 | pending | — | 28.1 h so far · expected done Nov 27 21:06–Nov 30 05:32 UTC |
 
 ## Phase 23 segments
 
-9 merged, 1 merging
+9 merged, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-ff0bde679` | merge upstream upstream/main up to ff0bde679 (33 commits) | merging | tturbo-mac |
+| `upstream-sync-ff0bde679` | merge upstream upstream/main up to ff0bde679 (33 commits) | working | tturbo-mac |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 27 19:04 | `upstream-sync-ff0bde679` | refused | 0 pass | tturbo-mac |
 | Nov 27 16:36 | `upstream-sync-ff0bde679` | refused | 0 pass | claude-sonnet-a |
 | Nov 27 14:34 | `upstream-sync-16929ef8e` | merged | 13,210 pass | bonsai-b |
 | Nov 27 12:57 | `upstream-sync-97dccaf9e` | merged | 13,179 pass | claude-sonnet-b |
@@ -58,7 +59,6 @@ Updated 2026-11-27 19:00 UTC. This page and the card in the README are regenerat
 | Nov 27 09:54 | `upstream-sync-d3af2d507` | merged | 13,106 pass | tturbo-mac2 |
 | Nov 27 09:39 | `harden-p1-inspect-solved-poché` | merged | 13,092 pass | bonsai-a |
 | Nov 27 08:54 | `upstream-sync-fafe5f128` | merged | 13,066 pass | claude-sonnet-d |
-| Nov 27 07:47 | `harden-p1-crate-lints-and-wall-close` | merged | 13,020 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
@@ -77,5 +77,5 @@ Updated 2026-11-27 19:00 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | idle | 1343 |
+| tturbo-mac | tturbo-ultraheretic | agent | 1343 |
 | tturbo-mac2 | tturbo-ultraheretic | down | 763 |
