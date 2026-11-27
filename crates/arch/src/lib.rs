@@ -158,4 +158,48 @@ mod tests {
         assert!(m.wall(id1).is_some());
         assert!(m.wall(id2).is_some());
     }
+
+    #[test]
+    fn wall_bounds_with_zero_thickness() {
+        let w = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 0.0, ..Wall::default() };
+        let b = crate::wall::wall_bounds(&w);
+        // Zero thickness: bounds should still cover the centerline.
+        assert!(b.min.x <= 0.0 + 1e-9, "min x too large: {}", b.min.x);
+        assert!(b.max.x >= 10.0 - 1e-9, "max x too small: {}", b.max.x);
+    }
+
+    #[test]
+    fn wall_bounds_with_vertical_wall() {
+        let w = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 10.0), thickness: 0.2, ..Wall::default() };
+        let b = crate::wall::wall_bounds(&w);
+        assert!(b.min.y <= 0.0 + 1e-9, "min y too large: {}", b.min.y);
+        assert!(b.max.y >= 10.0 - 1e-9, "max y too small: {}", b.max.y);
+        assert!(b.min.x <= 0.0 + 0.1 + 1e-9, "min x too large: {}", b.min.x);
+        assert!(b.max.x >= 0.0 - 0.1 - 1e-9, "max x too small: {}", b.max.x);
+    }
+
+    #[test]
+    fn wall_bounds_with_diagonal_wall() {
+        let w = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 10.0), thickness: 0.2, ..Wall::default() };
+        let b = crate::wall::wall_bounds(&w);
+        assert!(b.min.x <= 0.0 + 0.15 + 1e-9, "min x too large: {}", b.min.x);
+        assert!(b.max.x >= 10.0 - 0.15 - 1e-9, "max x too small: {}", b.max.x);
+        assert!(b.min.y <= 0.0 + 0.15 + 1e-9, "min y too large: {}", b.min.y);
+        assert!(b.max.y >= 10.0 - 0.15 - 1e-9, "max y too small: {}", b.max.y);
+    }
+
+    #[test]
+    fn arch_model_wall_lookup_by_id() {
+        let mut m = ArchModel::default();
+        let id1 = m.push_wall(Wall::new(Vec2::ZERO, Vec2::new(1.0, 0.0), 0.2));
+        let id2 = m.push_wall(Wall::new(Vec2::ZERO, Vec2::new(0.0, 1.0), 0.2));
+        let w1 = m.wall(id1).unwrap();
+        let w2 = m.wall(id2).unwrap();
+        assert_eq!(w1.start, Vec2::ZERO);
+        assert_eq!(w1.end, Vec2::new(1.0, 0.0));
+        assert_eq!(w2.start, Vec2::ZERO);
+        assert_eq!(w2.end, Vec2::new(0.0, 1.0));
+        // Non-existent id returns None.
+        assert!(m.wall(ArchId(999)).is_none());
+    }
 }
