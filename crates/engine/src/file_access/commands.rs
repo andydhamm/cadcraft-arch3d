@@ -375,6 +375,7 @@ pub const NO_FILES: &[&str] = &[
     "boundary",
     "region",
     "hatchedit",
+    "hatchgenerateboundary",
     "hatchpick",
     "overkill",
     "block",
