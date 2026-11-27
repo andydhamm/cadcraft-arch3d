@@ -161,7 +161,7 @@ pub fn wall_span(model: &ArchModel, w: &Wall) -> Option<(f64, f64)> {
     // A spanning wall is one solid from its base level's floor to its top level's ceiling.
     let mut top = match w.top_level.and_then(|t| model.levels.iter().rev().find(|l| l.index == t)) {
         Some(t) => {
-            if t.elevation <= base {
+            if t.index != w.base_level && t.elevation <= base {
                 return None;
             }
             t.elevation + t.ceiling_height
