@@ -224,7 +224,7 @@ pub fn elevation_profile(
     let dx = wall.end.x - wall.start.x;
     let dy = wall.end.y - wall.start.y;
     let len = (dx * dx + dy * dy).sqrt();
-    if len < 1e-9 {
+    if len < 1e-9 || !wall.start.is_finite() || !wall.end.is_finite() {
         return None;
     }
 
@@ -1964,5 +1964,89 @@ mod tests {
             mesh.triangle_count(),
             no_hole.triangle_count()
         );
+    }
+
+    #[test]
+    fn extrude_wall_rejects_zero_length_wall() {
+        let id = ArchId(1);
+        let polygon = vec![Vec2::new(0.0, -0.1), Vec2::new(0.0, -0.1), Vec2::new(0.0, 0.1), Vec2::new(0.0, 0.1)];
+        let centre = (Vec2::new(0.0, 0.0), Vec2::new(0.0, 0.0));
+        let shape = WallShape::new(id, polygon, centre);
+        let mesh = extrude_wall(&shape, 2.5, 0.0, "wall");
+        assert!(mesh.is_none(), "zero-length wall should return None");
+    }
+
+    #[test]
+    fn extrude_wall_rejects_nan_height() {
+        let id = ArchId(1);
+        let polygon = vec![Vec2::new(0.0, -0.1), Vec2::new(4.0, -0.1), Vec2::new(4.0, 0.1), Vec2::new(0.0, 0.1)];
+        let centre = (Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let shape = WallShape::new(id, polygon, centre);
+        let mesh = extrude_wall(&shape, f64::NAN, 0.0, "wall");
+        assert!(mesh.is_none(), "NaN height should return None");
+    }
+
+    #[test]
+    fn extrude_wall_rejects_nan_level_elevation() {
+        let id = ArchId(1);
+        let polygon = vec![Vec2::new(0.0, -0.1), Vec2::new(4.0, -0.1), Vec2::new(4.0, 0.1), Vec2::new(0.0, 0.1)];
+        let centre = (Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let shape = WallShape::new(id, polygon, centre);
+        let mesh = extrude_wall(&shape, 2.5, f64::NAN, "wall");
+        assert!(mesh.is_none(), "NaN level elevation should return None");
+    }
+
+    #[test]
+    fn extrude_wall_rejects_negative_height() {
+        let id = ArchId(1);
+        let polygon = vec![Vec2::new(0.0, -0.1), Vec2::new(4.0, -0.1), Vec2::new(4.0, 0.1), Vec2::new(0.0, 0.1)];
+        let centre = (Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let shape = WallShape::new(id, polygon, centre);
+        let mesh = extrude_wall(&shape, -1.0, 0.0, "wall");
+        assert!(mesh.is_none(), "negative height should return None");
+    }
+
+    #[test]
+    fn elevation_profile_rejects_nan_wall_start() {
+        let id = ArchId(1);
+        let polygon = vec![Vec2::new(0.0, -0.1), Vec2::new(4.0, -0.1), Vec2::new(4.0, 0.1), Vec2::new(0.0, 0.1)];
+        let centre = (Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let shape = WallShape::new(id, polygon, centre);
+        let wall = Wall { start: Vec2::new(f64::NAN, 0.0), end: Vec2::new(4.0, 0.0), thickness: 0.2, height: 2.4, ..Default::default() };
+        let profile = elevation_profile(&shape, &wall, 0.0, 2.4, None, None, &[]);
+        assert!(profile.is_none(), "NaN wall start should return None");
+    }
+
+    #[test]
+    fn elevation_profile_rejects_nan_base() {
+        let id = ArchId(1);
+        let polygon = vec![Vec2::new(0.0, -0.1), Vec2::new(4.0, -0.1), Vec2::new(4.0, 0.1), Vec2::new(0.0, 0.1)];
+        let centre = (Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let shape = WallShape::new(id, polygon, centre);
+        let wall = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.0, 0.0), thickness: 0.2, height: 2.4, ..Default::default() };
+        let profile = elevation_profile(&shape, &wall, f64::NAN, 2.4, None, None, &[]);
+        assert!(profile.is_none(), "NaN base should return None");
+    }
+
+    #[test]
+    fn elevation_profile_rejects_nan_top() {
+        let id = ArchId(1);
+        let polygon = vec![Vec2::new(0.0, -0.1), Vec2::new(4.0, -0.1), Vec2::new(4.0, 0.1), Vec2::new(0.0, 0.1)];
+        let centre = (Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let shape = WallShape::new(id, polygon, centre);
+        let wall = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.0, 0.0), thickness: 0.2, height: 2.4, ..Default::default() };
+        let profile = elevation_profile(&shape, &wall, 0.0, f64::NAN, None, None, &[]);
+        assert!(profile.is_none(), "NaN top should return None");
+    }
+
+    #[test]
+    fn elevation_profile_rejects_top_le_base() {
+        let id = ArchId(1);
+        let polygon = vec![Vec2::new(0.0, -0.1), Vec2::new(4.0, -0.1), Vec2::new(4.0, 0.1), Vec2::new(0.0, 0.1)];
+        let centre = (Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0));
+        let shape = WallShape::new(id, polygon, centre);
+        let wall = Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(4.0, 0.0), thickness: 0.2, height: 2.4, ..Default::default() };
+        let profile = elevation_profile(&shape, &wall, 2.0, 2.0, None, None, &[]);
+        assert!(profile.is_none(), "top <= base should return None");
     }
 }
