@@ -1207,4 +1207,128 @@ mod arch_grips_tests {
         assert_eq!(arch_id_from_handle(rh), Some(ArchTarget::Room(ArchId(0))));
         assert_eq!(arch_id_from_handle(wh), Some(ArchTarget::Wall(ArchId(0))));
     }
+
+    /// A non-finite drag point is refused for a wall: hostile input (NaN/Inf) must
+    /// never reach the join solver (unlike a room, whose edit is a silent no-op).
+    #[test]
+    fn arch_wall_grip_edit_non_finite_point_errors() {
+        let mut s = setup();
+        let nan = Vec2::new(f64::NAN, 0.0);
+        let inf = Vec2::new(f64::INFINITY, 0.0);
+        assert!(s.grip_edit(arch_handle(ArchId(0)), 1, nan, GripMode::Stretch).is_err());
+        assert!(s.grip_edit(arch_handle(ArchId(0)), 1, inf, GripMode::Stretch).is_err());
+    }
+
+    /// A wall exposes exactly two grips (0 = start, 1 = end). Any other index is
+    /// refused in every mode, so the join solver never receives a bad endpoint index.
+    #[test]
+    fn arch_wall_grip_edit_out_of_range_index_errors() {
+        let mut s = setup();
+        for idx in [2, 3, 100] {
+            assert!(s.grip_edit(arch_handle(ArchId(0)), idx, Vec2::new(12.0, 0.0), GripMode::Stretch).is_err());
+            assert!(s.grip_edit(arch_handle(ArchId(0)), idx, Vec2::new(12.0, 0.0), GripMode::Move).is_err());
+            assert!(s.grip_edit(arch_handle(ArchId(0)), idx, Vec2::new(12.0, 0.0), GripMode::Rotate).is_err());
+            assert!(s.grip_edit(arch_handle(ArchId(0)), idx, Vec2::new(12.0, 0.0), GripMode::Scale).is_err());
+        }
+    }
+
+    /// Arch walls support only the stretch grip: Rotate, Scale and Mirror are refused,
+    /// not silently transformed (refusal independent of grip index).
+    #[test]
+    fn arch_wall_grip_edit_non_stretch_modes_error() {
+        let mut s = setup();
+        assert!(s.grip_edit(arch_handle(ArchId(0)), 0, Vec2::new(12.0, 0.0), GripMode::Rotate).is_err());
+        assert!(s.grip_edit(arch_handle(ArchId(0)), 0, Vec2::new(12.0, 0.0), GripMode::Scale).is_err());
+        assert!(s.grip_edit(arch_handle(ArchId(0)), 1, Vec2::new(12.0, 0.0), GripMode::Mirror).is_err());
+    }
+
+    /// A locked `A-WALL` layer refuses the drag and leaves the model untouched
+    /// (mirrors the `d.layer("A-WALL")` locked check in `Session::grip_edit`).
+    #[test]
+    fn arch_wall_grip_edit_locked_layer_errors() {
+        let mut s = setup();
+        {
+            let d = s.doc_mut().unwrap();
+            if let Some(l) = d.layers.iter_mut().find(|l| l.name == "A-WALL") {
+                l.locked = true;
+            }
+        }
+        assert!(s.grip_edit(arch_handle(ArchId(0)), 1, Vec2::new(12.0, 0.0), GripMode::Stretch).is_err());
+        // Locked: the wall stays put (drag refused, model untouched).
+        assert_eq!(s.doc().unwrap().arch.wall(ArchId(0)).unwrap().end, Vec2::new(10.0, 0.0));
+    }
+
+    /// Direct command path (`grip.stretch` in `gripcmds.rs::stretch`): a wall drag
+    /// routes through `arch.wall.stretch` as one undoable step, so the join solver
+    /// fires and the neighbour wall's end moves with it (the existing tests only
+    /// drive `Session::grip_edit`).
+    #[test]
+    fn grip_stretch_command_on_arch_wall_stretches() {
+        let mut s = setup();
+        let r = s.execute(
+            "grip.stretch",
+            &json!({
+                "handle": arch_handle(ArchId(0)).hex(),
+                "index": 1,
+                "to": [12.0, 0.0],
+            }),
+        );
+        assert!(r.is_ok());
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.wall(ArchId(0)).unwrap().end, Vec2::new(12.0, 0.0));
+        assert_eq!(d.arch.wall(ArchId(1)).unwrap().start, Vec2::new(12.0, 0.0));
+    }
+
+    /// The direct command path is a single undo step that fully restores the join.
+    #[test]
+    fn grip_stretch_command_on_arch_wall_is_undoable() {
+        let mut s = setup();
+        s.execute(
+            "grip.stretch",
+            &json!({
+                "handle": arch_handle(ArchId(0)).hex(),
+                "index": 1,
+                "to": [12.0, 0.0],
+            }),
+        )
+        .unwrap();
+        s.undo().unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.wall(ArchId(0)).unwrap().end, Vec2::new(10.0, 0.0));
+        assert_eq!(d.arch.wall(ArchId(1)).unwrap().start, Vec2::new(10.0, 0.0));
+    }
+
+    /// "An arch handle not in the model is an error, not a no-op": through the
+    /// command path, a missing wall's grip must refuse (the `wall` body errors),
+    /// never panic and never silently no-op.
+    #[test]
+    fn grip_stretch_command_on_missing_arch_wall_errors() {
+        let mut s = setup();
+        let r = s.execute(
+            "grip.stretch",
+            &json!({
+                "handle": arch_handle(ArchId(99)).hex(),
+                "index": 0,
+                "to": [5.0, 0.0],
+            }),
+        );
+        assert!(r.is_err());
+    }
+
+    /// Round trip: stretch, undo, stretch must re-solve the join each time, so the
+    /// neighbour tracks the wall end at every value (not just the first).
+    #[test]
+    fn arch_wall_grip_stretch_round_trip() {
+        let mut s = setup();
+        s.grip_edit(arch_handle(ArchId(0)), 1, Vec2::new(12.0, 0.0), GripMode::Stretch).unwrap();
+        let d1 = s.doc().unwrap();
+        assert_eq!(d1.arch.wall(ArchId(0)).unwrap().end, Vec2::new(12.0, 0.0));
+        s.undo().unwrap();
+        let d2 = s.doc().unwrap();
+        assert_eq!(d2.arch.wall(ArchId(0)).unwrap().end, Vec2::new(10.0, 0.0));
+        s.grip_edit(arch_handle(ArchId(0)), 1, Vec2::new(14.0, 0.0), GripMode::Stretch).unwrap();
+        let d3 = s.doc().unwrap();
+        assert_eq!(d3.arch.wall(ArchId(0)).unwrap().end, Vec2::new(14.0, 0.0));
+        assert_eq!(d3.arch.wall(ArchId(1)).unwrap().start, Vec2::new(14.0, 0.0));
+    }
 }
