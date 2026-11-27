@@ -5284,7 +5284,7 @@ mod tests {
                 for p in poly {
                     assert!(p.is_array(), "poché vertex must be an array: {p}");
                     let pair = p.as_array().unwrap_or(&empty);
-                    assert_eq!(pair.len(), 2, "poché vertex must be exactly [x, y]: {pair}");
+                    assert_eq!(pair.len(), 2, "poché vertex must be exactly [x, y]");
                     for c in pair {
                         assert!(c.is_number(), "poché vertex component must be a number: {c}");
                         assert!(c.as_f64().is_some_and(f64::is_finite), "poché vertex must be finite: {c}");
@@ -5339,7 +5339,7 @@ mod tests {
         assert_eq!(walls.len(), 1, "expected one angled wall");
         assert!(walls[0]["polygon"].is_array(), "angled isolated wall must report a polygon");
         let poly = walls[0]["polygon"].as_array().unwrap_or(&empty);
-        assert!(poly.len() >= 4, "poché must have at least 4 vertices: {poly}");
+        assert!(poly.len() >= 4, "poché must have at least 4 vertices");
         for p in poly {
             if let Some(c) = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64) {
                 assert!(c.is_finite(), "angled wall vertex x {c} not finite");
