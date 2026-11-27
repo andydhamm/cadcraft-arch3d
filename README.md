@@ -36,19 +36,19 @@ arch3d's own model of the sample plan: walls, doors, windows and room floors fro
 
 <!-- arch3d: everything below this line is CADCraft's own README from storytold/cadcraft, refreshed by the swarm on every upstream sync. Edit arch3d's section above it. -->
 
-*CADCraft's README from [storytold/cadcraft](https://github.com/storytold/cadcraft/tree/1c5e4f41f57a4dc218801bf98dfee7014259511e) at `1c5e4f41f`.*
+*CADCraft's README from [storytold/cadcraft](https://github.com/storytold/cadcraft/tree/fafe5f128ca1c35c50d6c2da08c64aba3b29457d) at `fafe5f128`.*
 
 <p align="center">
   <a href="https://getartcraft.com/">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/storytold/cadcraft/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/brand/artcraft-logo-white.svg">
-      <img alt="ArtCraft" src="https://raw.githubusercontent.com/storytold/cadcraft/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/brand/artcraft-logo.svg" width="200">
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/storytold/cadcraft/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/brand/artcraft-logo-white.svg">
+      <img alt="ArtCraft" src="https://raw.githubusercontent.com/storytold/cadcraft/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/brand/artcraft-logo.svg" width="200">
     </picture>
   </a>
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/storytold/cadcraft/1c5e4f41f57a4dc218801bf98dfee7014259511e/assets/app-icon/hicolor/256x256/apps/ai.storyteller.cadcraft.png" width="128" height="128" alt="CADCraft icon: a drafting set square and compass arc on a blue grid tile">
+  <img src="https://raw.githubusercontent.com/storytold/cadcraft/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/assets/app-icon/hicolor/256x256/apps/ai.storyteller.cadcraft.png" width="128" height="128" alt="CADCraft icon: a drafting set square and compass arc on a blue grid tile">
 </p>
 
 <h1 align="center">CADCraft</h1>
@@ -88,8 +88,8 @@ arch3d's own model of the sample plan: walls, doors, windows and room floors fro
 <br>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/storytold/cadcraft/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/images/ui-apartment.png" alt="CADCraft with an apartment floor plan open: hatched grey walls, blue windows, green door swings, furniture outlines, yellow room names with areas, a yellow room schedule table, a multileader note and cyan dimensions with architectural ticks; Tool Sets on the left, Layers and Properties on the right, the command line at the bottom" width="100%">
-  <br><sub><b>Apartment plan</b> (<a href="https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/examples/apartment.dxf">examples/apartment.dxf</a>): walls with pick-point hatching, TrueType MTEXT room labels, a TABLE, a multileader and architectural dimensions — built entirely from CADCraft commands.</sub>
+  <img src="https://raw.githubusercontent.com/storytold/cadcraft/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/images/ui-apartment.png" alt="CADCraft with an apartment floor plan open: hatched grey walls, blue windows, green door swings, furniture outlines, yellow room names with areas, a yellow room schedule table, a multileader note and cyan dimensions with architectural ticks; Tool Sets on the left, Layers and Properties on the right, the command line at the bottom" width="100%">
+  <br><sub><b>Apartment plan</b> (<a href="https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/examples/apartment.dxf">examples/apartment.dxf</a>): walls with pick-point hatching, TrueType MTEXT room labels, a TABLE, a multileader and architectural dimensions — built entirely from CADCraft commands.</sub>
 </p>
 
 > [!NOTE]
@@ -114,8 +114,8 @@ arch3d's own model of the sample plan: walls, doors, windows and room floors fro
 
 <table>
   <tr>
-    <td width="50%"><img src="https://raw.githubusercontent.com/storytold/cadcraft/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/images/ui-layout.png" alt="A paper-space layout in CADCraft: a white sheet with a dashed printable area and a viewport showing the apartment plan at scale, the status bar showing the A1 Plan layout tab and a PAPER toggle"></td>
-    <td width="50%"><img src="https://raw.githubusercontent.com/storytold/cadcraft/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/images/ui-bracket.png" alt="CADCraft with a mounting bracket part drawing: front view with bolt holes, centre lines and dimensions, a hatched section view, notes and a title block"></td>
+    <td width="50%"><img src="https://raw.githubusercontent.com/storytold/cadcraft/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/images/ui-layout.png" alt="A paper-space layout in CADCraft: a white sheet with a dashed printable area and a viewport showing the apartment plan at scale, the status bar showing the A1 Plan layout tab and a PAPER toggle"></td>
+    <td width="50%"><img src="https://raw.githubusercontent.com/storytold/cadcraft/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/images/ui-bracket.png" alt="CADCraft with a mounting bracket part drawing: front view with bolt holes, centre lines and dimensions, a hatched section view, notes and a title block"></td>
   </tr>
   <tr>
     <td><sub><b>Layouts</b>: paper space with viewports, page setups and PLOT to PDF. Double-click a viewport to work in model space through it.</sub></td>
@@ -141,7 +141,7 @@ arch3d's own model of the sample plan: walls, doors, windows and room floors fro
 
 ## What works today
 
-CADCraft is in early, fast development. Honest status (see [ROADMAP.md](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/ROADMAP.md) for parity
+CADCraft is in early, fast development. Honest status (see [ROADMAP.md](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/ROADMAP.md) for parity
 numbers):
 
 | Area | Status |
@@ -154,11 +154,11 @@ numbers):
 | Layers & properties | Layers palette and Layer Properties Manager (on/off, freeze, lock, plot, colour, linetype), layer tools (isolate, freeze, off, lock, match, previous), Properties palette with per-object editing, linetypes, lineweights, colour index and true colour |
 | Annotation | All DIM* commands with full DIMSTYLE variables, overrides and every arrowhead, associative dimensions that follow geometry, MLEADER, TABLE, TrueType fonts (`.ttf`, `.otf`, `.ttc` collections), MTEXT formatting codes (fonts, heights, colours, stacked fractions), our own single-stroke drafting font |
 | Hatch & blocks | Pick-point hatch boundaries with islands, pattern, solid and gradient fills from our own pattern library, BLOCK/INSERT, attributes and nested blocks |
-| Files | DXF read (R12–2018, ASCII and binary) and write (R2000), including dimension styles, associativity, tables and constraints; DWG read (via the acadrust library) and write (R2000); PDF plotting, SVG and PNG export. Entities CADCraft doesn't model yet are not kept on save: see [file-format parity](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/file-format-parity.md) |
+| Files | DXF read (R12–2018, ASCII and binary) and write (R2000), including dimension styles, associativity, tables and constraints; DWG read (via the acadrust library) and write (R2000); PDF plotting, SVG and PNG export. Entities CADCraft doesn't model yet are not kept on save: see [file-format parity](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/file-format-parity.md) |
 | Layouts & plotting | Paper-space layouts, viewports (scale, lock, per-viewport layer freeze), MSPACE/PSPACE through viewports, page setups, PLOT and EXPORTPDF |
 | Parametric | Geometric and dimensional constraints, AUTOCONSTRAIN, PARAMETERS with expressions, conflict detection; constraints re-solve after every edit |
 | Grips | Hot grips with Space to cycle Stretch, Move, Rotate, Scale and Mirror |
-| Interface languages | English, Ukrainian (Українська), Brazilian Portuguese (Português (Brasil)), German (Deutsch), Spanish (Español), Czech (Čeština), Russian (Русский), French (Français), Simplified Chinese (简体中文, with an installed CJK font), Italian (Italiano), Korean (한국어, with an installed Hangul font), Swedish (Svenska), Arabic (العربية, with an installed Arabic font), Hungarian (Magyar), Turkish (Türkçe), Greek (Ελληνικά), Bosnian (Bosanski) and Georgian (ქართული), live switching and a remembered Auto/system-language choice; [details](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/localization.md) |
+| Interface languages | English, Ukrainian (Українська), Brazilian Portuguese (Português (Brasil)), German (Deutsch), Spanish (Español), Czech (Čeština), Russian (Русский), French (Français), Simplified Chinese (简体中文, with an installed CJK font), Italian (Italiano), Korean (한국어, with an installed Hangul font), Swedish (Svenska), Arabic (العربية, with an installed Arabic font), Hungarian (Magyar), Turkish (Türkçe), Greek (Ελληνικά), Bosnian (Bosanski) and Georgian (ქართული), live switching and a remembered Auto/system-language choice; [details](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/localization.md) |
 | Automation | MCP server, JSON control channel, `cadcraft-cli` (info, convert, run, commands, mcp) |
 
 ## Quick start
@@ -224,6 +224,34 @@ in the text style or set `FONTFALLBACK` (`CADCRAFT_FONTFALLBACK="Vazirmatn"`). F
 inside a word (an MTEXT colour change in the middle of a Persian word) break the joining at that
 point.
 
+### Portable Windows ZIP
+
+The Windows portable ZIP includes `portable.txt` beside `cadcraft.exe`. With that
+marker present, the desktop app's settings, logs, autosaves, workspace data,
+plotter files, and eframe preferences/window state stay in `CADCraftData` beside
+the executable. eframe saves its preferences and window state in `CADCraftData/app.ron`.
+Keep that directory when replacing the binaries. The MSI does not include the
+marker and continues to use the normal user profile.
+
+`CADCRAFT_CONFIG_DIR` takes precedence over the marker, including an empty or
+blank value that disables the settings folder. If `CADCraftData` cannot be
+created or written, CADCraft warns and uses the normal profile. Existing profile
+settings are not automatically copied into the portable directory.
+
+Before switching an existing Windows installation to portable mode, close CADCraft,
+back up `%APPDATA%\CADCraft`, and copy the settings you want to retain into
+`CADCraftData`. Include the `autosave` folder if you need to recover unsaved drawings. The
+preferences and window state are kept apart, in `%APPDATA%\ai.storyteller.cadcraft\data\app.ron`:
+copy that file to `CADCraftData\app.ron` to keep them.
+Updating a portable ZIP, including through the updater, can restore `portable.txt`;
+set `CADCRAFT_CONFIG_DIR` to your existing profile folder to keep using it across updates.
+
+`cadcraft-cli.exe` does not detect the marker. To share the desktop app's portable
+settings, pass `--config-dir` with the full path to `CADCraftData`, or set
+`CADCRAFT_CONFIG_DIR` to that path. The marker is also recognized on other desktop
+platforms, but is intended for a standalone writable installation, not inside a
+signed macOS application bundle.
+
 ### Logs
 
 The desktop app writes its `log` records to standard error and to `logs/cadcraft.log` in the
@@ -280,13 +308,13 @@ prints the DWG notes with its log; the exit code stays 0. MCP `open` replies wit
 MCP tools include `command_line` (type at the prompt), `execute` (any command with JSON),
 `inspect_drawing`, `query_entities`, `render` (returns a PNG) and, when connected to the app,
 `screenshot` and `ui_click`. The desktop app's JSON control channel is documented in
-[docs/control-protocol.md](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/control-protocol.md).
+[docs/control-protocol.md](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/control-protocol.md).
 
 To run LISP routines, scripts and alias files, or to drive CADCraft from your own programs, see
-[docs/customization.md](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/customization.md).
+[docs/customization.md](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/customization.md).
 
 `cadcraft-cli --help` documents every subcommand and flag; exit codes, streams, environment
-variables and its RFC-0012 conventions are in [docs/cli.md](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/cli.md).
+variables and its RFC-0012 conventions are in [docs/cli.md](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/cli.md).
 
 ## Architecture
 
@@ -336,7 +364,7 @@ Drafting feedback is not an animation effect and stays as it is: rubber bands an
 
 ## Roadmap
 
-See [ROADMAP.md](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/ROADMAP.md) for the stage, measured parity and the estimate of remaining work, and [docs/gaps.md](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/gaps.md) for everything still missing.
+See [ROADMAP.md](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/ROADMAP.md) for the stage, measured parity and the estimate of remaining work, and [docs/gaps.md](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/gaps.md) for everything still missing.
 
 ## Downloads
 
@@ -460,22 +488,22 @@ And [**ArtCraft**](https://getartcraft.com/) itself, our AI image and video stud
 
 ## License and credits
 
-CADCraft is dual-licensed under [MIT](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/LICENSE-MIT) or [Apache-2.0](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/LICENSE-APACHE), at your option.
-Copyright (c) 2026 ArtCraft Team and the CADCraft contributors. Required notices are in [NOTICE](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/NOTICE).
+CADCraft is dual-licensed under [MIT](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/LICENSE-MIT) or [Apache-2.0](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/LICENSE-APACHE), at your option.
+Copyright (c) 2026 ArtCraft Team and the CADCraft contributors. Required notices are in [NOTICE](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/NOTICE).
 
 Bundled fonts, icons, images and other assets keep their own open licenses; each one is listed
-with its author, source and license in [ATTRIBUTION.md](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/ATTRIBUTION.md).
+with its author, source and license in [ATTRIBUTION.md](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/ATTRIBUTION.md).
 
 CADCraft's icons, its single-stroke drafting font, its hatch patterns and its linetypes are all
 original work, drawn or defined in code. The sample drawings are generated in code too.
 
-The ArtCraft name, wordmark and logos in [`docs/brand/`](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/brand/) are trademarks of the
+The ArtCraft name, wordmark and logos in [`docs/brand/`](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/brand/) are trademarks of the
 ArtCraft Team and are not covered by this license. They may be used only unmodified, and only as
-part of this repository and CADCraft, under [`docs/brand/LICENSE-brand.txt`](https://github.com/storytold/cadcraft/blob/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/brand/LICENSE-brand.txt).
+part of this repository and CADCraft, under [`docs/brand/LICENSE-brand.txt`](https://github.com/storytold/cadcraft/blob/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/brand/LICENSE-brand.txt).
 Forks and modified versions must remove them.
 
 <p align="center">
-  <a href="https://getartcraft.com/"><img alt="ArtCraft" src="https://raw.githubusercontent.com/storytold/cadcraft/1c5e4f41f57a4dc218801bf98dfee7014259511e/docs/brand/artcraft-mark.svg" width="28"></a><br>
+  <a href="https://getartcraft.com/"><img alt="ArtCraft" src="https://raw.githubusercontent.com/storytold/cadcraft/fafe5f128ca1c35c50d6c2da08c64aba3b29457d/docs/brand/artcraft-mark.svg" width="28"></a><br>
   <sub>Made by the <a href="https://getartcraft.com/">ArtCraft</a> team and community.</sub>
 </p>
 
