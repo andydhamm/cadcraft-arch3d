@@ -160,7 +160,12 @@ pub fn wall_span(model: &ArchModel, w: &Wall) -> Option<(f64, f64)> {
     let h = if w.to_ceiling { level.map(|l| l.ceiling_height).unwrap_or(w.height) } else { w.height };
     // A spanning wall is one solid from its base level's floor to its top level's ceiling.
     let mut top = match w.top_level.and_then(|t| model.levels.iter().rev().find(|l| l.index == t)) {
-        Some(t) => t.elevation + t.ceiling_height,
+        Some(t) => {
+            if t.elevation <= base {
+                return None;
+            }
+            t.elevation + t.ceiling_height
+        }
         None => base + h,
     };
     if let Some(c) = cadcraft_arch::ceiling::overhead::wall_top_clip(model, w) {
