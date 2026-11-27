@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-27 10:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-27 11:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 6 of 7 segments merged**
 
-13,127 workspace tests passing at the last merge · 1497 segments merged in all · 0 of 15 seats working
+13,132 workspace tests passing at the last merge · 1498 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -33,20 +33,21 @@ Updated 2026-11-27 10:45 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 19.6 h so far · expected done Nov 27 14:10–Dec 05 14:55 UTC |
+| 23 | Phase 23 | pending | — | 19.9 h so far · expected done Nov 27 14:25–Dec 05 15:10 UTC |
 
 ## Phase 23 segments
 
-6 merged, 1 gate
+6 merged, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-97c5670a0` | merge upstream upstream/main up to 97c5670a0 (47 commits) | gate | tturbo-mac |
+| `upstream-sync-97c5670a0` | merge upstream upstream/main up to 97c5670a0 (47 commits) | merging | tturbo-mac |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 27 10:58 | `harden-p1-arch-inspect` | merged | 13,132 pass | bonsai-a |
 | Nov 27 10:39 | `harden-p1-arch3d` | merged | 13,127 pass | darwin-ws3 |
 | Nov 27 10:12 | `harden-p1-inspect-solved-poch` | merged | 13,109 pass | bonsai-a |
 | Nov 27 09:54 | `upstream-sync-d3af2d507` | merged | 13,106 pass | tturbo-mac2 |
@@ -58,14 +59,13 @@ Updated 2026-11-27 10:45 UTC. This page and the card in the README are regenerat
 | Nov 26 23:28 | `harden-p1-arch-xrecord-write` | merged | 12,987 pass | darwin-ws3 |
 | Nov 26 23:28 | `harden-p2-cmd-inspect-openings` | merged | 12,987 pass | tturbo-mac |
 | Nov 26 23:28 | `harden-p1-arch-validate` | merged | 12,987 pass | bonsai-a |
-| Nov 26 23:28 | `harden-p2-arch3d-components` | merged | 12,987 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1528 |
-| bonsai-b | bonsai2-27b | agent | 1441 |
+| bonsai-b | bonsai2-27b | agent | 1443 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 179 |
@@ -77,5 +77,5 @@ Updated 2026-11-27 10:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | gate | 1341 |
+| tturbo-mac | tturbo-ultraheretic | idle | 1342 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 763 |
