@@ -19,7 +19,9 @@ Generated-in-code assets are original and have no file to list:
 - the standard linetype and hatch-pattern libraries (`crates/doc/src/library.rs`; industry-common
   names, our own dash/spacing values);
 - the colour index palette, generated from its structure (`crates/color/src/lib.rs`);
-- the sample drawings (`crates/engine/src/sample.rs`).
+- the sample drawings (`crates/engine/src/sample.rs`);
+- the synthetic two-hexagon hatch logo (`crates/io/tests/it/hatch_loop_flags.rs`, `logo`):
+  original contributor geometry, generated in code from invented points, under MIT OR Apache-2.0.
 
 Lifted code (credited here, not generated in this repository):
 - the TIN/contour helpers in `crates/geom` (`src/tin.rs` and `src/tin_ops.rs`) lifted from the [`cadcraft-terrain`](https://github.com/zorgglubb/cadcraft) crate on [zorgglubb/cadcraft](https://github.com/zorgglubb/cadcraft) (`main` commit 5da6d7b; upstream `crates/terrain/src/tin.rs` and `contour.rs`) by zorgglubb; MIT OR Apache-2.0 (same as the code: `LICENSE-MIT`, `LICENSE-APACHE`).
