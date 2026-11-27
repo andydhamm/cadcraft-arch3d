@@ -97,8 +97,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     // a join: the solver's ring is used only when it does, otherwise we fall
     // back to the raw end-cap rectangle (`raw_wall_polygon`), which is also the
     // path for walls the solver skips entirely (degenerate / zero-length).
-    let mut solved: std::collections::BTreeMap<ArchId, (bool, &Vec<cadcraft_geom::Vec2>)> =
-        std::collections::BTreeMap::new();
+    let mut solved: std::collections::BTreeMap<ArchId, (bool, &Vec<cadcraft_geom::Vec2>)> = std::collections::BTreeMap::new();
     for s in &shapes {
         solved.insert(s.id, (s.joins.len() > 0, &s.polygon));
     }
@@ -153,10 +152,8 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             // Use the solved (mitred/butted) ring only when this wall has a
             // join; an isolated wall falls back to the raw end-cap rectangle,
             // as do walls the solver skips (degenerate / zero-length).
-            let poly: Option<&Vec<cadcraft_geom::Vec2>> = solved
-                .get(&w.id)
-                .and_then(|(has_join, ring)| (*has_join).then(ring))
-                .or_else(|| raw_wall_polygon(w).as_ref());
+            let poly: Option<&Vec<cadcraft_geom::Vec2>> =
+                solved.get(&w.id).and_then(|(has_join, ring)| (*has_join).then(|| ring)).or_else(|| raw_wall_polygon(w).as_ref());
             if let Some(poly) = poly {
                 let poly_json: Vec<Value> = poly.iter().map(|p| json!([p.x, p.y])).collect();
                 obj.insert("polygon".to_string(), Value::Array(poly_json));
@@ -5384,12 +5381,7 @@ mod tests {
         let mut s = Session::new();
         match s.doc_mut() {
             Ok(d) => {
-                d.arch.push_wall(Wall {
-                    start: Vec2::new(0.0, 0.0),
-                    end: Vec2::new(5.0, 0.0),
-                    thickness: 0.0,
-                    ..Wall::default(),
-                });
+                d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), thickness: 0.0, ..Wall::default() });
                 d.touch_arch();
             }
             Err(_) => {}
