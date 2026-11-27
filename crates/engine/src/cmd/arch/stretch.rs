@@ -512,4 +512,220 @@ mod tests {
         assert!((door_world - Vec2::new(10.0, 5.0)).len() < 1e-6, "door world start should be (10, 5): ({}, {})", door_world.x, door_world.y);
         assert!((door.offset - 3.0).abs() < 1e-6, "door offset should be 3.0: {}", door.offset);
     }
+
+    /// The `id` parameter is an accepted alias for `wall` and must name the same wall.
+    #[test]
+    fn arch_wall_stretch_accepts_id_param() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]]})).expect("wall command");
+
+        // `id` (not `wall`) names the stretched wall.
+        let res = s.execute("arch.wall.stretch", &json!({"id": "w0", "end": "end", "to": [12.0, 0.0]}));
+        assert!(matches!(res, Ok(_)), "id param should be accepted: {:?}", res);
+
+        let d = s.doc_mut().expect("doc_mut should succeed");
+        let w0 = d.arch.wall(ArchId(0)).expect("w0 should exist");
+        let w1 = d.arch.wall(ArchId(1)).expect("w1 should exist");
+        assert!((w0.end.x - 12.0).abs() < 1e-6, "w0.end.x should be 12: {}", w0.end.x);
+        assert!((w1.start.x - 12.0).abs() < 1e-6, "w1.start.x should be 12: {}", w1.start.x);
+
+        // The reply's `moved` list must name both the stretched and the following wall.
+        let reply = res.expect("res should be Ok");
+        let moved: Vec<String> = reply["moved"]
+            .as_array()
+            .expect("moved should be an array")
+            .iter()
+            .map(|v| v.as_str().expect("moved entries must be strings").to_string())
+            .collect();
+        assert!(moved.contains(&"w0".to_string()), "w0 should be in moved: {moved:?}");
+        assert!(moved.contains(&"w1".to_string()), "w1 should be in moved: {moved:?}");
+    }
+
+    /// The `end` keyword is case-insensitive (the command lowercases it before matching).
+    #[test]
+    fn arch_wall_stretch_accepts_uppercase_end() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]]})).expect("wall command");
+
+        // "END", "End" and "end" all mean End::End.
+        for e in ["END", "End", "end"] {
+            let r = s.execute("arch.wall.stretch", &json!({"wall": "w0", "end": e, "to": [12.0, 0.0]}));
+            assert!(matches!(r, Ok(_)), "end={e} should be accepted: {:?}", r);
+        }
+
+        let d = s.doc_mut().expect("doc_mut should succeed");
+        let w0 = d.arch.wall(ArchId(0)).expect("w0 should exist");
+        let w1 = d.arch.wall(ArchId(1)).expect("w1 should exist");
+        assert!((w0.end.x - 12.0).abs() < 1e-6, "w0.end.x should be 12: {}", w0.end.x);
+        assert!((w1.start.x - 12.0).abs() < 1e-6, "w1.start.x should be 12: {}", w1.start.x);
+    }
+
+    /// Moving the end of a single (unconnected) wall off its own axis rotates it in
+    /// place: the start is fixed, the end lands exactly on the requested point.
+    #[test]
+    fn arch_wall_stretch_isolated_perpendicular() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0]]})).expect("wall command");
+
+        let res = s.execute("arch.wall.stretch", &json!({"wall": "w0", "end": "end", "to": [5.0, 5.0]}));
+        assert!(matches!(res, Ok(_)), "perpendicular stretch should succeed: {:?}", res);
+
+        let d = s.doc_mut().expect("doc_mut should succeed");
+        let w0 = d.arch.wall(ArchId(0)).expect("w0 should exist");
+        assert!((w0.end - Vec2::new(5.0, 5.0)).len() < 1e-6, "w0.end should be (5, 5): ({}, {})", w0.end.x, w0.end.y);
+        assert!((w0.start - Vec2::new(0.0, 0.0)).len() < 1e-6, "w0.start should be unchanged: ({}, {})", w0.start.x, w0.start.y);
+    }
+
+    /// Dragging an end onto its own *current* position is a valid no-op: the degenerate
+    /// guard compares against the *other* end, so the wall is not collapsed.
+    #[test]
+    fn arch_wall_stretch_to_current_end_is_a_no_op() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0]]})).expect("wall command");
+
+        // w0.end is (10, 0); dragging it to (10, 0) must succeed and change nothing.
+        let res = s.execute("arch.wall.stretch", &json!({"wall": "w0", "end": "end", "to": [10.0, 0.0]}));
+        assert!(matches!(res, Ok(_)), "stretch onto the current end should succeed: {:?}", res);
+
+        let d = s.doc_mut().expect("doc_mut should succeed");
+        let w0 = d.arch.wall(ArchId(0)).expect("w0 should exist");
+        assert!((w0.end - Vec2::new(10.0, 0.0)).len() < 1e-6, "w0.end should be unchanged: ({}, {})", w0.end.x, w0.end.y);
+        assert!((w0.start - Vec2::new(0.0, 0.0)).len() < 1e-6, "w0.start should be unchanged: ({}, {})", w0.start.x, w0.start.y);
+    }
+
+    /// The reply must carry `moved` (an array) and `revision` (an integer), and the
+    /// revision must advance past the pre-stretch value.
+    #[test]
+    fn arch_wall_stretch_reply_carries_revision_and_moved() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]]})).expect("wall command");
+        let rev_before = s.doc().expect("doc").arch_revision;
+
+        let res = s.execute("arch.wall.stretch", &json!({"wall": "w0", "end": "end", "to": [12.0, 0.0]}));
+        let reply = res.expect("stretch should succeed: {res:?}");
+
+        assert!(reply["revision"].as_i64().is_some(), "reply must carry an integer `revision`: {:?}", reply);
+        assert!(reply["moved"].is_array(), "reply must carry a `moved` array: {:?}", reply);
+        assert_ne!(reply["revision"].as_i64(), Some(rev_before as i64), "revision must advance after a stretch: {reply:?}",);
+    }
+
+    /// A forward stretch followed by an inverse one restores the original join: this
+    /// pins the "neighbours follow, and follow back" round-trip invariant.
+    #[test]
+    fn arch_wall_stretch_round_trip_restores_neighbour() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]]})).expect("wall command");
+
+        // Forward: w0's end moves to (12, 0); w1's start follows.
+        let r1 = s.execute("arch.wall.stretch", &json!({"wall": "w0", "end": "end", "to": [12.0, 0.0]}));
+        assert!(matches!(r1, Ok(_)), "forward stretch should succeed: {:?}", r1);
+
+        let d = s.doc_mut().expect("doc_mut should succeed");
+        let w1a = d.arch.wall(ArchId(1)).expect("w1 should exist");
+        assert!(
+            (w1a.start - Vec2::new(12.0, 0.0)).len() < 1e-6,
+            "after forward stretch w1.start should be (12, 0): ({}, {})",
+            w1a.start.x,
+            w1a.start.y
+        );
+
+        // Back: w0's end returns to (10, 0); w1's start follows back.
+        let r2 = s.execute("arch.wall.stretch", &json!({"wall": "w0", "end": "end", "to": [10.0, 0.0]}));
+        assert!(matches!(r2, Ok(_)), "back stretch should succeed: {:?}", r2);
+
+        let d2 = s.doc_mut().expect("doc_mut should succeed");
+        let w0b = d2.arch.wall(ArchId(0)).expect("w0 should exist");
+        let w1b = d2.arch.wall(ArchId(1)).expect("w1 should exist");
+        assert!((w0b.end - Vec2::new(10.0, 0.0)).len() < 1e-6, "after back stretch w0.end should be (10, 0): ({}, {})", w0b.end.x, w0b.end.y);
+        assert!((w1b.start - Vec2::new(10.0, 0.0)).len() < 1e-6, "after back stretch w1.start should be (10, 0): ({}, {})", w1b.start.x, w1b.start.y);
+    }
+
+    /// A non-finite `to` when moving the *end* grip is refused (mirrors the `start`-side
+    /// NaN test) and leaves both the model and the undo history untouched.
+    #[test]
+    fn arch_wall_stretch_nan_end_to_is_an_error() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0]]})).expect("wall command");
+        let undo_before = s.state().expect("should have state").undo.len();
+
+        let r = s.execute("arch.wall.stretch", &json!({"wall": "w0", "end": "end", "to": [f64::NAN, 0.0]}));
+        assert!(matches!(r, Err(EngineError::BadParams { .. })), "NaN in to (end) should be BadParams: {:?}", r);
+
+        // Model unchanged: w0.end still (10, 0); no new undo step.
+        let d = s.doc_mut().expect("doc_mut should succeed");
+        let w0 = d.arch.wall(ArchId(0)).expect("w0");
+        assert!((w0.end.x - 10.0).abs() < 1e-6, "w0.end.x should still be 10: {}", w0.end.x);
+        assert_eq!(s.state().expect("should have state").undo.len(), undo_before, "no new undo step for the refused stretch");
+    }
+
+    /// An infinite `to` is refused (hostile input) and leaves both the model and the
+    /// undo history untouched.
+    #[test]
+    fn arch_wall_stretch_inf_to_is_an_error() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0]]})).expect("wall command");
+        let undo_before = s.state().expect("should have state").undo.len();
+
+        let r = s.execute("arch.wall.stretch", &json!({"wall": "w0", "end": "end", "to": [f64::INFINITY, 0.0]}));
+        assert!(matches!(r, Err(EngineError::BadParams { .. })), "Inf in to should be BadParams: {:?}", r);
+
+        let d = s.doc_mut().expect("doc_mut should succeed");
+        let w0 = d.arch.wall(ArchId(0)).expect("w0");
+        assert!((w0.end.x - 10.0).abs() < 1e-6, "w0.end.x should still be 10: {}", w0.end.x);
+        assert_eq!(s.state().expect("should have state").undo.len(), undo_before, "no new undo step for the refused stretch");
+    }
+
+    /// A blank/empty `wall` id is refused (hostile input) and leaves both the model and
+    /// the undo history untouched.
+    #[test]
+    fn arch_wall_stretch_blank_wall_id_is_an_error() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]]})).expect("wall command");
+        let undo_before = s.state().expect("should have state").undo.len();
+
+        // Empty id -> parse fails -> BadParams.
+        let r = s.execute("arch.wall.stretch", &json!({"wall": "", "end": "end", "to": [12.0, 0.0]}));
+        assert!(matches!(r, Err(EngineError::BadParams { .. })), "empty wall should be BadParams: {:?}", r);
+        // Whitespace-only id -> trim to empty -> parse fails -> BadParams.
+        let r2 = s.execute("arch.wall.stretch", &json!({"wall": "   ", "end": "end", "to": [12.0, 0.0]}));
+        assert!(matches!(r2, Err(EngineError::BadParams { .. })), "blank wall should be BadParams: {:?}", r2);
+
+        // Model and undo history untouched by the refused stretches.
+        assert_eq!(s.state().expect("should have state").undo.len(), undo_before, "no new undo step for the refused stretches");
+        let d = s.doc_mut().expect("doc_mut should succeed");
+        let w0 = d.arch.wall(ArchId(0)).expect("w0");
+        assert!((w0.end.x - 10.0).abs() < 1e-6 && w0.end.y.abs() < 1e-6, "w0.end should still be (10, 0)");
+        let w1 = d.arch.wall(ArchId(1)).expect("w1");
+        assert!((w1.start - Vec2::new(10.0, 0.0)).len() < 1e-6, "w1.start should still be (10, 0)");
+    }
+
+    /// Moving the `end` grip of an isolated wall off its axis rotates the wall about
+    /// its fixed start: existing offsets are kept, so a hosted opening moves with the
+    /// wall (its world point lands on the rotated axis) rather than staying put.
+    #[test]
+    fn arch_wall_stretch_isolated_end_rotation_keeps_offset() {
+        let mut s = Session::new();
+        s.execute("wall", &json!({"points": [[0.0, 0.0], [10.0, 0.0]]})).expect("wall command");
+        // Window at offset 5 -> world (5, 0).
+        s.execute("window", &json!({"wall": "w0", "offset": 5.0, "width": 1.0, "height": 1.5, "sill": 0.9})).expect("window on w0");
+
+        // Rotate the end to (0, 10): the wall becomes (0, 0)-(0, 10). The offset must
+        // stay 5 and the opening's world point must land on the rotated axis at (0, 5).
+        let res = s.execute("arch.wall.stretch", &json!({"wall": "w0", "end": "end", "to": [0.0, 10.0]}));
+        assert!(matches!(res, Ok(_)), "end-rotation should succeed: {:?}", res);
+
+        let d = s.doc().expect("doc");
+        let w0 = d.arch.wall(ArchId(0)).expect("w0");
+        assert!((w0.start - Vec2::new(0.0, 0.0)).len() < 1e-6, "start must stay fixed: ({}, {})", w0.start.x, w0.start.y);
+        assert!((w0.end - Vec2::new(0.0, 10.0)).len() < 1e-6, "end must be (0, 10): ({}, {})", w0.end.x, w0.end.y);
+        let win = d.arch.opening(ArchId(0)).expect("window");
+        assert!((win.offset - 5.0).abs() < 1e-6, "offset must stay 5: {}", win.offset);
+        let world = w0.start + (w0.end - w0.start).normalized() * win.offset;
+        assert!(
+            (world - Vec2::new(0.0, 5.0)).len() < 1e-6,
+            "opening world point should be on the rotated axis at (0, 5): ({}, {})",
+            world.x,
+            world.y
+        );
+    }
 }
