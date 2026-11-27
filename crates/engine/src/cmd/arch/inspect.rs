@@ -5187,7 +5187,8 @@ mod tests {
     #[test]
     fn arch_inspect_poché_direction_independent_bounds() {
         fn wall_bounds(v: Value) -> (f64, f64, f64, f64) {
-            let walls = v["walls"].as_array().unwrap_or(&[Value::Null]);
+            let empty: Vec<Value> = Vec::new();
+            let walls = v["walls"].as_array().unwrap_or(&empty);
             let poly = walls.get(0).and_then(|w| w.as_array()).and_then(|a| a.get(0)).and_then(Value::as_array).expect("polygon array missing");
             let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
             for p in poly {
@@ -5232,5 +5233,120 @@ mod tests {
             (min_xf - (-0.1)).abs() < 1e-6 && (max_xf - 5.1).abs() < 1e-6 && (min_yf - (-0.1)).abs() < 1e-6 && (max_yf - 0.1).abs() < 1e-6,
             "forward wall bounds {min_xf}..{max_xf} {min_yf}..{max_yf} != raw rectangle"
         );
+    }
+
+    /// The poché perpendicular extent equals the full wall thickness (half-thickness
+    /// on each side of the centreline). Pins that the offset scales with the stored
+    /// thickness: a 0.2 m wall spans y in [-0.1, 0.1]; a 0.1 m wall spans y in
+    /// [-0.05, 0.05]. Both are isolated walls, so the raw-rectangle and the
+    /// join-solved ring agree.
+    #[test]
+    fn arch_inspect_poché_perpendicular_extent_scales_with_thickness() {
+        for (thickness, half) in [(0.2, 0.1), (0.1, 0.05)] {
+            let mut s = Session::new();
+            exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]], "thickness": thickness }));
+            let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+            let empty: Vec<Value> = Vec::new();
+            let walls = v["walls"].as_array().unwrap_or(&empty);
+            assert_eq!(walls.len(), 1, "expected one isolated wall for {thickness}");
+            assert!(walls[0]["polygon"].is_array(), "polygon must be present");
+            let poly = walls[0]["polygon"].as_array().unwrap_or(&empty);
+            let mut min_y = f64::INFINITY;
+            let mut max_y = f64::NEG_INFINITY;
+            let mut any = false;
+            for p in poly {
+                if let Some(c) = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64) {
+                    any = true;
+                    min_y = min_y.min(c);
+                    max_y = max_y.max(c);
+                }
+            }
+            assert!(any, "poché polygon has no vertices for {thickness}");
+            assert!((min_y - (-half)).abs() < 1e-6 && (max_y - half).abs() < 1e-6, "{thickness} m wall should span y in [{min_y}, {max_y}]");
+        }
+    }
+
+    /// Every poché vertex across the full 6-wall demo plan is a two-element [x, y]
+    /// array of finite numbers. Pins the per-vertex JSON structure the renderer and
+    /// the acceptance checks read, and that no degenerate ring leaks a non-finite
+    /// coordinate.
+    #[test]
+    fn arch_inspect_poché_vertices_are_finite_xy_pairs() {
+        let mut s = Session::new();
+        build_full_demo_plan(&mut s);
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 6, "expected 6 walls in the full demo plan");
+        let mut checked = 0;
+        for w in walls {
+            if let Some(poly) = w["polygon"].as_array() {
+                for p in poly {
+                    assert!(p.is_array(), "poché vertex must be an array: {p}");
+                    let pair = p.as_array().unwrap_or(&empty);
+                    assert_eq!(pair.len(), 2, "poché vertex must be exactly [x, y]: {pair}");
+                    for c in pair {
+                        assert!(c.is_number(), "poché vertex component must be a number: {c}");
+                        assert!(c.as_f64().is_some_and(f64::is_finite), "poché vertex must be finite: {c}");
+                    }
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked > 0, "no poché vertices were collected");
+    }
+
+    /// Two walls crossing at right angles (a plus / X sign) produce finite poché
+    /// rings; none of the emitted vertices diverge. Pins the join solver meeting
+    /// every crossing so that an intersecting wall graph does not crash
+    /// `arch.inspect {"poche": true}`.
+    #[test]
+    fn arch_inspect_poché_crossing_walls_stay_finite() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 4.0], [8.0, 4.0]], "thickness": 0.2 }));
+        exec(&mut s, "wall", &json!({ "points": [[4.0, 0.0], [4.0, 8.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 2, "expected the two crossing walls");
+        let mut checked = 0;
+        for w in walls {
+            if let Some(poly) = w["polygon"].as_array() {
+                for p in poly {
+                    if let Some(c) = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64) {
+                        assert!(c.is_finite(), "crossing wall vertex x {c} not finite");
+                    }
+                    if let Some(c) = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64) {
+                        assert!(c.is_finite(), "crossing wall vertex y {c} not finite");
+                    }
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked > 0, "no poché vertices collected from crossing walls");
+    }
+
+    /// An isolated 45° wall gets a finite, closed poché ring (at least four corners)
+    /// even though its centreline is not axis-aligned; the perpendicular offset must
+    /// not produce NaN/Inf at the corners. Pins angled-wall poché.
+    #[test]
+    fn arch_inspect_poché_angled_wall_stays_finite() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [4.0, 4.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one angled wall");
+        assert!(walls[0]["polygon"].is_array(), "angled isolated wall must report a polygon");
+        let poly = walls[0]["polygon"].as_array().unwrap_or(&empty);
+        assert!(poly.len() >= 4, "poché must have at least 4 vertices: {poly}");
+        for p in poly {
+            if let Some(c) = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64) {
+                assert!(c.is_finite(), "angled wall vertex x {c} not finite");
+            }
+            if let Some(c) = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64) {
+                assert!(c.is_finite(), "angled wall vertex y {c} not finite");
+            }
+        }
     }
 }
