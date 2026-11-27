@@ -90,14 +90,13 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
 
     let shapes = solve_joins(&d.arch);
     let mut solved: std::collections::BTreeMap<ArchId, &Vec<cadcraft_geom::Vec2>> = std::collections::BTreeMap::new();
-    // Only walls that actually participate in a join get the *mitred* solved ring.
-    // Every other wall (isolated, degenerate, or zero-join) keeps the raw
-    // `wall_polygon` — its mitred end-cap rectangle, which for an isolated wall is
-    // the correct poché outline.
+    // Every shape the join solver produces carries a valid poché ring.  Walls
+    // that share a join get the mitred ring; isolated walls (empty `joins`)
+    // get the raw end-cap rectangle, which the solver emits unchanged.  The
+    // `wall_polygon(w)` fallback below is only reached for walls the solver
+    // skips entirely (degenerate / zero-length).
     for s in &shapes {
-        if !s.joins.is_empty() {
-            solved.insert(s.id, &s.polygon);
-        }
+        solved.insert(s.id, &s.polygon);
     }
 
     let mut walls = Vec::new();
