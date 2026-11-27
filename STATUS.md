@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-27 04:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-27 04:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 4 of 5 segments merged**
 
@@ -33,15 +33,15 @@ Updated 2026-11-27 04:15 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 13.1 h so far · expected done Nov 27 06:26–Nov 30 09:19 UTC |
+| 23 | Phase 23 | pending | — | 13.4 h so far · expected done Nov 27 06:40–Nov 30 09:34 UTC |
 
 ## Phase 23 segments
 
-4 merged, 1 working
+4 merged, 1 escalate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-fafe5f128` | merge upstream upstream/main up to fafe5f128 (76 commits) | working | mai-flash-esc |
+| `upstream-sync-fafe5f128` | merge upstream upstream/main up to fafe5f128 (76 commits) | escalate |  |
 
 ## Recent merges
 
@@ -64,7 +64,7 @@ Updated 2026-11-27 04:15 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1511 |
+| bonsai-a | bonsai2-27b | agent | 1512 |
 | bonsai-b | bonsai2-27b | idle | 1438 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
@@ -76,6 +76,6 @@ Updated 2026-11-27 04:15 UTC. This page and the card in the README are regenerat
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
-| mai-flash-esc | mai-code-1.1-flash | agent | 178 |
+| mai-flash-esc | mai-code-1.1-flash | down | 178 |
 | tturbo-mac | tturbo-ultraheretic | gate | 1339 |
 | tturbo-mac2 | tturbo-ultraheretic | idle | 762 |
