@@ -2002,4 +2002,91 @@ mod tests {
         assert!(m.is_manifold(), "1e6 m square prism must be a closed manifold");
         assert_eq!(m.triangle_count(), 12, "expected 12 triangles for a 4-gon prism, got {}", m.triangle_count());
     }
+
+    #[test]
+    fn push_prism_rejects_empty_ring() {
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism(&[], 0.0, 2.5);
+        assert!(m.positions.is_empty(), "empty ring must emit no positions");
+        assert!(m.indices.is_empty(), "empty ring must emit no indices");
+    }
+
+    #[test]
+    fn push_prism_rejects_two_vertex_ring() {
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)];
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism(&ring, 0.0, 2.5);
+        assert!(m.positions.is_empty(), "2-vertex ring must emit no positions");
+        assert!(m.indices.is_empty(), "2-vertex ring must emit no indices");
+    }
+
+    #[test]
+    fn push_prism_rejects_collinear_ring() {
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(2.0, 0.0)];
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism(&ring, 0.0, 2.5);
+        assert!(m.positions.is_empty(), "collinear ring must emit no positions");
+        assert!(m.indices.is_empty(), "collinear ring must emit no indices");
+    }
+
+    #[test]
+    fn push_prism_rejects_nan_in_ring() {
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, f64::NAN), Vec2::new(2.0, 1.0)];
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism(&ring, 0.0, 2.5);
+        assert!(m.positions.is_empty(), "ring with NaN must emit no positions");
+        assert!(m.indices.is_empty(), "ring with NaN must emit no indices");
+    }
+
+    #[test]
+    fn push_prism_rejects_inf_in_ring() {
+        let ring = vec![Vec2::new(0.0, 0.0), Vec2::new(f64::INFINITY, 1.0), Vec2::new(2.0, 1.0)];
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism(&ring, 0.0, 2.5);
+        assert!(m.positions.is_empty(), "ring with Inf must emit no positions");
+        assert!(m.indices.is_empty(), "ring with Inf must emit no indices");
+    }
+
+    #[test]
+    fn push_prism_with_holes_rejects_empty_outer() {
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism_with_holes(&[], &[], 0.0, 2.5);
+        assert!(m.positions.is_empty(), "empty outer must emit no positions");
+    }
+
+    #[test]
+    fn push_prism_with_holes_rejects_two_vertex_outer() {
+        let outer = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0)];
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism_with_holes(&outer, &[], 0.0, 2.5);
+        assert!(m.positions.is_empty(), "2-vertex outer must emit no positions");
+    }
+
+    #[test]
+    fn push_prism_with_holes_rejects_nan_in_outer() {
+        let outer = vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, f64::NAN), Vec2::new(2.0, 1.0)];
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism_with_holes(&outer, &[], 0.0, 2.5);
+        assert!(m.positions.is_empty(), "outer with NaN must emit no positions");
+    }
+
+    #[test]
+    fn push_prism_with_holes_ignores_empty_hole() {
+        let outer = square_ring();
+        let holes = vec![vec![]];
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism_with_holes(&outer, &holes, 0.0, 2.5);
+        assert!(!m.positions.is_empty(), "empty hole should be ignored, not fail the build");
+        assert!(m.is_manifold(), "prism with empty hole must be manifold");
+    }
+
+    #[test]
+    fn push_prism_with_holes_ignores_two_vertex_hole() {
+        let outer = square_ring();
+        let holes = vec![vec![Vec2::new(3.5, 3.5), Vec2::new(4.5, 3.5)]];
+        let mut m = Mesh::new("wall", ArchId(1));
+        m.push_prism_with_holes(&outer, &holes, 0.0, 2.5);
+        assert!(!m.positions.is_empty(), "2-vertex hole should be ignored");
+        assert!(m.is_manifold(), "prism with 2-vertex hole must be manifold");
+    }
 }
