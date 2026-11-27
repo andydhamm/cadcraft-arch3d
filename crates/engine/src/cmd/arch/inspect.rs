@@ -4905,12 +4905,20 @@ mod tests {
 
     /// A zero-length wall (start == end) survives poché: the join solver skips
     /// degenerate walls and `wall_polygon` has no direction to offset a point,
-    /// so no `polygon` key is emitted.  The command must not crash and every
-    /// vertex it does emit must be finite.
+    /// so no `polygon` key is emitted.  The `wall` command rejects such
+    /// hostile input (points must be 2 or more distinct points), so the stored
+    /// degenerate wall is pushed directly onto the model instead — `arch.inspect`
+    /// must still handle it: no crash, every emitted vertex finite.
     #[test]
     fn arch_inspect_poché_zero_length_wall_does_not_crash() {
         let mut s = Session::new();
-        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [0.0, 0.0]], "thickness": 0.2 }));
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), thickness: 0.2, ..Wall::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
         let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
         let empty: Vec<Value> = Vec::new();
         let walls = v["walls"].as_array().unwrap_or(&empty);
@@ -4963,5 +4971,124 @@ mod tests {
             assert!(px >= 1e9 - 0.2 && px <= 1e9 + 5.2, "vertex x {px} outside expected range [1e9 - 0.2, 1e9 + 5.2]");
             assert!(py >= 1e9 - 0.2 && py <= 1e9 + 0.2, "vertex y {py} outside expected range [1e9 - 0.2, 1e9 + 0.2]");
         }
+    }
+
+    /// An isolated wall has nothing to join against, so the solved ring equals
+    /// the raw `wall_polygon` rectangle: the join-solved path and the poché
+    /// fallback must agree.  Pins the exact corners of a single wall
+    /// (0,0)-(5,0), t 0.2 — [(-0.1,-0.1),(5.1,-0.1),(4.9,0.1),(0.1,0.1)] —
+    /// and that no vertex sits on the far centerline end (x = 5.0), which a
+    /// broken emission (un-offset or centerline-based) would produce.
+    #[test]
+    fn arch_inspect_poché_isolated_wall_matches_raw_rectangle() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one isolated wall");
+        let poly = walls[0]["polygon"].as_array().expect("polygon array missing");
+        let corners = [(-0.1, -0.1), (5.1, -0.1), (4.9, 0.1), (0.1, 0.1)];
+        for (cx, cy) in corners {
+            let found = poly.iter().any(|p| {
+                let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                (px - cx).abs() < 1e-6 && (py - cy).abs() < 1e-6
+            });
+            assert!(found, "corner ({cx}, {cy}) missing from isolated wall polygon");
+        }
+        let on_centerline_end = poly.iter().any(|p| {
+            let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            (px - 5.0).abs() < 1e-6
+        });
+        assert!(!on_centerline_end, "isolated wall polygon must not contain a vertex on the far centerline end (x = 5.0)");
+    }
+
+    /// Union-of-all-rings invariant (spec): on the phase-1 demo plan the solved
+    /// poché rings span exactly x ∈ [-0.1, 10.1] and y ∈ [-0.1, 8.1] — the
+    /// exterior rectangle offset by half its thickness, with no ring overshooting
+    /// the plan.  The interior walls (t 0.1) must butt at the exterior faces,
+    /// never extend past them, and no exterior ring may exceed its offset.
+    #[test]
+    fn arch_inspect_poché_all_rings_union_bounds() {
+        let mut s = Session::new();
+        build_full_demo_plan(&mut s);
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 6, "expected 6 walls in the full demo plan");
+        let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        let mut vertices = 0;
+        for w in walls {
+            if let Some(poly) = w["polygon"].as_array() {
+                for p in poly {
+                    let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                    let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                    if px.is_finite() {
+                        min_x = min_x.min(px);
+                        max_x = max_x.max(px);
+                        vertices += 1;
+                    }
+                    if py.is_finite() {
+                        min_y = min_y.min(py);
+                        max_y = max_y.max(py);
+                    }
+                }
+            }
+        }
+        assert!(vertices > 0, "no finite poché vertices collected");
+        assert!((min_x - (-0.1)).abs() < 1e-6, "union min x {min_x} != -0.1");
+        assert!((min_y - (-0.1)).abs() < 1e-6, "union min y {min_y} != -0.1");
+        assert!((max_x - 10.1).abs() < 1e-6, "union max x {max_x} != 10.1");
+        assert!((max_y - 8.1).abs() < 1e-6, "union max y {max_y} != 8.1");
+    }
+
+    /// Hostile stored input: a wall carrying a NaN in its centerline has no
+    /// direction for the raw poché and is skipped by the join solver, so
+    /// `arch.inspect` must still succeed, report the wall with a null start x,
+    /// and must not emit a non-finite polygon vertex.
+    #[test]
+    fn arch_inspect_poché_nan_wall_no_crash_no_bad_vertex() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_wall(Wall { start: Vec2::new(f64::NAN, 0.0), end: Vec2::new(5.0, 0.0), thickness: 0.2, ..Wall::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall");
+        let w = &walls[0];
+        assert!(w["start"][0].is_null(), "NaN start x must serialize to null");
+        assert!(w["handle"].is_string(), "handle must survive a NaN wall");
+        // serde_json can never hold a NaN number, so "a number" is the same as
+        // "a finite number"; the only legal emission for a degenerate vertex is null.
+        if let Some(poly) = w["polygon"].as_array() {
+            for p in poly {
+                for i in 0..2 {
+                    let coord = p.as_array().and_then(|a| a.get(i));
+                    assert!(coord.map_or(true, |c| c.is_null() || c.is_number()), "poché vertex {p} must be null or a finite number");
+                }
+            }
+        }
+    }
+
+    /// Repeated poché inspects must agree exactly: `run_inspect` is a pure
+    /// function of the stored model (no `doc_mut`, no revision bump, no ordering
+    /// drift across calls).
+    #[test]
+    fn arch_inspect_poché_is_deterministic_across_calls() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [10.0, 0.0]], "thickness": 0.2 }));
+        exec(&mut s, "wall", &json!({ "points": [[10.0, 0.0], [10.0, 8.0]], "thickness": 0.2 }));
+        exec(&mut s, "wall", &json!({ "points": [[10.0, 8.0], [0.0, 8.0]], "thickness": 0.2 }));
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 8.0], [0.0, 0.0]], "thickness": 0.2 }));
+        let params = json!({ "poche": true, "rooms": true, "levels": true });
+        let first = exec(&mut s, "arch.inspect", &params);
+        let second = exec(&mut s, "arch.inspect", &json!({ "poche": true, "rooms": true, "levels": true }));
+        assert_eq!(first, second, "poché inspect must be deterministic across calls");
     }
 }
