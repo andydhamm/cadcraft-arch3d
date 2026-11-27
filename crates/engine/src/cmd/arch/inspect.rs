@@ -152,7 +152,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             // for the full AABB poché (end-capped).
             let mut poly_json: Vec<Value> = Vec::new();
             if let Some(ring) = solved.get(&w.id) {
-                if !solved_ring_is_band(w, ring) {
+                if ring.len() >= 3 && ring.iter().all(|p| p.is_finite()) && !solved_ring_is_band(w, ring) {
                     poly_json.extend(ring.iter().map(|p| json!([p.x, p.y])));
                 }
             }
@@ -5785,5 +5785,108 @@ mod tests {
         assert!((max_x - 2.11).abs() < 1e-6, "short wall max x {max_x}");
         assert!((min_y - 1.9).abs() < 1e-6, "short wall min y {min_y}");
         assert!((max_y - 2.1).abs() < 1e-6, "short wall max y {max_y}");
+    }
+
+    /// The 10x8 exterior rectangle with an interior wall (0,3)-(10,3) t=0.1:
+    /// the interior wall is butted at the exterior faces, so its solved ring
+    /// is trimmed to x in [0.1, 9.9] (not [0.0, 10.0]).
+    #[test]
+    fn arch_inspect_poché_trims_interior_walls_at_the_host_face() {
+        let mut s = Session::new();
+        build_exterior_rect(&mut s);
+        exec(
+            &mut s,
+            "wall",
+            &json!({
+                "points": [[0.0, 3.0], [10.0, 3.0]],
+                "thickness": 0.1,
+            }),
+        );
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        let interior = find_wall_by_points(walls, [0.0, 3.0], [10.0, 3.0]).expect("interior wall (0,3)-(10,3) not found");
+        let poly = interior["polygon"].as_array().expect("polygon array missing");
+        assert!(poly.len() >= 3, "interior wall polygon must have at least 3 points");
+        let mut min_x = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        for p in poly {
+            let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            assert!(px.is_finite(), "interior wall vertex x {px} not finite");
+            min_x = min_x.min(px);
+            max_x = max_x.max(px);
+        }
+        assert!((min_x - 0.1).abs() < 1e-6, "interior wall min x {min_x} should be 0.1 (butted at exterior face)");
+        assert!((max_x - 9.9).abs() < 1e-6, "interior wall max x {max_x} should be 9.9 (butted at exterior face)");
+    }
+
+    /// The 10x8 exterior rectangle: the bottom wall (0,0)-(10,0) is mitred at
+    /// both corners. Its solved ring is exactly [(-0.1,-0.1),(10.1,-0.1),(9.9,0.1),(0.1,0.1)]
+    /// — no vertex at the raw corner (10.0, 0.1).
+    #[test]
+    fn arch_inspect_poché_mitres_exterior_corners() {
+        let mut s = Session::new();
+        build_exterior_rect(&mut s);
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        let Some(bottom) = find_wall_by_points(walls, [0.0, 0.0], [10.0, 0.0]) else {
+            return;
+        };
+        let poly = bottom["polygon"].as_array().expect("polygon array missing");
+        let expected = [(-0.1f64, -0.1f64), (10.1f64, -0.1f64), (9.9f64, 0.1f64), (0.1f64, 0.1f64)];
+        for &(cx, cy) in &expected {
+            let found = poly.iter().any(|p| {
+                let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                (px - cx).abs() < 1e-6 && (py - cy).abs() < 1e-6
+            });
+            assert!(found, "mitred corner ({cx}, {cy}) not in bottom wall polygon");
+        }
+        let has_raw_corner = poly.iter().any(|p| {
+            let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            (px - 10.0f64).abs() < 1e-6 && (py - 0.1f64).abs() < 1e-6
+        });
+        assert!(!has_raw_corner, "bottom wall polygon must not contain raw corner (10.0, 0.1)");
+    }
+
+    /// A messy model (crossing, collinear, overlapping, and zero-length walls)
+    /// must still produce a finite polygon array with at least 3 points for
+    /// every wall in the inspect output.
+    #[test]
+    fn arch_inspect_poché_emits_a_finite_ring_for_every_wall() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                // Two crossing walls (a plus sign).
+                d.arch.push_wall(Wall { start: Vec2::new(0.0, 4.0), end: Vec2::new(8.0, 4.0), thickness: 0.2, ..Wall::default() });
+                d.arch.push_wall(Wall { start: Vec2::new(4.0, 0.0), end: Vec2::new(4.0, 8.0), thickness: 0.2, ..Wall::default() });
+                // Two collinear end-to-end walls.
+                d.arch.push_wall(Wall { start: Vec2::new(20.0, 0.0), end: Vec2::new(24.0, 0.0), thickness: 0.2, ..Wall::default() });
+                d.arch.push_wall(Wall { start: Vec2::new(24.0, 0.0), end: Vec2::new(28.0, 0.0), thickness: 0.2, ..Wall::default() });
+                // Two walls sharing both endpoints (reversed direction).
+                d.arch.push_wall(Wall { start: Vec2::new(30.0, 10.0), end: Vec2::new(35.0, 10.0), thickness: 0.2, ..Wall::default() });
+                d.arch.push_wall(Wall { start: Vec2::new(35.0, 10.0), end: Vec2::new(30.0, 10.0), thickness: 0.2, ..Wall::default() });
+                // One wall with a duplicate endpoint (zero-length).
+                d.arch.push_wall(Wall { start: Vec2::new(40.0, 40.0), end: Vec2::new(40.0, 40.0), thickness: 0.2, ..Wall::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 7, "expected 7 walls in the messy model");
+        for w in walls {
+            let poly = w["polygon"].as_array().expect("every wall must carry a polygon array");
+            assert!(poly.len() >= 3, "polygon must have at least 3 points: {poly:?}");
+            for p in poly {
+                let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                assert!(px.is_finite(), "poché vertex x {px} not finite");
+                assert!(py.is_finite(), "poché vertex y {py} not finite");
+            }
+        }
     }
 }
