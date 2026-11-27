@@ -1107,6 +1107,67 @@ mod tests {
     }
 
     #[test]
+    fn wall_machine_close_with_one_point_does_not_finish() {
+        let mut s = new_session_with_level();
+        s.start("wall").unwrap();
+        s.input(Input::Point(Vec2::new(0.0, 0.0))).unwrap();
+        // Close with only one point: the command needs at least 2 points to finish.
+        s.input(Input::Text("close".to_string()).into()).unwrap();
+        assert_eq!(s.doc().unwrap().arch.walls.len(), 0, "close with one point must not finish");
+        // Add a second point and close again.
+        s.input(Input::Point(Vec2::new(3.0, 0.0))).unwrap();
+        s.input(Input::Text("close".to_string()).into()).unwrap();
+        assert_eq!(s.doc().unwrap().arch.walls.len(), 1);
+    }
+
+    #[test]
+    fn wall_machine_close_when_already_closed() {
+        let mut s = new_session_with_level();
+        s.start("wall").unwrap();
+        s.input(Input::Point(Vec2::new(0.0, 0.0))).unwrap();
+        s.input(Input::Point(Vec2::new(4.0, 0.0))).unwrap();
+        s.input(Input::Point(Vec2::new(4.0, 3.0))).unwrap();
+        s.input(Input::Point(Vec2::new(0.0, 0.0))).unwrap();
+        // The last point equals the first; the wall is already closed.
+        s.input(Input::Text("close".to_string()).into()).unwrap();
+        let d = s.doc().unwrap();
+        // Should create 3 walls (the closing segment is not added when already closed).
+        assert_eq!(d.arch.walls.len(), 3);
+        assert_eq!(d.arch.walls[2].start, Vec2::new(4.0, 3.0));
+        assert_eq!(d.arch.walls[2].end, Vec2::new(0.0, 0.0));
+    }
+
+    #[test]
+    fn wall_machine_close_with_nan_point() {
+        let mut s = new_session_with_level();
+        s.start("wall").unwrap();
+        s.input(Input::Point(Vec2::new(0.0, 0.0))).unwrap();
+        // A NaN point is rejected by the machine (re-prompt).
+        s.input(Input::Point(Vec2::new(f64::NAN, 0.0))).unwrap();
+        s.input(Input::Point(Vec2::new(4.0, 0.0))).unwrap();
+        s.input(Input::Text("close".to_string()).into()).unwrap();
+        let d = s.doc().unwrap();
+        // Only 2 valid points were collected, so close creates 1 wall.
+        assert_eq!(d.arch.walls.len(), 1);
+        assert_eq!(d.arch.walls[0].start, Vec2::new(0.0, 0.0));
+        assert_eq!(d.arch.walls[0].end, Vec2::new(4.0, 0.0));
+    }
+
+    #[test]
+    fn wall_machine_close_with_huge_coordinates() {
+        let mut s = new_session_with_level();
+        s.start("wall").unwrap();
+        s.input(Input::Point(Vec2::new(0.0, 0.0))).unwrap();
+        s.input(Input::Point(Vec2::new(1e15, 0.0))).unwrap();
+        s.input(Input::Point(Vec2::new(1e15, 1e15))).unwrap();
+        s.input(Input::Text("close".to_string()).into()).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.arch.walls.len(), 3);
+        assert_eq!(d.arch.walls[2].start, Vec2::new(1e15, 1e15));
+        assert_eq!(d.arch.walls[2].end, Vec2::new(0.0, 0.0));
+    }
+
+    #[test]
     fn wall_height_nan_rejected() {
         let mut s = new_session_with_level();
         let p = json!({

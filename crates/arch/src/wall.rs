@@ -48,10 +48,23 @@ pub fn wall_length(w: &Wall) -> f64 {
 }
 
 /// Bounding box of the wall's poché ring.
+///
+/// For a zero-thickness wall with non-zero length, returns bounds covering the
+/// centerline. Returns `Bounds2::EMPTY` only for degenerate walls (zero length,
+/// non-finite points).
 pub fn wall_bounds(w: &Wall) -> Bounds2 {
     match wall_polygon(w) {
         Some(pts) => Bounds2::from_points(pts.iter().copied()),
-        None => Bounds2::EMPTY,
+        None => {
+            if !w.start.is_finite() || !w.end.is_finite() {
+                return Bounds2::EMPTY;
+            }
+            let len = w.start.dist(w.end);
+            if len < 1e-12 || !len.is_finite() {
+                return Bounds2::EMPTY;
+            }
+            Bounds2::from_points([w.start, w.end].iter().copied())
+        }
     }
 }
 

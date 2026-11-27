@@ -1316,4 +1316,54 @@ mod tests {
         let cam = &r["cameras"][0];
         assert_eq!(cam["look"]["sun"]["disc"], json!(0.53));
     }
+
+    #[test]
+    fn camera_orbit_on_overview_without_distance_refused() {
+        let mut s = Session::new();
+        s.execute("camera", &json!({ "save": "o", "kind": "overview", "level": 0 })).unwrap();
+        // Overview cameras have no distance until camera.update sets one.
+        let r = s.execute("camera.orbit", &json!({ "name": "o", "distance": 2.0 }));
+        assert!(matches!(r, Err(EngineError::BadParams { .. })), "orbit an overview without a distance must be refused");
+    }
+
+    #[test]
+    fn walkthrough_yaw_exactly_180_normalises_to_180() {
+        let mut s = Session::new();
+        let r = s.execute("walkthrough", &json!({ "eye": [0, 0, 0], "yaw": 180.0, "turn": 0.0 })).unwrap();
+        assert!((r["yaw"].as_f64().unwrap() - 180.0).abs() < 1e-9, "yaw 180 must normalise to 180");
+        let r2 = s.execute("walkthrough", &json!({ "eye": [0, 0, 0], "yaw": -180.0, "turn": 0.0 })).unwrap();
+        assert!((r2["yaw"].as_f64().unwrap() - 180.0).abs() < 1e-9, "yaw -180 must normalise to 180");
+    }
+
+    #[test]
+    fn camera_save_all_optional_fields_at_boundaries() {
+        let mut s = Session::new();
+        let r = s
+            .execute(
+                "camera",
+                &json!({
+                    "save": "a",
+                    "azimuth": 359.99,
+                    "elevation": 89.0,
+                    "distance": 1000000.0,
+                    "fov": 179.99,
+                    "target": [1e15, -1e15, 0.0]
+                }),
+            )
+            .unwrap();
+        let cam = &r["cameras"][0];
+        assert_eq!(cam["azimuth"], json!(359.99));
+        assert_eq!(cam["elevation"], json!(89.0));
+        assert_eq!(cam["distance"], json!(1000000.0));
+        assert_eq!(cam["fov"], json!(179.99));
+        assert_eq!(cam["target"], json!([1e15, -1e15, 0.0]));
+    }
+
+    #[test]
+    fn camera_save_elevation_exactly_minus_89() {
+        let mut s = Session::new();
+        let r = s.execute("camera", &json!({ "save": "a", "azimuth": 0.0, "elevation": -89.0 })).unwrap();
+        let cam = &r["cameras"][0];
+        assert_eq!(cam["elevation"], json!(-89.0));
+    }
 }
