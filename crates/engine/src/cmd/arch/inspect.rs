@@ -89,14 +89,18 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     let cameras_flag = p.get("cameras").and_then(Value::as_bool).unwrap_or(false);
 
     let shapes = solve_joins(&d.arch);
-    let mut solved: std::collections::BTreeMap<ArchId, &Vec<cadcraft_geom::Vec2>> = std::collections::BTreeMap::new();
     // Every shape the join solver produces carries a valid poché ring.  Walls
-    // that share a join get the mitred ring; isolated walls (empty `joins`)
-    // get the raw end-cap rectangle, which the solver emits unchanged.  The
-    // `wall_polygon(w)` fallback below is only reached for walls the solver
-    // skips entirely (degenerate / zero-length).
+    // that share a join get the mitred/butted ring; isolated walls (empty
+    // `joins`) get a raw perpendicular ring from the solver (end caps at the
+    // centreline ends), which is not the poché we report for a wall with
+    // nothing to join against.  So `solved` also tracks whether each wall has
+    // a join: the solver's ring is used only when it does, otherwise we fall
+    // back to the raw end-cap rectangle (`raw_wall_polygon`), which is also the
+    // path for walls the solver skips entirely (degenerate / zero-length).
+    let mut solved: std::collections::BTreeMap<ArchId, (bool, &Vec<cadcraft_geom::Vec2>)> =
+        std::collections::BTreeMap::new();
     for s in &shapes {
-        solved.insert(s.id, &s.polygon);
+        solved.insert(s.id, (s.joins.len() > 0, &s.polygon));
     }
 
     let mut walls = Vec::new();
@@ -146,13 +150,14 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
         obj.insert("finish".to_string(), json!(w.finish.map(cadcraft_doc::arch::Finish::name)));
 
         if poché {
-            if let Some(poly) = solved.get(&w.id) {
-                let poly_json: Vec<Value> = poly.iter().map(|p| json!([p.x, p.y])).collect();
-                obj.insert("polygon".to_string(), Value::Array(poly_json));
-            } else if let Some(poly) = raw_wall_polygon(w) {
-                // Fallback for walls the join solver skips (no neighbours /
-                // degenerate): the raw unmitred rectangle, which is
-                // direction-independent.
+            // Use the solved (mitred/butted) ring only when this wall has a
+            // join; an isolated wall falls back to the raw end-cap rectangle,
+            // as do walls the solver skips (degenerate / zero-length).
+            let poly: Option<&Vec<cadcraft_geom::Vec2>> = solved
+                .get(&w.id)
+                .and_then(|(has_join, ring)| (*has_join).then(ring))
+                .or_else(|| raw_wall_polygon(w).as_ref());
+            if let Some(poly) = poly {
                 let poly_json: Vec<Value> = poly.iter().map(|p| json!([p.x, p.y])).collect();
                 obj.insert("polygon".to_string(), Value::Array(poly_json));
             }
@@ -5371,11 +5376,24 @@ mod tests {
     }
 
     /// A wall with thickness zero has a zero-area raw rectangle (degenerate case);
-    /// every emitted vertex must still be finite.
+    /// every emitted vertex must still be finite.  The `wall` command rejects a
+    /// non-positive thickness, so the wall is pushed directly (as the other
+    /// degenerate-input tests do) instead of through the command.
     #[test]
     fn arch_inspect_poché_zero_thickness_wall() {
         let mut s = Session::new();
-        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]], "thickness": 0.0 }));
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_wall(Wall {
+                    start: Vec2::new(0.0, 0.0),
+                    end: Vec2::new(5.0, 0.0),
+                    thickness: 0.0,
+                    ..Wall::default(),
+                });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
         let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
         let empty: Vec<Value> = Vec::new();
         let walls = v["walls"].as_array().unwrap_or(&empty);
