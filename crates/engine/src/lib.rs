@@ -61,7 +61,7 @@ pub use cmd::arch::render::{
 };
 pub use cmd::hatch::{HatchPicks, PatternChoice, PickMode, pattern_choices};
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
-pub use prompt::{Accept, DisplayOnly, Drag, Input, Interactive, Picker, Prompt, Step};
+pub use prompt::{Accept, DisplayOnly, Drag, EditorKind, Input, Interactive, Picker, Prompt, Step, TextEditor};
 
 /// The draw look used for the active view: the active camera's own look or the global one plus
 /// the camera's overview state when the active camera is an overview.
