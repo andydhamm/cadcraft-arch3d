@@ -5934,4 +5934,91 @@ mod tests {
             vec![format!("w0: thickness 0 below minimum {}", MIN_WALL_THICKNESS), format!("w1: thickness inf below minimum {}", MIN_WALL_THICKNESS),]
         );
     }
+
+    /// Pushing past the top of the id range saturates at `u32::MAX` and must never panic
+    /// (the spec pins `next_id.saturating_add(1)`), so a saturated push yields the max id
+    /// twice and leaves `next_id` at the ceiling rather than wrapping around.
+    #[test]
+    fn arch_model_add_wall_next_id_saturates_at_u32_max() {
+        let mut m = ArchModel::default();
+        m.next_id = u32::MAX;
+        let a = m.push_wall(Wall::default());
+        let b = m.push_wall(Wall::default());
+        assert_eq!(a, ArchId(u32::MAX));
+        assert_eq!(b, ArchId(u32::MAX));
+        assert_eq!(m.next_id, u32::MAX, "saturating add at u32::MAX must not wrap or panic");
+        assert_eq!(m.len(), 2);
+    }
+
+    /// The stored wall carries back the exact id that `push_wall` handed out, so a caller
+    /// can re-fetch it with `wall(id)`.
+    #[test]
+    fn arch_model_push_wall_stores_the_returned_id_on_the_wall() {
+        let mut m = ArchModel::default();
+        let id = m.push_wall(Wall::default());
+        assert!(m.wall(id).is_some());
+        assert_eq!(m.wall(id).unwrap().id, id);
+    }
+
+    /// `wall_ids` is the storage order of the `id` field, so the returned sequence is the
+    /// ids in the exact order they were pushed.
+    #[test]
+    fn arch_model_wall_ids_iterates_in_storage_order() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall::default());
+        m.push_wall(Wall::default());
+        m.push_wall(Wall::default());
+        assert_eq!(m.wall_ids().collect::<Vec<ArchId>>(), vec![ArchId(0), ArchId(1), ArchId(2)],);
+    }
+
+    /// A model whose walls are all degenerate or non-finite produces empty bounds without
+    /// leaking NaN/inf into the result (hostile input must not crash or poison `bounds`).
+    #[test]
+    fn arch_model_bounds_empty_when_only_degenerate_walls() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), ..Wall::default() });
+        m.push_wall(Wall { start: Vec2::new(f64::NAN, 0.0), end: Vec2::new(1.0, 0.0), ..Wall::default() });
+        m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: f64::INFINITY, ..Wall::default() });
+        assert_eq!(m.bounds(), Bounds2::EMPTY);
+        let b = m.bounds();
+        assert!(
+            !b.min.x.is_nan() && !b.min.y.is_nan() && !b.max.x.is_nan() && !b.max.y.is_nan(),
+            "no NaN may leak into bounds: min={:?} max={:?}",
+            b.min,
+            b.max
+        );
+    }
+
+    /// A single valid wall's poché envelope survives neighbouring degenerate walls: the zero-length
+    /// wall in the middle must not expand the union beyond the valid wall's `thickness / 2.0`.
+    #[test]
+    fn arch_model_bounds_ignores_degenerate_walls() {
+        let mut m = ArchModel::default();
+        m.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(10.0, 0.0), thickness: 2.0, ..Wall::default() });
+        m.push_wall(Wall { start: Vec2::new(5.0, 5.0), end: Vec2::new(5.0, 5.0), ..Wall::default() });
+        let b = m.bounds();
+        assert!((b.min.x - 0.0).abs() < 1e-9, "min.x: {} != 0", b.min.x);
+        assert!((b.max.x - 10.0).abs() < 1e-9, "max.x: {} != 10", b.max.x);
+        assert!((b.min.y - (-1.0)).abs() < 1e-9, "min.y: {} != -1", b.min.y);
+        assert!((b.max.y - 1.0).abs() < 1e-9, "max.y: {} != 1", b.max.y);
+    }
+
+    /// Arch walls and their ids survive a JSON round trip: storage order, per-wall `id`,
+    /// `thickness`, and the `next_id` counter are all preserved, and an unknown id is
+    /// still `None` after deserialization.
+    #[test]
+    fn arch_model_round_trip_preserves_walls_ids_and_counter() {
+        let mut m = ArchModel::default();
+        let id0 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(4.0, 0.0), 0.2));
+        let id1 = m.push_wall(Wall::new(Vec2::new(0.0, 0.0), Vec2::new(0.0, 6.0), 0.3));
+        let json = serde_json::to_string(&m).unwrap();
+        let back: ArchModel = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.walls.len(), 2);
+        assert_eq!(back.walls[0].id, id0);
+        assert_eq!(back.walls[1].id, id1);
+        assert_eq!(back.next_id, 2);
+        assert_eq!(back.wall(id0).unwrap().thickness, 0.2);
+        assert_eq!(back.wall(id1).unwrap().thickness, 0.3);
+        assert!(back.wall(ArchId(999)).is_none());
+    }
 }
