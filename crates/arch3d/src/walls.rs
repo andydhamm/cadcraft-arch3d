@@ -224,7 +224,7 @@ pub fn elevation_profile(
     let dx = wall.end.x - wall.start.x;
     let dy = wall.end.y - wall.start.y;
     let len = (dx * dx + dy * dy).sqrt();
-    if len < 1e-9 {
+    if len < 1e-9 || !wall.start.is_finite() || !wall.end.is_finite() {
         return None;
     }
 
