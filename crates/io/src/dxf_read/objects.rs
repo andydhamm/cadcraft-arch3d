@@ -402,8 +402,7 @@ fn repair_arch_counters(arch: &mut cadcraft_doc::ArchModel) {
 /// Drop the remembered arch proxy handles from the model, every layout and every block. Called
 /// only after the arch model parsed, so the proxies are redundant and the drawing is the one
 /// source of truth.
-fn drop_arch_proxies(d: &mut cadcraft_doc::Drawing, proxies: &[cadcraft_doc::Handle]) {
-    let set: std::collections::HashSet<cadcraft_doc::Handle> = proxies.iter().copied().collect();
+fn drop_arch_proxies(d: &mut cadcraft_doc::Drawing, set: &std::collections::HashSet<cadcraft_doc::Handle>) {
     d.model.retain(|e| !set.contains(&e.handle));
     for l in d.layouts.iter_mut() {
         l.entities.retain(|e| !set.contains(&e.handle));
