@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-27 09:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-27 09:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 5 of 6 segments merged**
 
@@ -33,15 +33,15 @@ Updated 2026-11-27 09:00 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 17.9 h so far · expected done Nov 27 12:26–Dec 05 13:10 UTC |
+| 23 | Phase 23 | pending | — | 18.1 h so far · expected done Nov 27 12:41–Dec 05 13:25 UTC |
 
 ## Phase 23 segments
 
-5 merged, 1 working
+5 merged, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-d3af2d507` | merge upstream upstream/main up to d3af2d507 (10 commits) | working | tturbo-mac2 |
+| `upstream-sync-d3af2d507` | merge upstream upstream/main up to d3af2d507 (10 commits) | gate | tturbo-mac2 |
 
 ## Recent merges
 
@@ -64,7 +64,7 @@ Updated 2026-11-27 09:00 UTC. This page and the card in the README are regenerat
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | agent | 1524 |
+| bonsai-a | bonsai2-27b | agent | 1525 |
 | bonsai-b | bonsai2-27b | idle | 1438 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
@@ -72,10 +72,10 @@ Updated 2026-11-27 09:00 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 189 |
 | claude-sonnet-c | sonnet | idle | 122 |
 | claude-sonnet-d | sonnet | idle | 122 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1457 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | agent | 1459 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
 | tturbo-mac | tturbo-ultraheretic | idle | 1340 |
-| tturbo-mac2 | tturbo-ultraheretic | agent | 762 |
+| tturbo-mac2 | tturbo-ultraheretic | gate | 762 |
