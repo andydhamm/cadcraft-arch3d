@@ -10,7 +10,7 @@ use cadcraft_arch::label::label_point;
 use cadcraft_arch::opening::rough_offset;
 use cadcraft_arch::room::room_at;
 use cadcraft_arch::symbol::opening_symbol;
-use cadcraft_arch::wall::{wall_layer_polygons, wall_polygon};
+use cadcraft_arch::wall::wall_layer_polygons;
 use cadcraft_doc::arch::{
     ArchKind, ArchModel, Camera3d, CameraKind, FurnishingHost, LevelKind, OpeningKind, Railing, RailingStyle, Roof, RoofEdge, RoofEdgeKind,
     RoofPlane, RoomType, Stair, StairShape, arch_handle, cabinet_label, furnishing_handle, furnishing_label, handle_json, opening_handle,
@@ -149,7 +149,7 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             if let Some(poly) = solved.get(&w.id) {
                 let poly_json: Vec<Value> = poly.iter().map(|p| json!([p.x, p.y])).collect();
                 obj.insert("polygon".to_string(), Value::Array(poly_json));
-            } else if let Some(poly) = wall_polygon(w) {
+            } else if let Some(poly) = raw_wall_polygon(w) {
                 // Fallback for walls the join solver skips (no neighbours /
                 // degenerate): the raw unmitred rectangle, which is
                 // direction-independent.
@@ -757,6 +757,26 @@ fn centroid_points(pts: &[Vec2]) -> Vec2 {
     let x = pts.iter().map(|p| p.x).sum::<f64>() / n;
     let y = pts.iter().map(|p| p.y).sum::<f64>() / n;
     Vec2::new(x, y)
+}
+
+/// The raw (unmitred) poché rectangle for a wall: the axis-aligned bounding
+/// box of the centreline inflated by half the thickness in every direction.
+/// Returns `None` when the thickness is non-finite or negative, so a degenerate
+/// wall never produces a non-finite polygon vertex.
+fn raw_wall_polygon(w: &cadcraft_doc::Wall) -> Option<Vec<Vec2>> {
+    let t = w.thickness;
+    if !t.is_finite() || t < 0.0 {
+        return None;
+    }
+    let ht = t / 2.0;
+    let min_x = w.start.x.min(w.end.x) - ht;
+    let max_x = w.start.x.max(w.end.x) + ht;
+    let min_y = w.start.y.min(w.end.y) - ht;
+    let max_y = w.start.y.max(w.end.y) + ht;
+    if !min_x.is_finite() || !max_x.is_finite() || !min_y.is_finite() || !max_y.is_finite() {
+        return None;
+    }
+    Some(vec![Vec2::new(min_x, min_y), Vec2::new(max_x, min_y), Vec2::new(max_x, max_y), Vec2::new(min_x, max_y)])
 }
 
 #[cfg(test)]
@@ -5189,7 +5209,7 @@ mod tests {
         fn wall_bounds(v: Value) -> (f64, f64, f64, f64) {
             let empty: Vec<Value> = Vec::new();
             let walls = v["walls"].as_array().unwrap_or(&empty);
-            let poly = walls.get(0).and_then(|w| w.as_array()).and_then(|a| a.get(0)).and_then(Value::as_array).expect("polygon array missing");
+            let poly = walls.get(0).and_then(|w| w.get("polygon")).and_then(Value::as_array).expect("polygon array missing");
             let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
             for p in poly {
                 let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
@@ -5347,6 +5367,66 @@ mod tests {
             if let Some(c) = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64) {
                 assert!(c.is_finite(), "angled wall vertex y {c} not finite");
             }
+        }
+    }
+
+    /// A wall with thickness zero has a zero-area raw rectangle (degenerate case);
+    /// every emitted vertex must still be finite.
+    #[test]
+    fn arch_inspect_poché_zero_thickness_wall() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]], "thickness": 0.0 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall");
+        let w = &walls[0];
+        if let Some(poly) = w["polygon"].as_array() {
+            for p in poly {
+                let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                assert!(px.is_finite() && py.is_finite(), "zero-thickness vertex not finite: ({px}, {py})");
+            }
+        }
+    }
+
+    /// A wall with NaN thickness must not crash and must not emit a polygon
+    /// (the raw rectangle is undefined without a finite thickness).
+    #[test]
+    fn arch_inspect_poché_nan_thickness_does_not_crash() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), thickness: f64::NAN, ..Wall::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall");
+        let w = &walls[0];
+        assert!(w["handle"].is_string(), "handle must survive");
+        assert!(w["thickness"].is_null(), "NaN thickness serializes to null");
+    }
+
+    /// A very long wall (1e15 m) with poché still produces finite vertices:
+    /// the AABB inflation by half-thickness must not overflow f64.
+    #[test]
+    fn arch_inspect_poché_very_long_wall_stays_finite() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [1e15, 0.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall");
+        let poly = walls[0]["polygon"].as_array().expect("polygon must be present");
+        for p in poly {
+            let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            assert!(px.is_finite(), "very-long wall vertex x {px} not finite");
+            assert!(py.is_finite(), "very-long wall vertex y {py} not finite");
         }
     }
 }
