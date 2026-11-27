@@ -296,27 +296,24 @@ fn osnap_all_with_neighborhood(
         Some((hits, prims)) => (hits, Some(prims)),
         None => (Vec::new(), None),
     };
-    // Arch objects live in model space only.
-    if *space == Space::Model {
-        if let Some(arch_hit) = arch::arch_snap(d, cursor, aperture, osmode) {
-            if best
-                .as_ref()
-                .is_none_or(|b| snap_score(arch_hit.mode, arch_hit.point, cursor, aperture) < snap_score(b.mode, b.point, cursor, aperture))
-            {
-                best = Some(arch_hit);
-            }
-        }
+    // Arch objects live in model space only; fold the model-space arch snap into the base
+    // candidates so it ranks and Tab-cycles like any other hit.
+    if *space == Space::Model
+        && let Some(arch_hit) = arch::arch_snap(d, cursor, aperture, osmode)
+    {
+        all.push(arch_hit);
     }
     let views = viewport::near(d, space, cursor, aperture);
     if views.is_empty() {
-        return (all, near_prims);
+        return (ranked(all, cursor, aperture), near_prims);
     }
     let model = Space::Model;
     let model_ix = crate::spatial::index(d, &model);
-    // What a click picks across spaces stays as it was: each space's best snap, and a viewport's
-    // replaces the best so far only when it scores closer. A paper-space Nearest can therefore
-    // beat an Endpoint seen through a viewport, which `ranked` alone would put first.
-    let mut pick = all.first().copied();
+    // What a click picks across spaces stays as it was: each space's best snap (including
+    // any model-space arch snap), and a viewport's replaces the best so far only when it
+    // scores closer. A paper-space Nearest can therefore beat an Endpoint seen through a
+    // viewport, which `ranked` alone would put first.
+    let mut pick = all.iter().min_by(|a, b| a.rank(cursor, aperture).cmp(&b.rank(cursor, aperture))).copied();
     for view in views {
         let model_cursor = view.to_model(cursor);
         let model_aperture = aperture / view.scale;
