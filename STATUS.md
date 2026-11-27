@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-27 10:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-27 10:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 6 of 7 segments merged**
 
-13,109 workspace tests passing at the last merge · 1496 segments merged in all · 0 of 15 seats working
+13,127 workspace tests passing at the last merge · 1497 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -33,7 +33,7 @@ Updated 2026-11-27 10:30 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 19.4 h so far · expected done Nov 27 13:55–Dec 05 14:40 UTC |
+| 23 | Phase 23 | pending | — | 19.6 h so far · expected done Nov 27 14:10–Dec 05 14:55 UTC |
 
 ## Phase 23 segments
 
@@ -47,6 +47,7 @@ Updated 2026-11-27 10:30 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 27 10:39 | `harden-p1-arch3d` | merged | 13,127 pass | darwin-ws3 |
 | Nov 27 10:12 | `harden-p1-inspect-solved-poch` | merged | 13,109 pass | bonsai-a |
 | Nov 27 09:54 | `upstream-sync-d3af2d507` | merged | 13,106 pass | tturbo-mac2 |
 | Nov 27 09:39 | `harden-p1-inspect-solved-poché` | merged | 13,092 pass | bonsai-a |
@@ -58,14 +59,13 @@ Updated 2026-11-27 10:30 UTC. This page and the card in the README are regenerat
 | Nov 26 23:28 | `harden-p2-cmd-inspect-openings` | merged | 12,987 pass | tturbo-mac |
 | Nov 26 23:28 | `harden-p1-arch-validate` | merged | 12,987 pass | bonsai-a |
 | Nov 26 23:28 | `harden-p2-arch3d-components` | merged | 12,987 pass | tturbo-mac |
-| Nov 26 21:52 | `upstream-sync-1c5e4f41f` | merged | 12,957 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1527 |
-| bonsai-b | bonsai2-27b | gate | 1440 |
+| bonsai-a | bonsai2-27b | idle | 1528 |
+| bonsai-b | bonsai2-27b | agent | 1441 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 179 |
