@@ -145,14 +145,22 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
         obj.insert("finish".to_string(), json!(w.finish.map(cadcraft_doc::arch::Finish::name)));
 
         if poché {
-            // Use the solved ring when the solver produced one (mitred/butted for
-            // joined walls, raw for isolated walls); fall back to `raw_wall_polygon`
-            // only for walls the solver skips (degenerate / zero-length).
-            let poly_json: Vec<Value> = solved
-                .get(&w.id)
-                .map(|ring| ring.iter().map(|p| json!([p.x, p.y])).collect())
-                .or_else(|| raw_wall_polygon(w).map(|pts| pts.iter().map(|p| json!([p.x, p.y])).collect()))
-                .unwrap_or_default();
+            // Use the solved ring when the solver produced a true join ring
+            // (mitred/butted, which extends or shrinks beyond the centreline
+            // along the wall direction). Isolated walls get a raw perpendicular
+            // band from the solver; for those we fall through to `raw_wall_polygon`
+            // for the full AABB poché (end-capped).
+            let mut poly_json: Vec<Value> = Vec::new();
+            if let Some(ring) = solved.get(&w.id) {
+                if !solved_ring_is_band(w, ring) {
+                    poly_json.extend(ring.iter().map(|p| json!([p.x, p.y])));
+                }
+            }
+            if poly_json.is_empty() {
+                if let Some(pts) = raw_wall_polygon(w) {
+                    poly_json.extend(pts.iter().map(|p| json!([p.x, p.y])));
+                }
+            }
             if !poly_json.is_empty() {
                 obj.insert("polygon".to_string(), Value::Array(poly_json));
             }
@@ -757,6 +765,39 @@ fn centroid_points(pts: &[Vec2]) -> Vec2 {
     let x = pts.iter().map(|p| p.x).sum::<f64>() / n;
     let y = pts.iter().map(|p| p.y).sum::<f64>() / n;
     Vec2::new(x, y)
+}
+
+/// Whether the solved ring is just the perpendicular band (no end extension),
+/// which is what the join solver returns for isolated walls.  A band's extent
+/// along the wall's own direction equals the centreline extent; a butted or
+/// mitred ring is always shorter (cut by the join) or extends beyond the
+/// centreline (exterior mitre), so the ranges differ.
+fn solved_ring_is_band(w: &cadcraft_doc::Wall, ring: &[cadcraft_geom::Vec2]) -> bool {
+    if ring.is_empty() {
+        return true;
+    }
+    let dx = w.end.x - w.start.x;
+    let dy = w.end.y - w.start.y;
+    let len_sq = dx * dx + dy * dy;
+    if len_sq < 1e-18 {
+        // Zero-length wall: treat the (trivial) ring as a band.
+        return true;
+    }
+    let len = len_sq.sqrt();
+    let ux = dx / len;
+    let uy = dy / len;
+    let start_proj = w.start.x * ux + w.start.y * uy;
+    let end_proj = w.end.x * ux + w.end.y * uy;
+    let cl_min = start_proj.min(end_proj);
+    let cl_max = start_proj.max(end_proj);
+    let mut ring_min = f64::INFINITY;
+    let mut ring_max = f64::NEG_INFINITY;
+    for p in ring {
+        let proj = p.x * ux + p.y * uy;
+        ring_min = ring_min.min(proj);
+        ring_max = ring_max.max(proj);
+    }
+    (ring_min - cl_min).abs() < 1e-6 && (ring_max - cl_max).abs() < 1e-6
 }
 
 /// The raw (unmitred) poché rectangle for a wall: the axis-aligned bounding
@@ -5627,5 +5668,122 @@ mod tests {
             }
         }
         assert!(checked > 0, "no poché vertices collected from the collinear run");
+    }
+
+    /// Two isolated walls at different positions and thicknesses each get the
+    /// full AABB poché (not just the perpendicular band), with bounds independent
+    /// of the other.
+    #[test]
+    fn arch_inspect_poché_multiple_isolated_walls_get_aabb() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [3.0, 0.0]], "thickness": 0.2 }));
+        exec(&mut s, "wall", &json!({ "points": [[20.0, 20.0], [23.0, 20.0]], "thickness": 0.4 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 2, "expected two isolated walls");
+
+        // Wall 0: (0,0)-(3,0), t=0.2 → AABB x[-0.1,3.1] y[-0.1,0.1]
+        let poly0 = walls[0]["polygon"].as_array().expect("polygon for wall 0");
+        assert!(poly0.len() >= 4, "wall 0 polygon must have >= 4 vertices");
+        let (mut x0_min, mut y0_min, mut x0_max, mut y0_max) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        for p in poly0 {
+            let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            assert!(px.is_finite() && py.is_finite());
+            x0_min = x0_min.min(px);
+            x0_max = x0_max.max(px);
+            y0_min = y0_min.min(py);
+            y0_max = y0_max.max(py);
+        }
+        assert!((x0_min - (-0.1)).abs() < 1e-6, "wall 0 min x {x0_min} != -0.1");
+        assert!((x0_max - 3.1).abs() < 1e-6, "wall 0 max x {x0_max} != 3.1");
+        assert!((y0_min - (-0.1)).abs() < 1e-6, "wall 0 min y {y0_min} != -0.1");
+        assert!((y0_max - 0.1).abs() < 1e-6, "wall 0 max y {y0_max} != 0.1");
+
+        // Wall 1: (20,20)-(23,20), t=0.4 → AABB x[19.8,23.2] y[19.8,20.2]
+        let poly1 = walls[1]["polygon"].as_array().expect("polygon for wall 1");
+        assert!(poly1.len() >= 4, "wall 1 polygon must have >= 4 vertices");
+        let (mut x1_min, mut y1_min, mut x1_max, mut y1_max) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        for p in poly1 {
+            let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            assert!(px.is_finite() && py.is_finite());
+            x1_min = x1_min.min(px);
+            x1_max = x1_max.max(px);
+            y1_min = y1_min.min(py);
+            y1_max = y1_max.max(py);
+        }
+        assert!((x1_min - 19.8).abs() < 1e-6, "wall 1 min x {x1_min} != 19.8");
+        assert!((x1_max - 23.2).abs() < 1e-6, "wall 1 max x {x1_max} != 23.2");
+        assert!((y1_min - 19.8).abs() < 1e-6, "wall 1 min y {y1_min} != 19.8");
+        assert!((y1_max - 20.2).abs() < 1e-6, "wall 1 max y {y1_max} != 20.2");
+    }
+
+    /// An angled isolated wall (45°) gets the correct AABB poché — the raw
+    /// axis-aligned bounding box of the centreline inflated by half-thickness
+    /// in all four directions — not a rotated perpendicular band.
+    #[test]
+    fn arch_inspect_poché_angled_isolated_wall_gets_aabb() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[1.0, 2.0], [5.0, 6.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one angled wall");
+        let poly = walls[0]["polygon"].as_array().expect("polygon missing");
+        assert!(poly.len() >= 4, "angled wall polygon must have >= 4 vertices");
+        let mut min_x = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        for p in poly {
+            let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            assert!(px.is_finite() && py.is_finite(), "angled isolated wall vertex not finite: ({px}, {py})");
+            min_x = min_x.min(px);
+            max_x = max_x.max(px);
+            min_y = min_y.min(py);
+            max_y = max_y.max(py);
+        }
+        // AABB of (1,2)-(5,6) with ht=0.1: x[0.9, 5.1], y[1.9, 6.1]
+        assert!((min_x - 0.9).abs() < 1e-6, "angled wall min x {min_x} != 0.9");
+        assert!((max_x - 5.1).abs() < 1e-6, "angled wall max x {max_x} != 5.1");
+        assert!((min_y - 1.9).abs() < 1e-6, "angled wall min y {min_y} != 1.9");
+        assert!((max_y - 6.1).abs() < 1e-6, "angled wall max y {max_y} != 6.1");
+    }
+
+    /// A very short isolated wall (length 0.01 m) with a moderate thickness
+    /// (0.2 m) still gets the full AABB poché.  The perpendicular band would
+    /// be wider than the wall in the parallel direction, but the AABB is
+    /// always the centreline inflated by half-thickness in all four directions.
+    #[test]
+    fn arch_inspect_poché_very_short_isolated_wall_gets_aabb() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[2.0, 2.0], [2.01, 2.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one very-short wall");
+        let poly = walls[0]["polygon"].as_array().expect("polygon missing");
+        assert!(poly.len() >= 4, "short wall polygon must have >= 4 vertices");
+        let mut min_x = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        for p in poly {
+            let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            assert!(px.is_finite() && py.is_finite());
+            min_x = min_x.min(px);
+            max_x = max_x.max(px);
+            min_y = min_y.min(py);
+            max_y = max_y.max(py);
+        }
+        // AABB of (2,2)-(2.01,2) with ht=0.1: x[1.9, 2.11], y[1.9, 2.1]
+        assert!((min_x - 1.9).abs() < 1e-6, "short wall min x {min_x}");
+        assert!((max_x - 2.11).abs() < 1e-6, "short wall max x {max_x}");
+        assert!((min_y - 1.9).abs() < 1e-6, "short wall min y {min_y}");
+        assert!((max_y - 2.1).abs() < 1e-6, "short wall max y {max_y}");
     }
 }
