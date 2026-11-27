@@ -5889,4 +5889,97 @@ mod tests {
             }
         }
     }
+
+    /// An empty drawing must report the bounds fallback `[[0, 0], [0, 0]]`:
+    /// `Bounds2::EMPTY` has no finite corners, so the p1 spec pins this exact
+    /// guard.  Pins that "empty model → zero bounds" still holds and is not
+    /// accidentally the real (degenerate) corner of an empty AABB.
+    #[test]
+    fn arch_inspect_empty_model_bounds_is_zero_pair() {
+        let mut s = Session::new();
+        let v = exec(&mut s, "arch.inspect", &json!({}));
+        let bounds = v["bounds"].as_array().expect("bounds array missing");
+        assert_eq!(bounds.len(), 2, "bounds must be [[min], [max]]");
+        assert_eq!(bounds[0], json!([0.0, 0.0]), "empty min corner must be [0, 0]");
+        assert_eq!(bounds[1], json!([0.0, 0.0]), "empty max corner must be [0, 0]");
+    }
+
+    /// A model with a wall must report real, finite, non-degenerate bounds that
+    /// cover the wall (not the `[[0, 0], [0, 0]]` empty-model fallback).  Pins
+    /// the p1 invariant that the non-empty path returns `d.arch.bounds()` and
+    /// the empty path returns the zero fallback.
+    #[test]
+    fn arch_inspect_wall_model_bounds_are_finite_and_reach_the_wall() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]], "thickness": 0.1 }));
+        let v = exec(&mut s, "arch.inspect", &json!({}));
+        let bounds = v["bounds"].as_array().expect("bounds array missing");
+        assert_eq!(bounds.len(), 2, "bounds must be [[min], [max]]");
+        let mn = bounds[0].as_array().expect("min corner must be an array");
+        let mx = bounds[1].as_array().expect("max corner must be an array");
+        assert_eq!(mn.len(), 2, "min corner must be [x, y]");
+        assert_eq!(mx.len(), 2, "max corner must be [x, y]");
+        let minx = mn[0].as_f64().expect("minx must be a number");
+        let miny = mn[1].as_f64().expect("miny must be a number");
+        let maxx = mx[0].as_f64().expect("maxx must be a number");
+        let maxy = mx[1].as_f64().expect("maxy must be a number");
+        assert!(minx.is_finite() && miny.is_finite() && maxx.is_finite() && maxy.is_finite(), "bounds must be finite");
+        assert!(maxx > minx, "bounds must be non-degenerate: maxx > minx");
+        assert!((maxx - minx).abs() > 3.0, "bounds must cover the 5 m wall (span 5), got {span}", span = maxx - minx);
+    }
+
+    /// An empty model has no walls, hence no joined ends: `joins` must be `0`.
+    /// Pins the p1 join-count invariant for the degenerate (no-geometry) case.
+    #[test]
+    fn arch_inspect_empty_model_joins_is_zero() {
+        let mut s = Session::new();
+        let v = exec(&mut s, "arch.inspect", &json!({}));
+        assert_eq!(v["joins"], 0, "empty model joins must be 0, got {joins}", joins = v["joins"]);
+    }
+
+    /// A default level row carries exactly the p1 field set (`name`,
+    /// `elevation`, `floorToFloor`, `ceiling`, `structure`) with the expected
+    /// types — a fresh `Session` always has the default level 0.
+    #[test]
+    fn arch_inspect_default_level_carries_the_p1_fields() {
+        let mut s = Session::new();
+        let v = exec(&mut s, "arch.inspect", &json!({}));
+        let levels = v["levels"].as_array().expect("levels array missing");
+        assert!(!levels.is_empty(), "a fresh model has the default level 0");
+        let l = &levels[0];
+        assert!(l.get("name").is_some(), "level row missing `name`");
+        assert!(l.get("elevation").is_some(), "level row missing `elevation`");
+        assert!(l.get("floorToFloor").is_some(), "level row missing `floorToFloor`");
+        assert!(l.get("ceiling").is_some(), "level row missing `ceiling`");
+        assert!(l.get("structure").is_some(), "level row missing `structure`");
+        assert!(l["name"].is_string(), "name must be a string: {n}", n = l["name"]);
+        assert!(l["elevation"].is_number() || l["elevation"].is_null(), "elevation must be number or null: {e}", e = l["elevation"]);
+        assert!(l["floorToFloor"].is_number() || l["floorToFloor"].is_null(), "floorToFloor must be number or null: {f}", f = l["floorToFloor"]);
+        assert!(l["ceiling"].is_number() || l["ceiling"].is_null(), "ceiling must be number or null: {c}", c = l["ceiling"]);
+        assert!(l["structure"].is_number() || l["structure"].is_null(), "structure must be number or null: {s}", s = l["structure"]);
+    }
+
+    /// A valid wall's poché `layers` must be an array of finite polygons.  Pins
+    /// that the scaled wall-layer bands (see `wall_layer_polygons`) never leak
+    /// a non-finite vertex into the 2D overlay.
+    #[test]
+    fn arch_inspect_wall_layers_are_finite() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let walls = v["walls"].as_array().expect("walls array missing");
+        assert_eq!(walls.len(), 1, "expected one wall");
+        let w = &walls[0];
+        let layers = w["layers"].as_array().expect("layers must be an array when poché is set");
+        assert!(!layers.is_empty(), "a valid wall must report at least one layer");
+        for layer in layers {
+            let poly = layer["polygon"].as_array().expect("each layer must carry a polygon");
+            assert!(!poly.is_empty(), "a layer polygon must not be empty");
+            for p in poly {
+                let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                assert!(px.is_finite() && py.is_finite(), "layer vertex must be finite: ({px}, {py})");
+            }
+        }
+    }
 }
