@@ -130,13 +130,8 @@ mod web {
         });
         // ... and non-graphic objects (tables, dictionaries, layouts) as DXF records.
         cadcraft_engine::cmd::file::set_object_records(cadcraft_io::object_records);
-        // The library's file readers (the sample set is embedded).
-        cadcraft_engine::library::set_library_io(cadcraft_engine::library::LibraryIo {
-            read_glb: cadcraft_io::gltf_read::read_glb,
-            read_image: cadcraft_io::image_read::read_image,
-            encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
-            sample: cadcraft_io::library::sample_files,
-        });
+        // What a DXF before 2007 leaves out for its proxies' string streams (#3229).
+        cadcraft_engine::cmd::file::set_proxies_lost(cadcraft_io::proxies_lost);
         let Some(canvas) = app_canvas() else {
             log::error!("missing <canvas id=\"{CANVAS_ID}\">");
             return;
