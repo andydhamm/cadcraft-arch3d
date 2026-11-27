@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-27 21:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-27 21:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 9 of 10 segments merged**
 
@@ -33,20 +33,21 @@ Updated 2026-11-27 21:00 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 29.9 h so far · expected done Nov 27 23:11–Dec 01 02:04 UTC |
+| 23 | Phase 23 | pending | — | 30.1 h so far · expected done Nov 27 23:26–Dec 01 02:19 UTC |
 
 ## Phase 23 segments
 
-9 merged, 1 merging
+9 merged, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-ff0bde679` | merge upstream upstream/main up to ff0bde679 (33 commits) | merging | tturbo-mac |
+| `upstream-sync-ff0bde679` | merge upstream upstream/main up to ff0bde679 (33 commits) | gate | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 27 21:08 | `upstream-sync-ff0bde679` | refused | 0 pass | tturbo-mac |
 | Nov 27 19:04 | `upstream-sync-ff0bde679` | refused | 0 pass | tturbo-mac |
 | Nov 27 16:36 | `upstream-sync-ff0bde679` | refused | 0 pass | claude-sonnet-a |
 | Nov 27 14:34 | `upstream-sync-16929ef8e` | merged | 13,210 pass | bonsai-b |
@@ -58,7 +59,6 @@ Updated 2026-11-27 21:00 UTC. This page and the card in the README are regenerat
 | Nov 27 10:12 | `harden-p1-inspect-solved-poch` | merged | 13,109 pass | bonsai-a |
 | Nov 27 09:54 | `upstream-sync-d3af2d507` | merged | 13,106 pass | tturbo-mac2 |
 | Nov 27 09:39 | `harden-p1-inspect-solved-poché` | merged | 13,092 pass | bonsai-a |
-| Nov 27 08:54 | `upstream-sync-fafe5f128` | merged | 13,066 pass | claude-sonnet-d |
 
 ## Seats active in the last hour
 
@@ -69,7 +69,7 @@ Updated 2026-11-27 21:00 UTC. This page and the card in the README are regenerat
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 180 |
-| claude-sonnet-b | sonnet | idle | 190 |
+| claude-sonnet-b | sonnet | gate | 190 |
 | claude-sonnet-c | sonnet | idle | 122 |
 | claude-sonnet-d | sonnet | idle | 122 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1465 |
