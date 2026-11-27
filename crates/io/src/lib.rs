@@ -11,10 +11,15 @@ mod dxf_stair;
 
 /// XCLIP boundaries as SPATIAL_FILTER objects.
 mod dxf_arch;
+mod dxf_casework;
+mod dxf_ceiling;
 mod dxf_clip;
+mod dxf_electrical;
 mod dxf_ext;
+mod dxf_furnishing;
 mod dxf_image;
 mod dxf_layer_states;
+mod dxf_light;
 mod dxf_mleader;
 mod dxf_read;
 mod dxf_table;
