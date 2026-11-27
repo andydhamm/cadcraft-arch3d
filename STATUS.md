@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-27 05:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-27 05:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 4 of 5 segments merged**
 
-12,997 workspace tests passing at the last merge · 1490 segments merged in all · 0 of 15 seats working
+13,005 workspace tests passing at the last merge · 1491 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -33,7 +33,7 @@ Updated 2026-11-27 05:15 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 14.1 h so far · expected done Nov 27 07:55–Dec 01 21:21 UTC |
+| 23 | Phase 23 | pending | — | 14.4 h so far · expected done Nov 27 08:10–Dec 01 21:36 UTC |
 
 ## Phase 23 segments
 
@@ -47,6 +47,7 @@ Updated 2026-11-27 05:15 UTC. This page and the card in the README are regenerat
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 27 05:30 | `harden-p1-arch-grip-routing` | merged | 13,005 pass | bonsai-b |
 | Nov 27 01:57 | `harden-p1-stretch-cmd` | merged | 12,997 pass | bonsai-b |
 | Nov 26 23:28 | `harden-p1-arch-xrecord-write` | merged | 12,987 pass | darwin-ws3 |
 | Nov 26 23:28 | `harden-p2-cmd-inspect-openings` | merged | 12,987 pass | tturbo-mac |
@@ -58,13 +59,12 @@ Updated 2026-11-27 05:15 UTC. This page and the card in the README are regenerat
 | Nov 26 19:58 | `harden-p2-doc-opening-model` | merged | 12,930 pass | tturbo-mac |
 | Nov 26 19:34 | `upstream-sync-d23aad383` | merged | 12,924 pass | claude-sonnet-d |
 | Nov 26 19:15 | `harden-p1-arch-proxy-graphics` | merged | 12,831 pass | bonsai-b |
-| Nov 26 19:15 | `harden-p2-arch3d-opening-parts` | merged | 12,831 pass | tturbo-mac |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | gate | 1512 |
+| bonsai-a | bonsai2-27b | agent | 1513 |
 | bonsai-b | bonsai2-27b | idle | 1438 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
@@ -72,7 +72,7 @@ Updated 2026-11-27 05:15 UTC. This page and the card in the README are regenerat
 | claude-sonnet-b | sonnet | idle | 189 |
 | claude-sonnet-c | sonnet | idle | 122 |
 | claude-sonnet-d | sonnet | idle | 121 |
-| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1441 |
+| darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | gate | 1442 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
