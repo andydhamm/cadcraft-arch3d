@@ -149,9 +149,23 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
             if let Some(poly) = solved.get(&w.id) {
                 let poly_json: Vec<Value> = poly.iter().map(|p| json!([p.x, p.y])).collect();
                 obj.insert("polygon".to_string(), Value::Array(poly_json));
-            } else if let Some(poly) = wall_polygon(w) {
-                let poly_json: Vec<Value> = poly.iter().map(|p| json!([p.x, p.y])).collect();
-                obj.insert("polygon".to_string(), Value::Array(poly_json));
+            } else {
+                // End-cap ring for an isolated wall: centreline extended by half the
+                // thickness at both ends (flat ends, no mitres).
+                let delta = w.end - w.start;
+                let len = (delta.x * delta.x + delta.y * delta.y).sqrt();
+                if len > f64::EPSILON {
+                    let dir = Vec2::new(delta.x / len, delta.y / len);
+                    let n = Vec2::new(-dir.y, dir.x);
+                    let ht = w.thickness / 2.0;
+                    let corners =
+                        vec![w.start - dir * ht - n * ht, w.end + dir * ht - n * ht, w.end - dir * ht + n * ht, w.start + dir * ht + n * ht];
+                    let poly_json: Vec<Value> = corners.iter().map(|p| json!([p.x, p.y])).collect();
+                    obj.insert("polygon".to_string(), Value::Array(poly_json));
+                } else if let Some(poly) = wall_polygon(w) {
+                    let poly_json: Vec<Value> = poly.iter().map(|p| json!([p.x, p.y])).collect();
+                    obj.insert("polygon".to_string(), Value::Array(poly_json));
+                }
             }
             let layers = wall_layer_polygons(w);
             if !layers.is_empty() {
