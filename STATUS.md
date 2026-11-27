@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-27 12:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-27 13:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 23 of 23: Phase 23 — 7 of 8 segments merged**
+**Phase 23 of 23: Phase 23 — 8 of 9 segments merged**
 
-13,170 workspace tests passing at the last merge · 1500 segments merged in all · 0 of 15 seats working
+13,179 workspace tests passing at the last merge · 1501 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -33,20 +33,21 @@ Updated 2026-11-27 12:45 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 21.6 h so far · expected done Nov 27 15:25–Dec 02 04:51 UTC |
+| 23 | Phase 23 | pending | — | 21.9 h so far · expected done Nov 27 15:11–Nov 30 18:04 UTC |
 
 ## Phase 23 segments
 
-7 merged, 1 merging
+8 merged, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-97dccaf9e` | merge upstream upstream/main up to 97dccaf9e (16 commits) | merging | claude-sonnet-b |
+| `upstream-sync-16929ef8e` | merge upstream upstream/main up to 16929ef8e (36 commits) | working | bonsai-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 27 12:57 | `upstream-sync-97dccaf9e` | merged | 13,179 pass | claude-sonnet-b |
 | Nov 27 12:42 | `harden-p1-doc-arch-store` | merged | 13,170 pass | bonsai-b |
 | Nov 27 11:17 | `upstream-sync-97c5670a0` | merged | 13,164 pass | tturbo-mac |
 | Nov 27 10:58 | `harden-p1-arch-inspect` | merged | 13,132 pass | bonsai-a |
@@ -58,14 +59,13 @@ Updated 2026-11-27 12:45 UTC. This page and the card in the README are regenerat
 | Nov 27 07:47 | `harden-p1-crate-lints-and-wall-close` | merged | 13,020 pass | tturbo-mac |
 | Nov 27 05:30 | `harden-p1-arch-grip-routing` | merged | 13,005 pass | bonsai-b |
 | Nov 27 01:57 | `harden-p1-stretch-cmd` | merged | 12,997 pass | bonsai-b |
-| Nov 26 23:28 | `harden-p1-arch-xrecord-write` | merged | 12,987 pass | darwin-ws3 |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
 | bonsai-a | bonsai2-27b | idle | 1528 |
-| bonsai-b | bonsai2-27b | idle | 1454 |
+| bonsai-b | bonsai2-27b | agent | 1454 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 179 |
