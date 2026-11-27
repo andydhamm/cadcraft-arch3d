@@ -111,6 +111,22 @@ pub(super) fn parse_entities(
                 None => fresh_entity_handle(d, hp.seen, hp.reserved),
             };
             entity_extras(kind, tags, h, &mut k, rx);
+            // A proxy we keep (record absent or unreadable) is remembered so the arch model
+            // can drop it later if a valid record turns out to be present.
+            if crate::dxf_arch::is_arch_proxy(tags)
+                || crate::dxf_arch::is_view_proxy(tags)
+                || crate::dxf_arch::is_room_proxy(tags)
+                || crate::dxf_arch::is_roof_proxy(tags)
+                || crate::dxf_site::is_site_proxy(tags)
+                || crate::dxf_light::is_light_proxy(tags)
+                || crate::dxf_casework::is_casework_proxy(tags)
+                || crate::dxf_furnishing::is_furnishing_proxy(tags)
+                || crate::dxf_electrical::is_electrical_proxy(tags)
+                || crate::dxf_stair::is_stair_proxy(tags)
+                || crate::dxf_ceiling::is_ceiling_proxy(tags)
+            {
+                rx.arch_proxies.insert(h);
+            }
             let more: Vec<_> = extra
                 .into_iter()
                 .map(|f| (owner.clone(), paper, Entity { handle: fresh_entity_handle(d, hp.seen, hp.reserved), common: c.clone(), kind: f }))
