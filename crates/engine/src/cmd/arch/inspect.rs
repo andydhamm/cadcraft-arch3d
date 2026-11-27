@@ -10,7 +10,7 @@ use cadcraft_arch::label::label_point;
 use cadcraft_arch::opening::rough_offset;
 use cadcraft_arch::room::room_at;
 use cadcraft_arch::symbol::opening_symbol;
-use cadcraft_arch::wall::{wall_layer_polygons, wall_polygon};
+use cadcraft_arch::wall::wall_layer_polygons;
 use cadcraft_doc::arch::{
     ArchKind, ArchModel, Camera3d, CameraKind, FurnishingHost, LevelKind, OpeningKind, Railing, RailingStyle, Roof, RoofEdge, RoofEdgeKind,
     RoofPlane, RoomType, Stair, StairShape, arch_handle, cabinet_label, furnishing_handle, furnishing_label, handle_json, opening_handle,
@@ -89,6 +89,10 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
     let cameras_flag = p.get("cameras").and_then(Value::as_bool).unwrap_or(false);
 
     let shapes = solve_joins(&d.arch);
+    // `solved` maps every wall the join solver produced a ring for to that ring.
+    // Joined walls carry the mitred/butted ring; isolated walls carry the solver's
+    // raw perpendicular ring.  Walls the solver skips (degenerate / zero-length)
+    // are absent from `solved` and fall back to `raw_wall_polygon` below.
     let mut solved: std::collections::BTreeMap<ArchId, &Vec<cadcraft_geom::Vec2>> = std::collections::BTreeMap::new();
     for s in &shapes {
         solved.insert(s.id, &s.polygon);
@@ -141,11 +145,23 @@ fn run_inspect(s: &mut Session, p: &Value) -> Result<Value, EngineError> {
         obj.insert("finish".to_string(), json!(w.finish.map(cadcraft_doc::arch::Finish::name)));
 
         if poché {
-            if let Some(poly) = solved.get(&w.id) {
-                let poly_json: Vec<Value> = poly.iter().map(|p| json!([p.x, p.y])).collect();
-                obj.insert("polygon".to_string(), Value::Array(poly_json));
-            } else if let Some(poly) = wall_polygon(w) {
-                let poly_json: Vec<Value> = poly.iter().map(|p| json!([p.x, p.y])).collect();
+            // Use the solved ring when the solver produced a true join ring
+            // (mitred/butted, which extends or shrinks beyond the centreline
+            // along the wall direction). Isolated walls get a raw perpendicular
+            // band from the solver; for those we fall through to `raw_wall_polygon`
+            // for the full AABB poché (end-capped).
+            let mut poly_json: Vec<Value> = Vec::new();
+            if let Some(ring) = solved.get(&w.id) {
+                if !solved_ring_is_band(w, ring) {
+                    poly_json.extend(ring.iter().map(|p| json!([p.x, p.y])));
+                }
+            }
+            if poly_json.is_empty() {
+                if let Some(pts) = raw_wall_polygon(w) {
+                    poly_json.extend(pts.iter().map(|p| json!([p.x, p.y])));
+                }
+            }
+            if !poly_json.is_empty() {
                 obj.insert("polygon".to_string(), Value::Array(poly_json));
             }
             let layers = wall_layer_polygons(w);
@@ -749,6 +765,59 @@ fn centroid_points(pts: &[Vec2]) -> Vec2 {
     let x = pts.iter().map(|p| p.x).sum::<f64>() / n;
     let y = pts.iter().map(|p| p.y).sum::<f64>() / n;
     Vec2::new(x, y)
+}
+
+/// Whether the solved ring is just the perpendicular band (no end extension),
+/// which is what the join solver returns for isolated walls.  A band's extent
+/// along the wall's own direction equals the centreline extent; a butted or
+/// mitred ring is always shorter (cut by the join) or extends beyond the
+/// centreline (exterior mitre), so the ranges differ.
+fn solved_ring_is_band(w: &cadcraft_doc::Wall, ring: &[cadcraft_geom::Vec2]) -> bool {
+    if ring.is_empty() {
+        return true;
+    }
+    let dx = w.end.x - w.start.x;
+    let dy = w.end.y - w.start.y;
+    let len_sq = dx * dx + dy * dy;
+    if len_sq < 1e-18 {
+        // Zero-length wall: treat the (trivial) ring as a band.
+        return true;
+    }
+    let len = len_sq.sqrt();
+    let ux = dx / len;
+    let uy = dy / len;
+    let start_proj = w.start.x * ux + w.start.y * uy;
+    let end_proj = w.end.x * ux + w.end.y * uy;
+    let cl_min = start_proj.min(end_proj);
+    let cl_max = start_proj.max(end_proj);
+    let mut ring_min = f64::INFINITY;
+    let mut ring_max = f64::NEG_INFINITY;
+    for p in ring {
+        let proj = p.x * ux + p.y * uy;
+        ring_min = ring_min.min(proj);
+        ring_max = ring_max.max(proj);
+    }
+    (ring_min - cl_min).abs() < 1e-6 && (ring_max - cl_max).abs() < 1e-6
+}
+
+/// The raw (unmitred) poché rectangle for a wall: the axis-aligned bounding
+/// box of the centreline inflated by half the thickness in every direction.
+/// Returns `None` when the thickness is non-finite or negative, so a degenerate
+/// wall never produces a non-finite polygon vertex.
+fn raw_wall_polygon(w: &cadcraft_doc::Wall) -> Option<Vec<Vec2>> {
+    let t = w.thickness;
+    if !t.is_finite() || t < 0.0 {
+        return None;
+    }
+    let ht = t / 2.0;
+    let min_x = w.start.x.min(w.end.x) - ht;
+    let max_x = w.start.x.max(w.end.x) + ht;
+    let min_y = w.start.y.min(w.end.y) - ht;
+    let max_y = w.start.y.max(w.end.y) + ht;
+    if !min_x.is_finite() || !max_x.is_finite() || !min_y.is_finite() || !max_y.is_finite() {
+        return None;
+    }
+    Some(vec![Vec2::new(min_x, min_y), Vec2::new(max_x, min_y), Vec2::new(max_x, max_y), Vec2::new(min_x, max_y)])
 }
 
 #[cfg(test)]
@@ -4868,5 +4937,853 @@ mod tests {
         assert!(o["rough"].is_object(), "rough must be an object");
         assert!(o["rough"]["width"].is_number(), "rough.width must be a number");
         assert!(o["rough"]["height"].is_number(), "rough.height must be a number");
+    }
+
+    /// The vertical interior wall (6,3)-(6,8) of the 6-wall demo butts at the
+    /// horizontal interior wall (bottom: y=3.05) and the exterior face
+    /// (top: y=7.9).  Pins the T-junction butt span that no existing
+    /// test covers.
+    #[test]
+    fn arch_inspect_poché_t_junction_spans_y() {
+        let mut s = Session::new();
+        build_full_demo_plan(&mut s);
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        let Some(w) = find_wall_by_points(walls, [6.0, 3.0], [6.0, 8.0]) else {
+            return;
+        };
+        let Some(poly) = w["polygon"].as_array() else {
+            return;
+        };
+        let mut min_y = f64::INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        let mut has_finite = false;
+        for p in poly {
+            let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            if py.is_finite() {
+                has_finite = true;
+                min_y = min_y.min(py);
+                max_y = max_y.max(py);
+            }
+        }
+        assert!(has_finite, "t-junction polygon has no finite vertex");
+        assert!((min_y - 3.05).abs() < 1e-6, "t-junction min_y {min_y} should be 3.05");
+        assert!((max_y - 7.9).abs() < 1e-6, "t-junction max_y {max_y} should be 7.9");
+    }
+
+    /// A zero-length wall (start == end) survives poché: the join solver skips
+    /// degenerate walls and `wall_polygon` has no direction to offset a point,
+    /// so no `polygon` key is emitted.  The `wall` command rejects such
+    /// hostile input (points must be 2 or more distinct points), so the stored
+    /// degenerate wall is pushed directly onto the model instead — `arch.inspect`
+    /// must still handle it: no crash, every emitted vertex finite.
+    #[test]
+    fn arch_inspect_poché_zero_length_wall_does_not_crash() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(0.0, 0.0), thickness: 0.2, ..Wall::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        for w in walls {
+            assert!(w["handle"].is_string(), "zero-length wall still reports a handle");
+            assert!(w["start"].as_array().is_some(), "zero-length wall reports start");
+            assert!(w["end"].as_array().is_some(), "zero-length wall reports end");
+            // Every emitted vertex must be finite.
+            if let Some(poly) = w["polygon"].as_array() {
+                for p in poly {
+                    let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                    let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                    assert!(px.is_finite(), "zero-length wall vertex x {px} not finite");
+                    assert!(py.is_finite(), "zero-length wall vertex y {py} not finite");
+                }
+            }
+        }
+    }
+
+    /// A wall at huge coordinates (1e9) with poché must emit a finite mitred
+    /// rectangle.  Pins that the offset arithmetic does not overflow to
+    /// infinity or NaN at large magnitudes.
+    #[test]
+    fn arch_inspect_poché_huge_coordinates_stay_finite() {
+        let mut s = Session::new();
+        exec(
+            &mut s,
+            "wall",
+            &json!({
+                "points": [[1e9, 1e9], [1e9 + 5.0, 1e9]],
+                "thickness": 0.2,
+            }),
+        );
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall at huge coordinates");
+        let w = &walls[0];
+        let Some(poly) = w["polygon"].as_array() else {
+            assert!(w.get("polygon").is_none() || w["polygon"].is_null(), "expected a polygon for a finite wall");
+            return;
+        };
+        assert!(poly.len() >= 4, "polygon must have at least 4 vertices, got {poly:?}");
+        for p in poly {
+            let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            assert!(px.is_finite(), "huge-coordinate vertex x {px} not finite");
+            assert!(py.is_finite(), "huge-coordinate vertex y {py} not finite");
+            // All vertices must be within the expected mitred bounds.
+            assert!(px >= 1e9 - 0.2 && px <= 1e9 + 5.2, "vertex x {px} outside expected range [1e9 - 0.2, 1e9 + 5.2]");
+            assert!(py >= 1e9 - 0.2 && py <= 1e9 + 0.2, "vertex y {py} outside expected range [1e9 - 0.2, 1e9 + 0.2]");
+        }
+    }
+
+    /// An isolated wall has nothing to join against, so its poché is the raw
+    /// *unmitred* rectangle centred on its own centreline (a 5.2 × 0.2 block,
+    /// x ∈ [−0.1, 5.1], y ∈ [−0.1, 0.1]) — not a mitred trapezoid, which only
+    /// exists where a wall actually meets a neighbour.  Pins the bounding box,
+    /// finite vertices, ≥ 4 corners, and that no vertex sits on the far
+    /// centreline end (x = 5.0).  Asserted on bounds (not corner order) so it
+    /// holds regardless of stored wall direction.
+    #[test]
+    fn arch_inspect_poché_isolated_wall_matches_raw_rectangle() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one isolated wall");
+        let poly = walls[0]["polygon"].as_array().expect("polygon array missing");
+        assert!(poly.len() >= 4, "polygon must have at least 4 vertices");
+        let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        for p in poly {
+            let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            assert!(px.is_finite() && py.is_finite(), "polygon vertex not finite: ({px}, {py})");
+            min_x = min_x.min(px);
+            max_x = max_x.max(px);
+            min_y = min_y.min(py);
+            max_y = max_y.max(py);
+        }
+        assert!((min_x - (-0.1)).abs() < 1e-6, "isolated wall min x {min_x} != -0.1");
+        assert!((min_y - (-0.1)).abs() < 1e-6, "isolated wall min y {min_y} != -0.1");
+        assert!((max_x - 5.1).abs() < 1e-6, "isolated wall max x {max_x} != 5.1");
+        assert!((max_y - 0.1).abs() < 1e-6, "isolated wall max y {max_y} != 0.1");
+        let on_centerline_end = poly.iter().any(|p| {
+            let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            (px - 5.0).abs() < 1e-6
+        });
+        assert!(!on_centerline_end, "isolated wall polygon must not contain a vertex on the far centerline end (x = 5.0)");
+    }
+
+    /// Union-of-all-rings invariant (spec): on the phase-1 demo plan the solved
+    /// poché rings span exactly x ∈ [-0.1, 10.1] and y ∈ [-0.1, 8.1] — the
+    /// exterior rectangle offset by half its thickness, with no ring overshooting
+    /// the plan.  The interior walls (t 0.1) must butt at the exterior faces,
+    /// never extend past them, and no exterior ring may exceed its offset.
+    #[test]
+    fn arch_inspect_poché_all_rings_union_bounds() {
+        let mut s = Session::new();
+        build_full_demo_plan(&mut s);
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 6, "expected 6 walls in the full demo plan");
+        let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        let mut vertices = 0;
+        for w in walls {
+            if let Some(poly) = w["polygon"].as_array() {
+                for p in poly {
+                    let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                    let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                    if px.is_finite() {
+                        min_x = min_x.min(px);
+                        max_x = max_x.max(px);
+                        vertices += 1;
+                    }
+                    if py.is_finite() {
+                        min_y = min_y.min(py);
+                        max_y = max_y.max(py);
+                    }
+                }
+            }
+        }
+        assert!(vertices > 0, "no finite poché vertices collected");
+        assert!((min_x - (-0.1)).abs() < 1e-6, "union min x {min_x} != -0.1");
+        assert!((min_y - (-0.1)).abs() < 1e-6, "union min y {min_y} != -0.1");
+        assert!((max_x - 10.1).abs() < 1e-6, "union max x {max_x} != 10.1");
+        assert!((max_y - 8.1).abs() < 1e-6, "union max y {max_y} != 8.1");
+    }
+
+    /// Hostile stored input: a wall carrying a NaN in its centerline has no
+    /// direction for the raw poché and is skipped by the join solver, so
+    /// `arch.inspect` must still succeed, report the wall with a null start x,
+    /// and must not emit a non-finite polygon vertex.
+    #[test]
+    fn arch_inspect_poché_nan_wall_no_crash_no_bad_vertex() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_wall(Wall { start: Vec2::new(f64::NAN, 0.0), end: Vec2::new(5.0, 0.0), thickness: 0.2, ..Wall::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall");
+        let w = &walls[0];
+        assert!(w["start"][0].is_null(), "NaN start x must serialize to null");
+        assert!(w["handle"].is_string(), "handle must survive a NaN wall");
+        // serde_json can never hold a NaN number, so "a number" is the same as
+        // "a finite number"; the only legal emission for a degenerate vertex is null.
+        if let Some(poly) = w["polygon"].as_array() {
+            for p in poly {
+                for i in 0..2 {
+                    let coord = p.as_array().and_then(|a| a.get(i));
+                    assert!(coord.map_or(true, |c| c.is_null() || c.is_number()), "poché vertex {p} must be null or a finite number");
+                }
+            }
+        }
+    }
+
+    /// Repeated poché inspects must agree exactly: `run_inspect` is a pure
+    /// function of the stored model (no `doc_mut`, no revision bump, no ordering
+    /// drift across calls).
+    #[test]
+    fn arch_inspect_poché_is_deterministic_across_calls() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [10.0, 0.0]], "thickness": 0.2 }));
+        exec(&mut s, "wall", &json!({ "points": [[10.0, 0.0], [10.0, 8.0]], "thickness": 0.2 }));
+        exec(&mut s, "wall", &json!({ "points": [[10.0, 8.0], [0.0, 8.0]], "thickness": 0.2 }));
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 8.0], [0.0, 0.0]], "thickness": 0.2 }));
+        let params = json!({ "poche": true, "rooms": true, "levels": true });
+        let first = exec(&mut s, "arch.inspect", &params);
+        let second = exec(&mut s, "arch.inspect", &json!({ "poche": true, "rooms": true, "levels": true }));
+        assert_eq!(first, second, "poché inspect must be deterministic across calls");
+    }
+
+    /// A vertical wall (along y) at thickness 0.2 produces a poché rectangle
+    /// offset in x by ±0.1 with flat ends extended in y: bounds
+    /// x ∈ [2.9, 3.1], y ∈ [−0.1, 4.1].  Pins the offset for a
+    /// non-horizontal orientation.
+    #[test]
+    fn arch_inspect_poché_vertical_wall_bounds() {
+        let mut s = Session::new();
+        exec(
+            &mut s,
+            "wall",
+            &json!({
+                "points": [[3.0, 0.0], [3.0, 4.0]],
+                "thickness": 0.2,
+            }),
+        );
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one vertical wall");
+        let poly = walls[0]["polygon"].as_array().expect("polygon array missing");
+        assert!(poly.len() >= 4, "polygon must have at least 4 vertices");
+        let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        for p in poly {
+            let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            assert!(px.is_finite() && py.is_finite(), "vertical wall vertex not finite: ({px}, {py})");
+            min_x = min_x.min(px);
+            max_x = max_x.max(px);
+            min_y = min_y.min(py);
+            max_y = max_y.max(py);
+        }
+        assert!((min_x - 2.9).abs() < 1e-6, "vertical wall min x {min_x} != 2.9");
+        assert!((max_x - 3.1).abs() < 1e-6, "vertical wall max x {max_x} != 3.1");
+        assert!((min_y - (-0.1)).abs() < 1e-6, "vertical wall min y {min_y} != -0.1");
+        assert!((max_y - 4.1).abs() < 1e-6, "vertical wall max y {max_y} != 4.1");
+    }
+
+    /// A wall at negative coordinates is still offset correctly: the poché
+    /// rectangle tracks the centreline, so x ∈ [−3.1, 2.1], y ∈ [−2.1, −1.9].
+    /// Pins that the offset arithmetic holds away from the origin.
+    #[test]
+    fn arch_inspect_poché_negative_coordinates_bounds() {
+        let mut s = Session::new();
+        exec(
+            &mut s,
+            "wall",
+            &json!({
+                "points": [[-3.0, -2.0], [2.0, -2.0]],
+                "thickness": 0.2,
+            }),
+        );
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall at negative coordinates");
+        let poly = walls[0]["polygon"].as_array().expect("polygon array missing");
+        assert!(poly.len() >= 4, "polygon must have at least 4 vertices");
+        let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        for p in poly {
+            let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+            assert!(px.is_finite() && py.is_finite(), "negative wall vertex not finite: ({px}, {py})");
+            min_x = min_x.min(px);
+            max_x = max_x.max(px);
+            min_y = min_y.min(py);
+            max_y = max_y.max(py);
+        }
+        assert!((min_x - (-3.1)).abs() < 1e-6, "negative wall min x {min_x} != -3.1");
+        assert!((min_y - (-2.1)).abs() < 1e-6, "negative wall min y {min_y} != -2.1");
+        assert!((max_x - 2.1).abs() < 1e-6, "negative wall max x {max_x} != 2.1");
+        assert!((max_y - (-1.9)).abs() < 1e-6, "negative wall max y {max_y} != -1.9");
+    }
+
+    /// Poché is direction-independent: a wall stored (5,0)→(0,0) must emit the
+    /// same bounding box as one stored (0,0)→(5,0).  Pins the invariant that
+    /// reversing the centreline direction does not change the emitted rectangle
+    /// (guards the sign error the old hand-rolled corners had).
+    #[test]
+    fn arch_inspect_poché_direction_independent_bounds() {
+        fn wall_bounds(v: Value) -> (f64, f64, f64, f64) {
+            let empty: Vec<Value> = Vec::new();
+            let walls = v["walls"].as_array().unwrap_or(&empty);
+            let poly = walls.get(0).and_then(|w| w.get("polygon")).and_then(Value::as_array).expect("polygon array missing");
+            let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+            for p in poly {
+                let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                if px.is_finite() {
+                    min_x = min_x.min(px);
+                    max_x = max_x.max(px);
+                }
+                if py.is_finite() {
+                    min_y = min_y.min(py);
+                    max_y = max_y.max(py);
+                }
+            }
+            (min_x, min_y, max_x, max_y)
+        }
+        let mut s_f = Session::new();
+        exec(
+            &mut s_f,
+            "wall",
+            &json!({
+                "points": [[0.0, 0.0], [5.0, 0.0]],
+                "thickness": 0.2,
+            }),
+        );
+        let (min_xf, min_yf, max_xf, max_yf) = wall_bounds(exec(&mut s_f, "arch.inspect", &json!({ "poche": true })));
+        let mut s_r = Session::new();
+        exec(
+            &mut s_r,
+            "wall",
+            &json!({
+                "points": [[5.0, 0.0], [0.0, 0.0]],
+                "thickness": 0.2,
+            }),
+        );
+        let (min_xr, min_yr, max_xr, max_yr) = wall_bounds(exec(&mut s_r, "arch.inspect", &json!({ "poche": true })));
+        assert!((min_xf - min_xr).abs() < 1e-6, "min x bounds differ: forward {min_xf}, reversed {min_xr}");
+        assert!((min_yf - min_yr).abs() < 1e-6, "min y bounds differ: forward {min_yf}, reversed {min_yr}");
+        assert!((max_xf - max_xr).abs() < 1e-6, "max x bounds differ: forward {max_xf}, reversed {max_xr}");
+        assert!((max_yf - max_yr).abs() < 1e-6, "max y bounds differ: forward {max_yf}, reversed {max_yr}");
+        assert!(
+            (min_xf - (-0.1)).abs() < 1e-6 && (max_xf - 5.1).abs() < 1e-6 && (min_yf - (-0.1)).abs() < 1e-6 && (max_yf - 0.1).abs() < 1e-6,
+            "forward wall bounds {min_xf}..{max_xf} {min_yf}..{max_yf} != raw rectangle"
+        );
+    }
+
+    /// The poché perpendicular extent equals the full wall thickness (half-thickness
+    /// on each side of the centreline). Pins that the offset scales with the stored
+    /// thickness: a 0.2 m wall spans y in [-0.1, 0.1]; a 0.1 m wall spans y in
+    /// [-0.05, 0.05]. Both are isolated walls, so the raw-rectangle and the
+    /// join-solved ring agree.
+    #[test]
+    fn arch_inspect_poché_perpendicular_extent_scales_with_thickness() {
+        for (thickness, half) in [(0.2, 0.1), (0.1, 0.05)] {
+            let mut s = Session::new();
+            exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]], "thickness": thickness }));
+            let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+            let empty: Vec<Value> = Vec::new();
+            let walls = v["walls"].as_array().unwrap_or(&empty);
+            assert_eq!(walls.len(), 1, "expected one isolated wall for {thickness}");
+            assert!(walls[0]["polygon"].is_array(), "polygon must be present");
+            let poly = walls[0]["polygon"].as_array().unwrap_or(&empty);
+            let mut min_y = f64::INFINITY;
+            let mut max_y = f64::NEG_INFINITY;
+            let mut any = false;
+            for p in poly {
+                if let Some(c) = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64) {
+                    any = true;
+                    min_y = min_y.min(c);
+                    max_y = max_y.max(c);
+                }
+            }
+            assert!(any, "poché polygon has no vertices for {thickness}");
+            assert!((min_y - (-half)).abs() < 1e-6 && (max_y - half).abs() < 1e-6, "{thickness} m wall should span y in [{min_y}, {max_y}]");
+        }
+    }
+
+    /// Every poché vertex across the full 6-wall demo plan is a two-element [x, y]
+    /// array of finite numbers. Pins the per-vertex JSON structure the renderer and
+    /// the acceptance checks read, and that no degenerate ring leaks a non-finite
+    /// coordinate.
+    #[test]
+    fn arch_inspect_poché_vertices_are_finite_xy_pairs() {
+        let mut s = Session::new();
+        build_full_demo_plan(&mut s);
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 6, "expected 6 walls in the full demo plan");
+        let mut checked = 0;
+        for w in walls {
+            if let Some(poly) = w["polygon"].as_array() {
+                for p in poly {
+                    assert!(p.is_array(), "poché vertex must be an array: {p}");
+                    let pair = p.as_array().unwrap_or(&empty);
+                    assert_eq!(pair.len(), 2, "poché vertex must be exactly [x, y]");
+                    for c in pair {
+                        assert!(c.is_number(), "poché vertex component must be a number: {c}");
+                        assert!(c.as_f64().is_some_and(f64::is_finite), "poché vertex must be finite: {c}");
+                    }
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked > 0, "no poché vertices were collected");
+    }
+
+    /// Two walls crossing at right angles (a plus / X sign) produce finite poché
+    /// rings; none of the emitted vertices diverge. Pins the join solver meeting
+    /// every crossing so that an intersecting wall graph does not crash
+    /// `arch.inspect {"poche": true}`.
+    #[test]
+    fn arch_inspect_poché_crossing_walls_stay_finite() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 4.0], [8.0, 4.0]], "thickness": 0.2 }));
+        exec(&mut s, "wall", &json!({ "points": [[4.0, 0.0], [4.0, 8.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 2, "expected the two crossing walls");
+        let mut checked = 0;
+        for w in walls {
+            if let Some(poly) = w["polygon"].as_array() {
+                for p in poly {
+                    if let Some(c) = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64) {
+                        assert!(c.is_finite(), "crossing wall vertex x {c} not finite");
+                    }
+                    if let Some(c) = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64) {
+                        assert!(c.is_finite(), "crossing wall vertex y {c} not finite");
+                    }
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked > 0, "no poché vertices collected from crossing walls");
+    }
+
+    /// An isolated 45° wall gets a finite, closed poché ring (at least four corners)
+    /// even though its centreline is not axis-aligned; the perpendicular offset must
+    /// not produce NaN/Inf at the corners. Pins angled-wall poché.
+    #[test]
+    fn arch_inspect_poché_angled_wall_stays_finite() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [4.0, 4.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one angled wall");
+        assert!(walls[0]["polygon"].is_array(), "angled isolated wall must report a polygon");
+        let poly = walls[0]["polygon"].as_array().unwrap_or(&empty);
+        assert!(poly.len() >= 4, "poché must have at least 4 vertices");
+        for p in poly {
+            if let Some(c) = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64) {
+                assert!(c.is_finite(), "angled wall vertex x {c} not finite");
+            }
+            if let Some(c) = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64) {
+                assert!(c.is_finite(), "angled wall vertex y {c} not finite");
+            }
+        }
+    }
+
+    /// A wall with thickness zero has a zero-area raw rectangle (degenerate case);
+    /// every emitted vertex must still be finite.  The `wall` command rejects a
+    /// non-positive thickness, so the wall is pushed directly (as the other
+    /// degenerate-input tests do) instead of through the command.
+    #[test]
+    fn arch_inspect_poché_zero_thickness_wall() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), thickness: 0.0, ..Wall::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall");
+        let w = &walls[0];
+        if let Some(poly) = w["polygon"].as_array() {
+            for p in poly {
+                let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                assert!(px.is_finite() && py.is_finite(), "zero-thickness vertex not finite: ({px}, {py})");
+            }
+        }
+    }
+
+    /// A wall with NaN thickness must not crash and must not emit a polygon
+    /// (the raw rectangle is undefined without a finite thickness).
+    #[test]
+    fn arch_inspect_poché_nan_thickness_does_not_crash() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), thickness: f64::NAN, ..Wall::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall");
+        let w = &walls[0];
+        assert!(w["handle"].is_string(), "handle must survive");
+        assert!(w["thickness"].is_null(), "NaN thickness serializes to null");
+    }
+
+    /// A very long wall (1e15 m) with poché still produces finite vertices:
+    /// the AABB inflation by half-thickness must not overflow f64.
+    #[test]
+    fn arch_inspect_poché_very_long_wall_stays_finite() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [1e15, 0.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall");
+        let poly = walls[0]["polygon"].as_array().expect("polygon must be present");
+        for p in poly {
+            let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            assert!(px.is_finite(), "very-long wall vertex x {px} not finite");
+            assert!(py.is_finite(), "very-long wall vertex y {py} not finite");
+        }
+    }
+
+    /// The top wall (10,8)-(0,8) of the 4-wall exterior rectangle is mitred on
+    /// its interior face (y = 7.9): exterior face corners stay at x = -0.1 / 10.1,
+    /// interior face corners are cut to x = 0.1 / 9.9. Pins the top-wall mitre
+    /// symmetric to the bottom-wall test in `arch_inspect_mitres_exterior_corners`.
+    #[test]
+    fn arch_inspect_poché_top_wall_mitred_corners() {
+        let mut s = Session::new();
+        build_exterior_rect(&mut s);
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        let Some(w) = find_wall_by_points(walls, [10.0, 8.0], [0.0, 8.0]) else {
+            return;
+        };
+        let Some(poly) = w["polygon"].as_array() else {
+            return;
+        };
+        let corners = [(-0.1, 8.1), (10.1, 8.1), (9.9, 7.9), (0.1, 7.9)];
+        for (cx, cy) in corners {
+            let found = poly.iter().any(|p| {
+                let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                (px - cx).abs() < 1e-6 && (py - cy).abs() < 1e-6
+            });
+            assert!(found, "top wall corner ({cx}, {cy}) not in polygon");
+        }
+        assert!(
+            !poly.iter().any(|p| {
+                let px = p.as_array().and_then(|a| a.get(0).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                let py = p.as_array().and_then(|a| a.get(1).and_then(Value::as_f64)).unwrap_or(f64::NAN);
+                ((px + 0.1).abs() < 1e-6 || (px - 10.1).abs() < 1e-6) && (py - 7.9).abs() < 1e-6
+            }),
+            "top wall polygon must not contain non-mitred interior corners at (x, 7.9) where x is not 0.1 or 9.9"
+        );
+    }
+
+    /// A wall with NaN thickness is skipped by the join solver (non-finite)
+    /// and `raw_wall_polygon` returns None, so `arch.inspect {poche:true}` must
+    /// still emit the wall row but must not emit a `polygon` key. Pins that
+    /// degenerate thickness does not crash and does not silently fall back to
+    /// a non-finite polygon.
+    #[test]
+    fn arch_inspect_poché_nan_thickness_has_no_polygon() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), thickness: f64::NAN, ..Wall::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one wall");
+        let w = &walls[0];
+        assert!(w["handle"].is_string(), "handle must still be present");
+        assert!(w["thickness"].is_null(), "NaN thickness serializes to null");
+        assert!(w["polygon"].is_null(), "NaN thickness wall must not emit a polygon (raw_wall_polygon returns None, solver skips it)");
+    }
+
+    /// The `polygon` and `layers` keys are emitted only when the `poché` flag is
+    /// set. Without the flag, the wall row still carries its core fields but
+    /// neither `polygon` nor `layers` appears. Pins the flag-controlled output
+    /// so that a regression that always emits `polygon` is caught.
+    #[test]
+    fn arch_inspect_polygon_absent_without_poché() {
+        let mut s = Session::new();
+        exec(
+            &mut s,
+            "wall",
+            &json!({
+                "points": [[0.0, 0.0], [5.0, 0.0]],
+                "thickness": 0.1,
+            }),
+        );
+        let v_no = exec(&mut s, "arch.inspect", &json!({}));
+        let walls = v_no["walls"].as_array().expect("walls array missing");
+        assert_eq!(walls.len(), 1, "expected one wall");
+        assert!(walls[0]["polygon"].is_null(), "polygon key must be absent when poché flag is not set");
+        assert!(walls[0]["layers"].is_null(), "layers key must be absent when poché flag is not set");
+        let v_yes = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let walls = v_yes["walls"].as_array().expect("walls array missing");
+        assert!(walls[0]["polygon"].is_array(), "polygon key must be an array when poché flag is set");
+        assert!(walls[0]["layers"].is_array(), "layers key must be an array when poché flag is set");
+    }
+
+    /// A wall with a negative thickness is hostile input. `arch.inspect
+    /// {"poche":true}` must not crash, must still report the wall row
+    /// (handle, start, end, thickness), and every emitted poché vertex —
+    /// if any — must be finite. Pins the never-crash invariant for negative
+    /// thickness (raw rings are only defined for `t >= 0`).
+    #[test]
+    fn arch_inspect_poché_negative_thickness_wall_does_not_crash() {
+        let mut s = Session::new();
+        match s.doc_mut() {
+            Ok(d) => {
+                d.arch.push_wall(Wall { start: Vec2::new(0.0, 0.0), end: Vec2::new(5.0, 0.0), thickness: -0.3, ..Wall::default() });
+                d.touch_arch();
+            }
+            Err(_) => {}
+        }
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected the negative-thickness wall row");
+        let w = &walls[0];
+        assert!(w["handle"].is_string(), "handle must survive negative thickness");
+        assert!(w["start"].as_array().is_some() && w["end"].as_array().is_some(), "start/end must be reported");
+        assert_eq!(w["thickness"], -0.3, "negative thickness must be reported verbatim");
+        if let Some(poly) = w["polygon"].as_array() {
+            for p in poly {
+                let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                assert!(px.is_finite() && py.is_finite(), "negative-thickness poché vertex not finite: ({px}, {py})");
+            }
+        }
+    }
+
+    /// A joined corner placed at huge coordinates (1e12) must still emit
+    /// finite mitred poché rings — pins that the solved-ring path does not
+    /// overflow to NaN/Inf at large magnitude, and that the mitred ring is
+    /// bounded by the centreline offset (±0.2 m) rather than the raw AABB.
+    #[test]
+    fn arch_inspect_poché_joined_wall_at_huge_coordinates() {
+        let base = 1e12_f64;
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[base, base], [base + 10.0, base]], "thickness": 0.2 }));
+        exec(&mut s, "wall", &json!({ "points": [[base + 10.0, base], [base + 10.0, base + 8.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 2, "expected the two joined walls at huge coordinates");
+        let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        let mut checked = 0;
+        for w in walls {
+            if let Some(poly) = w["polygon"].as_array() {
+                for p in poly {
+                    let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                    let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                    assert!(px.is_finite() && py.is_finite(), "huge-coordinate poché vertex not finite: ({px}, {py})");
+                    // Mitred ring must stay within the half-thickness offset of the
+                    // centreline AABB — a raw rectangle would overshoot the mitred
+                    // inner corners.
+                    assert!(px >= base - 0.2 && px <= base + 10.2, "vertex x {px} outside mitred bounds");
+                    assert!(py >= base - 0.2 && py <= base + 8.2, "vertex y {py} outside mitred bounds");
+                    min_x = min_x.min(px);
+                    min_y = min_y.min(py);
+                    max_x = max_x.max(px);
+                    max_y = max_y.max(py);
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked > 0, "no finite poché vertices collected from the huge joined corner");
+        assert!((min_x - (base - 0.1)).abs() < 1e-3, "huge corner min x {min_x} should be base - 0.1");
+        assert!((max_x - (base + 10.1)).abs() < 1e-3, "huge corner max x {max_x} should be base + 10.1");
+        assert!((min_y - (base - 0.1)).abs() < 1e-3, "huge corner min y {min_y} should be base - 0.1");
+        assert!((max_y - (base + 8.1)).abs() < 1e-3, "huge corner max y {max_y} should be base + 8.1");
+    }
+
+    /// Two collinear end-to-end walls (a polyline split into segments) form a
+    /// degenerate collinear join. `arch.inspect {"poche":true}` must not crash
+    /// and every emitted vertex must be finite, with the strip bounded to the
+    /// half-thickness offset of the whole run. Pins that a collinear meeting
+    /// does not blow up the poché solver.
+    #[test]
+    fn arch_inspect_poché_collinear_touching_walls_stay_finite() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [5.0, 0.0]], "thickness": 0.2 }));
+        exec(&mut s, "wall", &json!({ "points": [[5.0, 0.0], [10.0, 0.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 2, "expected the two collinear touching walls");
+        let mut checked = 0;
+        for w in walls {
+            if let Some(poly) = w["polygon"].as_array() {
+                for p in poly {
+                    let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                    let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+                    assert!(px.is_finite() && py.is_finite(), "collinear-touching poché vertex not finite: ({px}, {py})");
+                    assert!(px >= -0.2 && px <= 10.2, "vertex x {px} outside expected strip bounds");
+                    assert!(py >= -0.2 && py <= 0.2, "vertex y {py} outside expected strip bounds");
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked > 0, "no poché vertices collected from the collinear run");
+    }
+
+    /// Two isolated walls at different positions and thicknesses each get the
+    /// full AABB poché (not just the perpendicular band), with bounds independent
+    /// of the other.
+    #[test]
+    fn arch_inspect_poché_multiple_isolated_walls_get_aabb() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[0.0, 0.0], [3.0, 0.0]], "thickness": 0.2 }));
+        exec(&mut s, "wall", &json!({ "points": [[20.0, 20.0], [23.0, 20.0]], "thickness": 0.4 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 2, "expected two isolated walls");
+
+        // Wall 0: (0,0)-(3,0), t=0.2 → AABB x[-0.1,3.1] y[-0.1,0.1]
+        let poly0 = walls[0]["polygon"].as_array().expect("polygon for wall 0");
+        assert!(poly0.len() >= 4, "wall 0 polygon must have >= 4 vertices");
+        let (mut x0_min, mut y0_min, mut x0_max, mut y0_max) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        for p in poly0 {
+            let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            assert!(px.is_finite() && py.is_finite());
+            x0_min = x0_min.min(px);
+            x0_max = x0_max.max(px);
+            y0_min = y0_min.min(py);
+            y0_max = y0_max.max(py);
+        }
+        assert!((x0_min - (-0.1)).abs() < 1e-6, "wall 0 min x {x0_min} != -0.1");
+        assert!((x0_max - 3.1).abs() < 1e-6, "wall 0 max x {x0_max} != 3.1");
+        assert!((y0_min - (-0.1)).abs() < 1e-6, "wall 0 min y {y0_min} != -0.1");
+        assert!((y0_max - 0.1).abs() < 1e-6, "wall 0 max y {y0_max} != 0.1");
+
+        // Wall 1: (20,20)-(23,20), t=0.4 → AABB x[19.8,23.2] y[19.8,20.2]
+        let poly1 = walls[1]["polygon"].as_array().expect("polygon for wall 1");
+        assert!(poly1.len() >= 4, "wall 1 polygon must have >= 4 vertices");
+        let (mut x1_min, mut y1_min, mut x1_max, mut y1_max) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        for p in poly1 {
+            let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            assert!(px.is_finite() && py.is_finite());
+            x1_min = x1_min.min(px);
+            x1_max = x1_max.max(px);
+            y1_min = y1_min.min(py);
+            y1_max = y1_max.max(py);
+        }
+        assert!((x1_min - 19.8).abs() < 1e-6, "wall 1 min x {x1_min} != 19.8");
+        assert!((x1_max - 23.2).abs() < 1e-6, "wall 1 max x {x1_max} != 23.2");
+        assert!((y1_min - 19.8).abs() < 1e-6, "wall 1 min y {y1_min} != 19.8");
+        assert!((y1_max - 20.2).abs() < 1e-6, "wall 1 max y {y1_max} != 20.2");
+    }
+
+    /// An angled isolated wall (45°) gets the correct AABB poché — the raw
+    /// axis-aligned bounding box of the centreline inflated by half-thickness
+    /// in all four directions — not a rotated perpendicular band.
+    #[test]
+    fn arch_inspect_poché_angled_isolated_wall_gets_aabb() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[1.0, 2.0], [5.0, 6.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one angled wall");
+        let poly = walls[0]["polygon"].as_array().expect("polygon missing");
+        assert!(poly.len() >= 4, "angled wall polygon must have >= 4 vertices");
+        let mut min_x = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        for p in poly {
+            let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            assert!(px.is_finite() && py.is_finite(), "angled isolated wall vertex not finite: ({px}, {py})");
+            min_x = min_x.min(px);
+            max_x = max_x.max(px);
+            min_y = min_y.min(py);
+            max_y = max_y.max(py);
+        }
+        // AABB of (1,2)-(5,6) with ht=0.1: x[0.9, 5.1], y[1.9, 6.1]
+        assert!((min_x - 0.9).abs() < 1e-6, "angled wall min x {min_x} != 0.9");
+        assert!((max_x - 5.1).abs() < 1e-6, "angled wall max x {max_x} != 5.1");
+        assert!((min_y - 1.9).abs() < 1e-6, "angled wall min y {min_y} != 1.9");
+        assert!((max_y - 6.1).abs() < 1e-6, "angled wall max y {max_y} != 6.1");
+    }
+
+    /// A very short isolated wall (length 0.01 m) with a moderate thickness
+    /// (0.2 m) still gets the full AABB poché.  The perpendicular band would
+    /// be wider than the wall in the parallel direction, but the AABB is
+    /// always the centreline inflated by half-thickness in all four directions.
+    #[test]
+    fn arch_inspect_poché_very_short_isolated_wall_gets_aabb() {
+        let mut s = Session::new();
+        exec(&mut s, "wall", &json!({ "points": [[2.0, 2.0], [2.01, 2.0]], "thickness": 0.2 }));
+        let v = exec(&mut s, "arch.inspect", &json!({ "poche": true }));
+        let empty: Vec<Value> = Vec::new();
+        let walls = v["walls"].as_array().unwrap_or(&empty);
+        assert_eq!(walls.len(), 1, "expected one very-short wall");
+        let poly = walls[0]["polygon"].as_array().expect("polygon missing");
+        assert!(poly.len() >= 4, "short wall polygon must have >= 4 vertices");
+        let mut min_x = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        for p in poly {
+            let px = p.as_array().and_then(|a| a.get(0)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            let py = p.as_array().and_then(|a| a.get(1)).and_then(Value::as_f64).unwrap_or(f64::NAN);
+            assert!(px.is_finite() && py.is_finite());
+            min_x = min_x.min(px);
+            max_x = max_x.max(px);
+            min_y = min_y.min(py);
+            max_y = max_y.max(py);
+        }
+        // AABB of (2,2)-(2.01,2) with ht=0.1: x[1.9, 2.11], y[1.9, 2.1]
+        assert!((min_x - 1.9).abs() < 1e-6, "short wall min x {min_x}");
+        assert!((max_x - 2.11).abs() < 1e-6, "short wall max x {max_x}");
+        assert!((min_y - 1.9).abs() < 1e-6, "short wall min y {min_y}");
+        assert!((max_y - 2.1).abs() < 1e-6, "short wall max y {max_y}");
     }
 }
