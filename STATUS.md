@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-28 11:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-28 11:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 16 of 17 segments merged**
 
@@ -33,20 +33,21 @@ Updated 2026-11-28 11:00 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 43.9 h so far · expected done Nov 28 12:22–Nov 30 03:02 UTC |
+| 23 | Phase 23 | pending | — | 44.1 h so far · expected done Nov 28 12:37–Nov 30 03:17 UTC |
 
 ## Phase 23 segments
 
-16 merged, 1 merging
+16 merged, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-2ce75fcb0` | merge upstream upstream/main up to 2ce75fcb0 (48 commits) | merging | darwin-ws3 |
+| `upstream-sync-2ce75fcb0` | merge upstream upstream/main up to 2ce75fcb0 (48 commits) | gate | bonsai-a |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 28 11:08 | `upstream-sync-2ce75fcb0` | refused | 13,492 pass | darwin-ws3 |
 | Nov 28 10:16 | `upstream-sync-d538a468e` | merged | 13,448 pass | tturbo-mac |
 | Nov 28 09:16 | `upstream-sync-f80dbb461` | merged | 13,384 pass | claude-sonnet-d |
 | Nov 28 07:43 | `upstream-sync-c1f771d5c` | merged | 13,353 pass | tturbo-mac |
@@ -58,13 +59,12 @@ Updated 2026-11-28 11:00 UTC. This page and the card in the README are regenerat
 | Nov 27 21:08 | `upstream-sync-ff0bde679` | refused | 0 pass | tturbo-mac |
 | Nov 27 19:04 | `upstream-sync-ff0bde679` | refused | 0 pass | tturbo-mac |
 | Nov 27 16:36 | `upstream-sync-ff0bde679` | refused | 0 pass | claude-sonnet-a |
-| Nov 27 14:34 | `upstream-sync-16929ef8e` | merged | 13,210 pass | bonsai-b |
 
 ## Seats active in the last hour
 
 | Seat | Model | State | Rounds |
 |---|---|---|---|
-| bonsai-a | bonsai2-27b | idle | 1528 |
+| bonsai-a | bonsai2-27b | gate | 1528 |
 | bonsai-b | bonsai2-27b | idle | 1458 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
