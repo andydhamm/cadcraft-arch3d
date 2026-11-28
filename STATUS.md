@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-28 00:30 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-28 00:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 9 of 10 segments merged**
 
@@ -33,7 +33,7 @@ Updated 2026-11-28 00:30 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 33.4 h so far · expected done Nov 28 03:55–Dec 06 04:40 UTC |
+| 23 | Phase 23 | pending | — | 33.6 h so far · expected done Nov 28 04:11–Dec 06 04:55 UTC |
 
 ## Phase 23 segments
 
