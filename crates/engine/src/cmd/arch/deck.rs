@@ -325,7 +325,7 @@ impl Interactive for DeckM {
             raw: false,
             picks_one: false,
             takes_block: false,
-            angle: None,
+            angle: false,
         }
     }
 
