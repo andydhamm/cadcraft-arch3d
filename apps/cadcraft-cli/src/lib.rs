@@ -68,6 +68,7 @@ fn install_io() {
         encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
         sample: cadcraft_io::library::sample_files,
     });
+    cadcraft_engine::cmd::file::set_dwg_compat_lost(cadcraft_io::dwg_compat_lost);
 }
 
 /// `path` as text, for the engine and io calls that take a file name as a string.

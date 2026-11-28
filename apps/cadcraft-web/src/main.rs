@@ -139,6 +139,7 @@ mod web {
             encode_png: |img| cadcraft_io::png::encode_rgba8(img.width, img.height, &img.rgba).unwrap_or_default(),
             sample: cadcraft_io::library::sample_files,
         });
+        cadcraft_engine::cmd::file::set_dwg_compat_lost(cadcraft_io::dwg_compat_lost);
         let Some(canvas) = app_canvas() else {
             log::error!("missing <canvas id=\"{CANVAS_ID}\">");
             return;
