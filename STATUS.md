@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-28 06:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-28 07:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 13 of 14 segments merged**
 
@@ -33,15 +33,15 @@ Updated 2026-11-28 06:45 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 39.6 h so far · expected done Nov 28 08:56–Dec 01 11:49 UTC |
+| 23 | Phase 23 | pending | — | 39.9 h so far · expected done Nov 28 09:10–Dec 01 12:04 UTC |
 
 ## Phase 23 segments
 
-13 merged, 1 working
+13 merged, 1 gate
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-c1f771d5c` | merge upstream upstream/main up to c1f771d5c (72 commits) | working | tturbo-mac |
+| `upstream-sync-c1f771d5c` | merge upstream upstream/main up to c1f771d5c (72 commits) | gate | tturbo-mac |
 
 ## Recent merges
 
@@ -77,5 +77,5 @@ Updated 2026-11-28 06:45 UTC. This page and the card in the README are regenerat
 | mai-flash | mai-code-1.1-flash | idle | 131 |
 | mai-flash-b | mai-code-1.1-flash | idle | 85 |
 | mai-flash-esc | mai-code-1.1-flash | idle | 178 |
-| tturbo-mac | tturbo-ultraheretic | agent | 1346 |
+| tturbo-mac | tturbo-ultraheretic | gate | 1346 |
 | tturbo-mac2 | tturbo-ultraheretic | down | 763 |
