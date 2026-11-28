@@ -53,12 +53,7 @@ pub use cadcraft_doc as doc;
 pub use cadcraft_fonts as fonts;
 pub use cadcraft_geom as geom;
 pub use cadcraft_render as render;
-pub use cmd::arch::look::{effective_look, effective_sun_dir};
-/// The app's 3D renderer behind `render` and `sunstudy` (phase 10): the CLI and the desktop app install it.
-pub use cmd::arch::render::{
-    FinalMode, IlluminanceRequest, LinearStageParam, PathParams, RenderHooks, RenderRequest, RenderStats, SunChoice, render_hooks, set_render_hooks,
-    stats as render_stats,
-};
+pub use cmd::blocks::WblockPicks;
 pub use cmd::hatch::{HatchPicks, PatternChoice, PickMode, pattern_choices};
 pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
 pub use prompt::{Accept, DisplayOnly, Drag, EditorKind, Input, Interactive, Picker, Prompt, Step, TextEditor};
@@ -190,6 +185,8 @@ pub struct Session {
     lisp_last: Option<std::result::Result<lisp::value::Value, String>>,
     /// What the last HATCHPICK kept (the Hatch and Gradient dialog's picks).
     pub hatch_picks: Option<cmd::hatch::HatchPicks>,
+    /// What the last WBLOCKPICK kept (the Write Block dialog's picks).
+    pub wblock_picks: Option<cmd::blocks::WblockPicks>,
     /// The window's menu bar and tool bar as the UI shows them (it reports them every frame).
     pub bars_shown: cmd::interface::InterfaceBars,
     /// The bars MENUBAR or TOOLBAR asked to change, for the UI to apply.
@@ -256,6 +253,7 @@ impl Session {
             lisp: lisp::LispState::default(),
             lisp_last: None,
             hatch_picks: None,
+            wblock_picks: None,
             bars_shown: Default::default(),
             bars_request: Default::default(),
             pick_hint: None,
