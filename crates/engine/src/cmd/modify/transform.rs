@@ -9,13 +9,22 @@ use super::{Entity, Handle, Mat3, Result, Session, Value, bad, bool_or, erase_ke
 /// Move, copy, rotate or mirror `hs` by `m`. Furnishings are arch data, not entities: their handles are split off and
 /// edited in the same command (so in its one undo step); the rest go through `edit_entities` as before.
 pub(crate) fn transform_entities(s: &mut Session, hs: &[Handle], m: &Mat3, copy: bool) -> Result<Vec<Handle>> {
+    // Furnishings are arch data, not entities: their handles are split off and edited in the
+    // same command (so in its one undo step); the rest go through `edit_entities` as before.
+    apply_transform(s, hs, m, copy, |e| e.kind.transform(m))
+}
+
+/// The shared transform for an entity list: split off furnishings (arch data, edited in the
+/// same undo step) and hand the remaining ordinary entities to `edit` (which may apply the
+/// hatch fill-direction policy). Returns the handles edited or made.
+fn apply_transform(s: &mut Session, hs: &[Handle], m: &Mat3, copy: bool, edit: impl Fn(&mut Entity)) -> Result<Vec<Handle>> {
     refuse_ole_frames(s, hs, m, copy)?;
     let furnishings = furnishings_of(s, hs)?;
     if copy {
         room_for_furnishings(s, furnishings.len())?;
     }
     let ordinary: Vec<Handle> = hs.iter().copied().filter(|h| !furnishings.iter().any(|(fh, _)| fh == h)).collect();
-    let mut out = if ordinary.is_empty() { Vec::new() } else { edit_entities(s, &ordinary, copy, |e| e.kind.transform(m))? };
+    let mut out = if ordinary.is_empty() { Vec::new() } else { edit_entities(s, &ordinary, copy, edit)? };
     if furnishings.is_empty() {
         return Ok(out);
     }
@@ -103,9 +112,10 @@ pub(super) fn mirror_kind(k: &mut EntityKind, m: &Mat3) {
 }
 
 /// Reflect selected entities with the command policy that retains individual hatch fill directions.
+/// Furnishings are arch data, not entities, so they are split off and edited in the same
+/// command (its one undo step), like the move/copy/rotate paths.
 pub(super) fn mirror_entities(s: &mut Session, hs: &[Handle], m: &Mat3, copy: bool) -> Result<Vec<Handle>> {
-    refuse_ole_frames(s, hs, m, copy)?;
-    edit_entities(s, hs, copy, |e| mirror_kind(&mut e.kind, m))
+    apply_transform(s, hs, m, copy, |e| mirror_kind(&mut e.kind, m))
 }
 
 /// Scale `hs` by `f` about `base` in 3D, as AutoCAD 2024's SCALE does: about the base point's XY,
