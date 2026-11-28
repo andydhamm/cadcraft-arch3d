@@ -1,5 +1,6 @@
 use cadcraft_doc::EntityKind;
-use cadcraft_geom::Vec3;
+use cadcraft_doc::arch::{ArchId, Furnishing, FurnishingHost, MAX_FURNISHINGS, Surface, furnishing_handle, furnishing_id_of_handle};
+use cadcraft_geom::{Vec2, Vec3};
 
 use super::{Entity, Handle, Mat3, Result, Session, Value, bad, bool_or, erase_kept, f64_req, json, point_param, point_req, targets};
 
