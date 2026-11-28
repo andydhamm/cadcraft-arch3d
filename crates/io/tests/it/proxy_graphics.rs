@@ -146,7 +146,8 @@ fn a_proxy_is_written_back_unchanged_and_draws_again() {
     };
     assert_eq!(layers(&again), ["BALLOONS"; 3]);
     let names: Vec<&str> = again.layers.iter().map(|l| l.name.as_str()).collect();
-    assert_eq!(names, ["0", "BALLOONS", "Defpoints"]);
+    // arch3d's standard A-* layers follow the file's own, so only the leading order is the file's.
+    assert_eq!(names[..3], ["0", "BALLOONS", "Defpoints"]);
 }
 
 /// A proxy text takes the first style on its font. With ISO and then Standard both on
