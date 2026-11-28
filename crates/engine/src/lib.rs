@@ -141,6 +141,9 @@ pub struct Session {
     pub last_finished: Option<(u64, bool)>,
     /// A script is running ([`Session::script`]); a SCRIPT command inside it is refused.
     in_script: bool,
+    /// When true, elevation and section geometry is not regenerated after each model command;
+    /// it is caught up before the first command that may read a view's generated geometry.
+    views_deferred: bool,
     /// The LISP evaluator is running ([`Session::lisp_drive`]): what a routine feeds the command
     /// line — the command it starts, or a `'command` token it types into a running one — is the
     /// program's input, so [`Session::start`] records [`Origin::Program`] for it. Saved and
@@ -247,6 +250,7 @@ impl Session {
             command_origin: Origin::Person,
             last_finished: None,
             in_script: false,
+            views_deferred: false,
             program_input: false,
             suspended: None,
             log: Vec::new(),
