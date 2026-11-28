@@ -1943,3 +1943,7 @@
 	World	Світова
 	Z	Z
 	Unnamed	Без назви
+	Edit Attributes	Редагування атрибутів
+	Block name:	Ім’я блока:
+	Tag: {tag}	Мітка: {tag}
+	Values typed at the command line work too	Значення, введені в командному рядку, теж приймаються
