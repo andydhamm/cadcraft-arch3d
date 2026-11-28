@@ -1,10 +1,10 @@
 # arch3d build status
 
-Updated 2026-11-28 00:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-28 01:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
-**Phase 23 of 23: Phase 23 — 9 of 10 segments merged**
+**Phase 23 of 23: Phase 23 — 10 of 11 segments merged**
 
-13,210 workspace tests passing at the last merge · 1502 segments merged in all · 0 of 15 seats working
+13,251 workspace tests passing at the last merge · 1503 segments merged in all · 0 of 15 seats working
 
 ## Phases
 
@@ -33,20 +33,21 @@ Updated 2026-11-28 00:45 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 33.6 h so far · expected done Nov 28 04:11–Dec 06 04:55 UTC |
+| 23 | Phase 23 | pending | — | 33.9 h so far · expected done Nov 28 04:25–Dec 06 05:10 UTC |
 
 ## Phase 23 segments
 
-9 merged, 1 merging
+10 merged, 1 working
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-ff0bde679` | merge upstream upstream/main up to ff0bde679 (33 commits) | merging | claude-sonnet-a |
+| `upstream-sync-6601baf63` | merge upstream upstream/main up to 6601baf63 (24 commits) | working | claude-sonnet-b |
 
 ## Recent merges
 
 | When (UTC) | Segment | Result | Workspace tests | Seat |
 |---|---|---|---|---|
+| Nov 28 00:50 | `upstream-sync-ff0bde679` | merged | 13,251 pass | claude-sonnet-a |
 | Nov 27 22:56 | `upstream-sync-ff0bde679` | refused | 0 pass | claude-sonnet-b |
 | Nov 27 21:08 | `upstream-sync-ff0bde679` | refused | 0 pass | tturbo-mac |
 | Nov 27 19:04 | `upstream-sync-ff0bde679` | refused | 0 pass | tturbo-mac |
@@ -58,7 +59,6 @@ Updated 2026-11-28 00:45 UTC. This page and the card in the README are regenerat
 | Nov 27 10:58 | `harden-p1-arch-inspect` | merged | 13,132 pass | bonsai-a |
 | Nov 27 10:39 | `harden-p1-arch3d` | merged | 13,127 pass | darwin-ws3 |
 | Nov 27 10:12 | `harden-p1-inspect-solved-poch` | merged | 13,109 pass | bonsai-a |
-| Nov 27 09:54 | `upstream-sync-d3af2d507` | merged | 13,106 pass | tturbo-mac2 |
 
 ## Seats active in the last hour
 
@@ -69,7 +69,7 @@ Updated 2026-11-28 00:45 UTC. This page and the card in the README are regenerat
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
 | claude-sonnet-a | sonnet | idle | 181 |
-| claude-sonnet-b | sonnet | idle | 191 |
+| claude-sonnet-b | sonnet | agent | 191 |
 | claude-sonnet-c | sonnet | idle | 122 |
 | claude-sonnet-d | sonnet | idle | 122 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1465 |
