@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-28 14:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-28 14:15 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 17 of 18 segments merged**
 
@@ -33,15 +33,15 @@ Updated 2026-11-28 14:00 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 46.9 h so far · expected done Nov 28 15:22–Nov 30 06:02 UTC |
+| 23 | Phase 23 | pending | — | 47.1 h so far · expected done Nov 28 15:37–Nov 30 06:17 UTC |
 
 ## Phase 23 segments
 
-17 merged, 1 gate
+17 merged, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-6e48d4b25` | merge upstream upstream/main up to 6e48d4b25 (39 commits) | gate | claude-sonnet-a |
+| `upstream-sync-6e48d4b25` | merge upstream upstream/main up to 6e48d4b25 (39 commits) | merging | claude-sonnet-a |
 
 ## Recent merges
 
@@ -68,7 +68,7 @@ Updated 2026-11-28 14:00 UTC. This page and the card in the README are regenerat
 | bonsai-b | bonsai2-27b | idle | 1458 |
 | bonsai-ws2-a | bonsai2-27b | down | 1488 |
 | bonsai-ws2-b | bonsai2-27b | down | 1414 |
-| claude-sonnet-a | sonnet | gate | 183 |
+| claude-sonnet-a | sonnet | idle | 184 |
 | claude-sonnet-b | sonnet | idle | 194 |
 | claude-sonnet-c | sonnet | idle | 122 |
 | claude-sonnet-d | sonnet | idle | 124 |
