@@ -1,6 +1,6 @@
 # arch3d build status
 
-Updated 2026-11-28 08:45 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
+Updated 2026-11-28 09:00 UTC. This page and the card in the README are regenerated every 15 minutes from the swarm's own dashboard.
 
 **Phase 23 of 23: Phase 23 — 14 of 15 segments merged**
 
@@ -33,15 +33,15 @@ Updated 2026-11-28 08:45 UTC. This page and the card in the README are regenerat
 | 20 | Plan views and dimensions | done | 13 / 13 | 54.9 h |
 | 21 | Schedules, elevations and sheets | done | 13 / 13 | 105.8 h |
 | 22 | Photoreal stills | done | 15 / 15 | 38.1 h |
-| 23 | Phase 23 | pending | — | 41.6 h so far · expected done Nov 28 10:35–Nov 30 19:02 UTC |
+| 23 | Phase 23 | pending | — | 41.9 h so far · expected done Nov 28 10:51–Nov 30 19:17 UTC |
 
 ## Phase 23 segments
 
-14 merged, 1 gate
+14 merged, 1 merging
 
 | Segment | What | State | Seat |
 |---|---|---|---|
-| `upstream-sync-f80dbb461` | merge upstream upstream/main up to f80dbb461 (27 commits) | gate | claude-sonnet-d |
+| `upstream-sync-f80dbb461` | merge upstream upstream/main up to f80dbb461 (27 commits) | merging | claude-sonnet-d |
 
 ## Recent merges
 
@@ -71,7 +71,7 @@ Updated 2026-11-28 08:45 UTC. This page and the card in the README are regenerat
 | claude-sonnet-a | sonnet | idle | 181 |
 | claude-sonnet-b | sonnet | idle | 194 |
 | claude-sonnet-c | sonnet | idle | 122 |
-| claude-sonnet-d | sonnet | gate | 123 |
+| claude-sonnet-d | sonnet | idle | 124 |
 | darwin-ws3 | darwin-r3-exl3-3.05bpw-sc | idle | 1465 |
 | kimi-k31 | k3.1-pro-highspeed | held | 111 |
 | mai-flash | mai-code-1.1-flash | idle | 131 |
